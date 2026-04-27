@@ -26,6 +26,7 @@ export type MenuItem = {
   name_tr: string;
   desc_en: string;
   desc_tr: string;
+  emoji: string;
   image_url: string | null;
   price: number;
   spicy: boolean;
@@ -70,6 +71,7 @@ type MenuItemInsert = {
   name_tr: string;
   desc_en?: string;
   desc_tr?: string;
+  emoji?: string;
   image_url?: string | null;
   price: number;
   spicy?: boolean;
