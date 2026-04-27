@@ -4,7 +4,7 @@ export type MenuItem = {
   cat: string;
   name: string;
   price: number;
-  emoji: string;
+  image_url: string | null;
   desc: string;
   spicy?: boolean;
 };
