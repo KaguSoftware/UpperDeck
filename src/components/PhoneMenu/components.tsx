@@ -13,6 +13,11 @@ import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
 
+// Collapse when scrolled past this, only re-open when scrolled back below EXPAND_AT.
+// The gap between the two prevents oscillation at the boundary.
+const COLLAPSE_AT = 40;
+const EXPAND_AT = 8;
+
 type PhoneMenuProps = {
   messages: Messages;
   categories: PublicCategory[];
@@ -23,21 +28,19 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   const [cart, setCart] = useState(0);
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
   const [activeSlug, setActiveSlug] = useState("");
-  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
   const [stageWidth, setStageWidth] = useState(0);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const pillsRef = useRef<HTMLDivElement>(null);
+  const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const isAutoScrollingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
-    const el = scrollRef.current;
+    const el = stageWrapRef.current;
     if (!el) return;
     setStageWidth(el.clientWidth);
     const ro = new ResizeObserver(() => setStageWidth(el.clientWidth));
@@ -74,17 +77,13 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
       setActiveSlug(slug);
       isAutoScrollingRef.current = true;
 
-      const wrap = scrollRef.current;
-      const stage = stageRef.current;
-      const pills = pillsRef.current;
-      if (wrap && stage && pills) {
-        const target = stage.querySelector<HTMLElement>(`[data-cat="${CSS.escape(slug)}"]`);
-        if (target) {
-          const wrapRect = wrap.getBoundingClientRect();
-          const targetRect = target.getBoundingClientRect();
-          const scrollTarget = wrap.scrollTop + (targetRect.top - wrapRect.top) - pills.offsetHeight;
-          wrap.scrollTo({ top: Math.max(0, scrollTarget), behavior: "smooth" });
-        }
+      const target = stageRef.current?.querySelector<HTMLElement>(
+        `[data-cat="${CSS.escape(slug)}"]`
+      );
+      if (target) {
+        // offsetTop is relative to stageRef (the scroll container's only child),
+        // so it equals the exact scrollTop needed.
+        stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
       }
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
@@ -100,27 +99,30 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   }, [activeSlug]);
 
   const handleTopClick = useCallback(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    stageWrapRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   const handleScroll = useCallback(() => {
-    const wrap = scrollRef.current;
+    const wrap = stageWrapRef.current;
     const stage = stageRef.current;
-    const hero = heroRef.current;
-    const pills = pillsRef.current;
-    if (!wrap || !stage || !hero || !pills) return;
+    if (!wrap || !stage) return;
 
     const scrollTop = wrap.scrollTop;
-    setShowScrollTop(scrollTop > hero.offsetHeight * 0.5);
+
+    // Hysteresis: collapse going down, but only re-open near the very top.
+    // This prevents the hero from toggling when the user is near the threshold.
+    setHeroCollapsed((prev) => {
+      if (!prev && scrollTop > COLLAPSE_AT) return true;
+      if (prev && scrollTop < EXPAND_AT) return false;
+      return prev;
+    });
 
     if (isAutoScrollingRef.current) return;
 
-    const wrapRect = wrap.getBoundingClientRect();
-    const pillsH = pills.offsetHeight;
     const headers = stage.querySelectorAll<HTMLElement>("[data-cat]");
     let current = "";
     headers.forEach((h) => {
-      if (h.getBoundingClientRect().top - wrapRect.top <= pillsH + 10) {
+      if (h.offsetTop - 20 <= scrollTop) {
         current = h.dataset.cat ?? "";
       }
     });
@@ -140,31 +142,28 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
         brandSub={t.brand.sub}
         orderLabel={t.topbar.order}
       />
+      <Hero
+        collapsed={heroCollapsed}
+        itemCount={items.length}
+        headline1={t.hero.headline1}
+        headline2={t.hero.headline2}
+        headline3={t.hero.headline3}
+        headline4={t.hero.headline4}
+        openHours={t.hero.openHours}
+        itemsLabel={t.hero.items}
+      />
+      <FilterPills
+        items={pillItems}
+        activeId={activeSlug}
+        onSelect={handlePillSelect}
+        navRef={pillsNavRef}
+      />
       <div className="relative flex-1 min-h-0">
         <div
-          ref={scrollRef}
+          ref={stageWrapRef}
           onScroll={handleScroll}
           className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <div ref={heroRef}>
-            <Hero
-              itemCount={items.length}
-              headline1={t.hero.headline1}
-              headline2={t.hero.headline2}
-              headline3={t.hero.headline3}
-              headline4={t.hero.headline4}
-              openHours={t.hero.openHours}
-              itemsLabel={t.hero.items}
-            />
-          </div>
-          <div ref={pillsRef} className="sticky top-0 z-10">
-            <FilterPills
-              items={pillItems}
-              activeId={activeSlug}
-              onSelect={handlePillSelect}
-              navRef={pillsNavRef}
-            />
-          </div>
           <MenuStage
             stageWidth={stageWidth}
             onOpen={setActiveItem}
@@ -180,7 +179,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
           aria-label="Scroll to top"
           className={[
             "absolute bottom-4 right-4 w-10 h-10 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300 z-9999",
-            showScrollTop ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
+            heroCollapsed ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
           ].join(" ")}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
