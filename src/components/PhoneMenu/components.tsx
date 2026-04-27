@@ -14,8 +14,6 @@ import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
 
-const ALL_SLUG = "__all";
-
 type PhoneMenuProps = {
   messages: Messages;
   categories: PublicCategory[];
@@ -25,7 +23,7 @@ type PhoneMenuProps = {
 export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   const [cart, setCart] = useState(0);
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
-  const [activeSlug, setActiveSlug] = useState(ALL_SLUG);
+  const [activeSlug, setActiveSlug] = useState("");
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
@@ -33,6 +31,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
 
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const isAutoScrollingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +42,23 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
     setStageWidth(el.clientWidth);
     const ro = new ResizeObserver(() => setStageWidth(el.clientWidth));
     ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const hero = heroRef.current;
+    const wrap = stageWrapRef.current;
+    if (!hero || !wrap) return;
+    let prevH = hero.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      const nextH = hero.offsetHeight;
+      const delta = prevH - nextH;
+      prevH = nextH;
+      if (delta !== 0) {
+        wrap.scrollTop = Math.max(0, wrap.scrollTop - delta);
+      }
+    });
+    ro.observe(hero);
     return () => ro.disconnect();
   }, []);
 
@@ -75,15 +91,11 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
       setActiveSlug(slug);
       isAutoScrollingRef.current = true;
 
-      if (slug === ALL_SLUG) {
-        stageWrapRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-      } else {
-        const target = stageRef.current?.querySelector<HTMLElement>(
-          `[data-cat="${CSS.escape(slug)}"]`
-        );
-        if (target) {
-          stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
-        }
+      const target = stageRef.current?.querySelector<HTMLElement>(
+        `[data-cat="${CSS.escape(slug)}"]`
+      );
+      if (target) {
+        stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
       }
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       setTimeout(() => { isAutoScrollingRef.current = false; }, 600);
@@ -112,21 +124,16 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
 
     if (isAutoScrollingRef.current) return;
     const headers = stage.querySelectorAll<HTMLElement>("[data-cat]");
-    let current = ALL_SLUG;
-    if (scrollTop >= 20) {
-      headers.forEach((h) => {
-        if (h.offsetTop - 40 <= scrollTop) {
-          current = h.dataset.cat ?? ALL_SLUG;
-        }
-      });
-    }
+    let current = "";
+    headers.forEach((h) => {
+      if (h.offsetTop - 40 <= scrollTop) {
+        current = h.dataset.cat ?? "";
+      }
+    });
     setActiveSlug(current);
   }, []);
 
-  const pillItems = [
-    { id: ALL_SLUG, label: t.filter.all },
-    ...categories.map((c) => ({ id: c.slug, label: c.name })),
-  ];
+  const pillItems = categories.map((c) => ({ id: c.slug, label: c.name }));
 
   return (
     <div className="fixed inset-0 flex flex-col">
@@ -139,16 +146,18 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
         brandSub={t.brand.sub}
         orderLabel={t.topbar.order}
       />
-      <Hero
-        collapsed={heroCollapsed}
-        itemCount={items.length}
-        headline1={t.hero.headline1}
-        headline2={t.hero.headline2}
-        headline3={t.hero.headline3}
-        headline4={t.hero.headline4}
-        openHours={t.hero.openHours}
-        itemsLabel={t.hero.items}
-      />
+      <div ref={heroRef}>
+        <Hero
+          collapsed={heroCollapsed}
+          itemCount={items.length}
+          headline1={t.hero.headline1}
+          headline2={t.hero.headline2}
+          headline3={t.hero.headline3}
+          headline4={t.hero.headline4}
+          openHours={t.hero.openHours}
+          itemsLabel={t.hero.items}
+        />
+      </div>
       <FilterPills
         items={pillItems}
         activeId={activeSlug}
