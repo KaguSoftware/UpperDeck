@@ -20,7 +20,7 @@ export function ItemModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {item && (
-        <div className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-[78%] overflow-hidden flex flex-col relative">
+        <div className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] flex flex-col relative">
           <button
             type="button"
             onClick={onClose}
@@ -36,7 +36,7 @@ export function ItemModal({
               <span className="text-[96px] leading-none p-4.5">{item.emoji}</span>
             )}
           </div>
-          <div className="px-4.5 pt-4 pb-4.5 flex-1 overflow-auto">
+          <div className="px-4.5 pt-4 pb-4.5">
             <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1.5">
               {item.cat}{item.spicy ? ` · 🌶 ${spicyLabel}` : ""}
             </div>
