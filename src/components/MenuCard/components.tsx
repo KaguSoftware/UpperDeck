@@ -88,7 +88,7 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
           </span>
         </div>
         {card.spicy && (
-          <span className={["absolute -top-3 -right-3 w-9 h-9 rounded-full grid place-items-center text-[18px] leading-none shadow-md", isGreen ? "bg-orange" : "bg-green"].join(" ")}>
+          <span className={["absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center text-[14px] leading-none", isGreen ? "bg-orange" : "bg-green"].join(" ")}>
             🌶
           </span>
         )}
