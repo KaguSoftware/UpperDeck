@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signIn } from "./actions";
+import { LoginSubmitButton } from "./submit-button";
 
 export const metadata = { title: "Sign in · Upperdeck" };
 
@@ -56,12 +57,7 @@ export default async function LoginPage({
             />
           </label>
 
-          <button
-            type="submit"
-            className="bg-orange text-white border-0 px-4 py-3 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase cursor-pointer mt-2"
-          >
-            Sign in
-          </button>
+          <LoginSubmitButton />
         </form>
 
         <p className="text-[10px] text-green/70 mt-4 leading-relaxed">

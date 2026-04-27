@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useFormStatus } from "react-dom";
 
 export function Field({
   label,
@@ -127,11 +130,14 @@ export function PrimaryButton({
   children: React.ReactNode;
   type?: "submit" | "button";
 }) {
+  const { pending } = useFormStatus();
   return (
     <button
       type={type}
-      className="bg-orange text-white border-0 px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase cursor-pointer"
+      disabled={pending}
+      className="bg-orange text-white border-0 px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
     >
+      {pending && <Spinner />}
       {children}
     </button>
   );
@@ -155,13 +161,25 @@ export function GhostButton({
 }
 
 export function DangerButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      className="bg-green-dark text-bg border-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase cursor-pointer"
+      disabled={pending}
+      className="bg-green-dark text-bg border-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
     >
+      {pending && <Spinner size="sm" />}
       {children}
     </button>
+  );
+}
+
+function Spinner({ size = "md" }: { size?: "sm" | "md" }) {
+  const dim = size === "sm" ? "w-2.5 h-2.5" : "w-3 h-3";
+  return (
+    <span
+      className={`${dim} border-2 border-current border-t-transparent rounded-full animate-spin inline-block`}
+    />
   );
 }
 

@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/require-session";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { PageHeader, Field, Select, PrimaryButton } from "../_components";
+import { SetRoleButton } from "../_submit-buttons";
 import { setRole, inviteUser } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -93,12 +94,7 @@ export default async function UsersPage() {
                       <option value="owner">Owner</option>
                       <option value="admin">Admin</option>
                     </select>
-                    <button
-                      type="submit"
-                      className="bg-green text-bg px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] cursor-pointer"
-                    >
-                      Set
-                    </button>
+                    <SetRoleButton />
                   </form>
                 )}
               </div>
