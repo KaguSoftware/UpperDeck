@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse \"C:\\\\Users\\\\MnS\\\\Kagu\\\\UpperDeckMenu\\\\src\" | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\UpperDeckMenu\\\\\", \"\"\\) })",
+      "Bash(npm install *)",
+      "Bash(mkdir -p \"\\(public\\)\" \"\\(dashboard\\)/admin/menu/new\" \"\\(dashboard\\)/admin/menu/[id]/edit\" \"\\(dashboard\\)/admin/categories/new\" \"\\(dashboard\\)/admin/categories/[id]/edit\" \"\\(dashboard\\)/admin/users\" \"\\(dashboard\\)/login\" auth/callback)",
+      "Bash(mv \"[locale]\" \"\\(public\\)/[locale]\")",
+      "Bash(npx tsc *)",
+      "Bash(NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=anon_key_placeholder_long_enough_to_pass_zod_validation SUPABASE_SERVICE_ROLE_KEY=service_role_key_placeholder_long_enough npx next build)"
+    ]
+  }
+}
