@@ -1,3 +1,6 @@
+"use client";
+
+import { useRef } from "react";
 import type { ItemModalProps } from "./types";
 
 export function ItemModal({
@@ -11,6 +14,38 @@ export function ItemModal({
   const isOpen = item !== null;
   const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
 
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number | null>(null);
+  const dragCurrentY = useRef(0);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    dragCurrentY.current = 0;
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = e.touches[0].clientY - dragStartY.current;
+    if (delta < 0) return;
+    dragCurrentY.current = delta;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${delta}px)`;
+  };
+
+  const onTouchEnd = () => {
+    if (dragStartY.current === null) return;
+    dragStartY.current = null;
+    if (dragCurrentY.current > 80) {
+      onClose();
+    } else {
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+        sheetRef.current.style.transform = "translateY(0)";
+      }
+    }
+    dragCurrentY.current = 0;
+  };
+
   return (
     <div
       className={[
@@ -20,22 +55,32 @@ export function ItemModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {item && (
-        <div className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] flex flex-col relative">
+        <div
+          ref={sheetRef}
+          className="w-full bg-bg animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] flex flex-col relative"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="flex flex-col shrink-0 overflow-hidden" style={{ background: topBg }}>
+            {/* drag handle */}
+            <div className="flex justify-center items-center h-4">
+              <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
+            </div>
+            {item.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.image_url} alt="" className="w-full h-52 object-cover" />
+            ) : (
+              <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-2 right-2 bg-orange text-white border-0 w-[34px] h-[34px] font-bowlby text-[18px] cursor-pointer z-5 grid place-items-center"
+            className={["absolute top-2 right-2 border-0 w-[34px] h-[34px] font-bowlby text-[18px] cursor-pointer z-5 grid place-items-center", item.fill === "orange-fill" ? "bg-green text-white" : "bg-orange text-white"].join(" ")}
           >
             ×
           </button>
-          <div className="grid place-items-center aspect-video shrink-0 overflow-hidden" style={{ background: topBg }}>
-            {item.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-[96px] leading-none p-4.5">{item.emoji}</span>
-            )}
-          </div>
           <div className="px-4.5 pt-4 pb-4.5">
             <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1.5">
               {item.cat}{item.spicy ? ` · 🌶 ${spicyLabel}` : ""}
