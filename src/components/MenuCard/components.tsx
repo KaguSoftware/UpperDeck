@@ -71,7 +71,7 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
       </div>
       <div className="flex justify-between items-center mt-auto gap-1">
         <span className={["text-[7px] tracking-[0.06em] font-semibold lowercase", descColor].join(" ")}>
-          {card.desc}
+          {card.hook}
         </span>
         <span
           className={[

@@ -43,9 +43,16 @@ export function ItemModal({
             <div className="font-bowlby text-[30px] leading-[0.92] text-green uppercase tracking-[-0.8px] mb-2.5">
               {item.name}
             </div>
-            <div className="font-bold text-[11px] tracking-[0.18em] text-green uppercase opacity-85 mb-3.5">
-              {item.desc}
-            </div>
+            {item.hook && (
+              <div className="font-bold text-[11px] tracking-[0.18em] text-green uppercase opacity-85 mb-2">
+                {item.hook}
+              </div>
+            )}
+            {item.desc && (
+              <div className="text-[12px] leading-relaxed text-green/80 mb-3.5">
+                {item.desc}
+              </div>
+            )}
             <div className="flex justify-between items-center py-2.5 border-t-2 border-b-2 border-green mb-3.5">
               <span className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase">{priceLabel}</span>
               <span className="font-bowlby text-[24px] text-orange">{item.price} ₺</span>

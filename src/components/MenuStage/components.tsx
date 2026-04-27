@@ -30,7 +30,7 @@ function layoutSection(items: MenuItem[], seed: number, stageW: number): LayoutR
   for (const item of items) {
     const sz = pickSize(rand);
     const { w, h } = SIZE_PX[sz];
-    const fill = pickFill(rand);
+    const fill: Fill = item.highlight ?? pickFill(rand);
     const rot = rand() * ROTATION_RANGE * 2 - ROTATION_RANGE;
     const card = { ...item, sz, fill, rot, w, h };
     const projW = curW + (cur.length ? MIN_GAP : 0) + w;
