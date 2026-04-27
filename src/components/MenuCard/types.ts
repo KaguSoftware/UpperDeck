@@ -1,4 +1,4 @@
-import type { MenuItem } from "@/data/menu";
+import type { MenuItem } from "@/components/MenuStage/types";
 
 export type Size = "size-s" | "size-m" | "size-l";
 export type Fill = "green-fill" | "orange-fill" | "";

@@ -17,10 +17,12 @@ backed by Supabase. Two roles: `admin` (platform) and `owner` (restaurant).
    - `SUPABASE_SERVICE_ROLE_KEY` (only required for `/admin/users`)
 
 3. **Apply the schema**
-   In the Supabase SQL editor, run [`supabase/migrations/20260426000000_init.sql`](supabase/migrations/20260426000000_init.sql).
-   It creates the `user_role` enum, `profiles` / `categories` / `menu_items` tables,
-   row-level-security policies, an `updated_at` trigger, a new-user trigger that
-   inserts a `profiles` row as `owner`, and seed categories.
+   In the Supabase SQL editor, run the migrations **in order**:
+
+   1. [`supabase/migrations/20260426000000_init.sql`](supabase/migrations/20260426000000_init.sql) —
+      creates the `user_role` enum, `profiles` / `categories` / `menu_items` tables,
+      row-level-security policies, an `updated_at` trigger, a new-user trigger that
+      inserts a `profiles` row as `owner`, and seed categories.
 
 4. **Create your first admin**
    - Sign up a user in Supabase Auth (or use the invite flow once seeded).
@@ -54,12 +56,27 @@ backed by Supabase. Two roles: `admin` (platform) and `owner` (restaurant).
 - **admin**: everything `owner` can do, plus `/admin/users` to invite new
   accounts and change roles.
 
+## Smoke test checklist
+
+Run these manually after deploying or after a fresh local setup:
+
+- [ ] Sign up a test user via the Supabase dashboard (Authentication → Users → Invite)
+- [ ] Promote them to admin in the SQL editor:
+
+  ```sql
+  update public.profiles set role = 'admin' where id = '<that-user-uuid>';
+  ```
+
+- [ ] Sign in at `/login`
+- [ ] `/admin` shows three stat cards (categories, items, users)
+- [ ] `/admin/categories`: create a new category, edit it, delete it
+- [ ] `/admin/menu`: create a new item, toggle availability off, delete it
+- [ ] `/admin/users` (admin only): invite a new user as "owner", change their role
+- [ ] Visit `/en` and `/tr` — seeded items appear, your new item appears, items marked unavailable do not appear
+
 ## Not yet built (ask before adding)
 
 - Image upload to Supabase Storage (replace emoji with photos)
 - Realtime subscriptions on the public menu
 - Audit log / activity feed
 - Playwright/Vitest test suites
-- Public menu reading from Supabase (currently still uses
-  [`src/data/menu.ts`](src/data/menu.ts) — wire to `menu_items` once you've
-  populated the table via the admin)

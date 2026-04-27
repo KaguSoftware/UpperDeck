@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import { MENU, CATEGORIES } from "@/data/menu";
 import { mulberry32, hashStr } from "@/lib/rng";
 import { MenuCard } from "@/components/MenuCard/components";
 import type { PlacedCard, Size, Fill } from "@/components/MenuCard/types";
-import type { MenuStageProps, LayoutResult } from "./types";
+import type { MenuItem, MenuStageProps, LayoutResult } from "./types";
 import { SIZE_PX, MIN_GAP, MAX_GAP, SIDE_MARGIN, ROTATION_RANGE, Y_JITTER } from "./constants";
 
 function pickSize(rand: () => number): Size {
@@ -20,11 +19,11 @@ function pickFill(rand: () => number): Fill {
   return "";
 }
 
-function layoutSection(items: typeof MENU, seed: number, stageW: number): LayoutResult {
+function layoutSection(items: MenuItem[], seed: number, stageW: number): LayoutResult {
   const rand = mulberry32(seed);
   const usableW = stageW - SIDE_MARGIN * 2;
 
-  const rows: (typeof MENU[0] & { sz: Size; fill: Fill; rot: number; w: number; h: number })[][] = [];
+  const rows: (MenuItem & { sz: Size; fill: Fill; rot: number; w: number; h: number })[][] = [];
   let cur: typeof rows[0] = [];
   let curW = 0;
 
@@ -73,38 +72,38 @@ function layoutSection(items: typeof MENU, seed: number, stageW: number): Layout
   return { placed, totalH };
 }
 
-export function MenuStage({ stageWidth, onOpen, stageRef, catLabel, itemLabel }: MenuStageProps) {
+export function MenuStage({ stageWidth, onOpen, stageRef, categories, items, itemLabel }: MenuStageProps) {
   const sections = useMemo(() => {
     if (!stageWidth) return [];
-    return CATEGORIES.map((cat) => {
-      const items = MENU.filter((m) => m.cat === cat);
-      const seed = hashStr(cat);
-      const { placed, totalH } = layoutSection(items, seed, stageWidth);
-      return { cat, items, placed, totalH };
+    return categories.map(({ slug, name }) => {
+      const catItems = items.filter((m) => m.cat === slug);
+      const seed = hashStr(slug);
+      const { placed, totalH } = layoutSection(catItems, seed, stageWidth);
+      return { slug, name, catItems, placed, totalH };
     });
-  }, [stageWidth]);
+  }, [stageWidth, categories, items]);
 
   return (
     <div className="relative w-full" ref={stageRef}>
-      {sections.map(({ cat, items, placed, totalH }, secIdx) => (
-        <div key={cat}>
+      {sections.map(({ slug, name, catItems, placed, totalH }, secIdx) => (
+        <div key={slug}>
           <div
-            data-cat={cat}
+            data-cat={slug}
             className={[
               "relative px-3.5 pb-2.5 flex items-baseline justify-between gap-2.5 border-b-2 border-green bg-bg",
               secIdx === 0 ? "pt-3.5" : "pt-3.5 mt-2 border-t-2",
             ].join(" ")}
           >
             <span className="font-bowlby text-[22px] leading-[0.9] text-green uppercase tracking-[-0.5px]">
-              {catLabel(cat)}
+              {name}
             </span>
             <span className="font-ui font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase">
-              {itemLabel(items.length)}
+              {itemLabel(catItems.length)}
             </span>
           </div>
           <div className="relative w-full" style={{ height: totalH }}>
             {placed.map((card, i) => (
-              <MenuCard key={`${cat}-${i}`} card={card} index={i} onOpen={onOpen} />
+              <MenuCard key={`${slug}-${i}`} card={card} index={i} onOpen={onOpen} />
             ))}
           </div>
         </div>
