@@ -28,8 +28,13 @@ export function ItemModal({
           >
             ×
           </button>
-          <div className="p-4.5 grid place-items-center aspect-video shrink-0" style={{ background: topBg }}>
-            <span className="text-[96px] leading-none">{item.emoji}</span>
+          <div className="grid place-items-center aspect-video shrink-0 overflow-hidden" style={{ background: topBg }}>
+            {item.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[96px] leading-none p-4.5">🍽️</span>
+            )}
           </div>
           <div className="px-4.5 pt-4 pb-4.5 flex-1 overflow-auto">
             <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1.5">

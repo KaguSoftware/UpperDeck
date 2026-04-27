@@ -1,12 +1,6 @@
 import type { MenuCardProps } from "./types";
 import { BLOB_BG_BY_FILL } from "./constants";
 
-const EMOJI_SIZE: Record<string, string> = {
-  "size-s": "text-[34px]",
-  "size-m": "text-[44px]",
-  "size-l": "text-[60px]",
-};
-
 const NAME_SIZE: Record<string, string> = {
   "size-s": "text-[11px]",
   "size-m": "text-[13px]",
@@ -55,9 +49,16 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
     >
       <div className="w-full aspect-square grid place-items-center relative overflow-hidden mb-1.5">
         <div className="absolute inset-[6%]" style={{ background: blobBg }} />
-        <span className={["relative leading-none", EMOJI_SIZE[card.sz]].join(" ")}>
-          {card.emoji}
-        </span>
+        {card.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={card.image_url}
+            alt=""
+            className="relative w-full h-full object-cover"
+          />
+        ) : (
+          <span className="relative text-[40px] leading-none">🍽️</span>
+        )}
       </div>
       <div
         className={[

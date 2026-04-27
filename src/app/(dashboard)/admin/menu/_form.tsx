@@ -1,4 +1,5 @@
 import { Field, Textarea, Select, Checkbox, PrimaryButton, GhostButton } from "../_components";
+import { ImageField } from "./_image-field";
 import type { Category, MenuItem } from "@/types/database";
 
 export function MenuItemForm({
@@ -22,7 +23,9 @@ export function MenuItemForm({
         defaultValue={initial?.category_id}
         options={categories.map((c) => ({ value: c.id, label: c.name_en }))}
       />
-      <Field label="Emoji" name="emoji" required defaultValue={initial?.emoji ?? "🍽️"} />
+      <div className="md:col-span-1">
+        <ImageField defaultUrl={initial?.image_url} />
+      </div>
 
       <Field label="Name (EN)" name="name_en" required defaultValue={initial?.name_en} />
       <Field label="Name (TR)" name="name_tr" required defaultValue={initial?.name_tr} />

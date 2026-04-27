@@ -6,7 +6,7 @@ export type PublicMenuItem = {
   cat: string;
   name: string;
   desc: string;
-  emoji: string;
+  image_url: string | null;
   price: number;
   spicy: boolean;
 };
@@ -29,7 +29,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "category_id, name_en, name_tr, desc_en, desc_tr, emoji, price, spicy, sort_order"
+      "category_id, name_en, name_tr, desc_en, desc_tr, image_url, price, spicy, sort_order"
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -38,7 +38,6 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
     throw new Error(`Failed to fetch menu items: ${itemsError.message}`);
   }
 
-  // Build a lookup from category id → { slug, sort_order } for item ordering
   const catById = new Map(
     cats.map((c) => [c.id, { slug: c.slug, sort_order: c.sort_order }])
   );
@@ -62,7 +61,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
       cat: catById.get(r.category_id)!.slug,
       name: locale === "tr" ? r.name_tr : r.name_en,
       desc: locale === "tr" ? r.desc_tr : r.desc_en,
-      emoji: r.emoji,
+      image_url: r.image_url,
       price: r.price,
       spicy: r.spicy,
     }));
