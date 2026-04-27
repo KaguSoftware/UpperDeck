@@ -7,6 +7,7 @@ export type PublicMenuItem = {
   name: string;
   desc: string;
   image_url: string | null;
+  emoji: string;
   price: number;
   spicy: boolean;
 };
@@ -29,7 +30,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "category_id, name_en, name_tr, desc_en, desc_tr, image_url, price, spicy, sort_order"
+      "category_id, name_en, name_tr, desc_en, desc_tr, emoji, image_url, price, spicy, sort_order"
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -62,6 +63,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
       name: locale === "tr" ? r.name_tr : r.name_en,
       desc: locale === "tr" ? r.desc_tr : r.desc_en,
       image_url: r.image_url,
+      emoji: r.emoji,
       price: r.price,
       spicy: r.spicy,
     }));

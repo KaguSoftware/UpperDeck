@@ -57,7 +57,7 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
             className="relative w-full h-full object-cover"
           />
         ) : (
-          <span className="relative text-[40px] leading-none">🍽️</span>
+          <span className="relative text-[40px] leading-none">{card.emoji}</span>
         )}
       </div>
       <div

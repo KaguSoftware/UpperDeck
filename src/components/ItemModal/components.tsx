@@ -33,7 +33,7 @@ export function ItemModal({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={item.image_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-[96px] leading-none p-4.5">🍽️</span>
+              <span className="text-[96px] leading-none p-4.5">{item.emoji}</span>
             )}
           </div>
           <div className="px-4.5 pt-4 pb-4.5 flex-1 overflow-auto">
