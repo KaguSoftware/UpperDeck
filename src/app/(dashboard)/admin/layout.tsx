@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { requireRole } from "@/lib/auth/require-session";
+import { SignOutButton } from "./_submit-buttons";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireRole(["admin", "owner"]);
@@ -54,12 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             {profile.role}
           </div>
           <form action="/logout" method="post" className="mt-3">
-            <button
-              type="submit"
-              className="w-full bg-green-dark text-bg border-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase cursor-pointer"
-            >
-              Sign out
-            </button>
+            <SignOutButton />
           </form>
         </div>
       </aside>
