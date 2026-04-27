@@ -6,9 +6,11 @@ import { Hero } from "@/components/Hero/components";
 import { FilterPills } from "@/components/FilterPills/components";
 import { MenuStage } from "@/components/MenuStage/components";
 import { ItemModal } from "@/components/ItemModal/components";
+import { CartDrawer } from "@/components/CartDrawer/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
+import type { CartItem } from "@/components/CartDrawer/types";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
@@ -25,7 +27,8 @@ type PhoneMenuProps = {
 };
 
 export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
-  const [cart, setCart] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
   const [activeSlug, setActiveSlug] = useState("");
   const [heroCollapsed, setHeroCollapsed] = useState(false);
@@ -55,19 +58,24 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
     toastTimerRef.current = setTimeout(() => setToastShow(false), TOAST_DURATION_MS);
   }, []);
 
+  const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
+
   const handleCartClick = useCallback(() => {
-    if (!cart) {
-      flashToast(t.toast.empty);
-    } else {
-      const tmpl = cart > 1 ? t.toast.itemsOnDeckMany : t.toast.itemsOnDeckOne;
-      flashToast(tmpl.replace("{count}", String(cart)));
-    }
-  }, [cart, flashToast, t.toast]);
+    setCartOpen(true);
+  }, []);
+
+  const handleRemove = useCallback((id: string) => {
+    setCartItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
 
   const handleAdd = useCallback(() => {
     if (!activeItem) return;
-    setCart((c) => c + 1);
-    const name = activeItem.name;
+    const { name, price } = activeItem;
+    setCartItems((prev) => {
+      const existing = prev.find((i) => i.id === name);
+      if (existing) return prev.map((i) => i.id === name ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: name, name, price, qty: 1 }];
+    });
     setActiveItem(null);
     flashToast(`${t.toast.addedPrefix}${name}`);
   }, [activeItem, flashToast, t.toast]);
@@ -134,7 +142,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   return (
     <div className="fixed inset-0 flex flex-col">
       <TopBar
-        cartCount={cart}
+        cartCount={cartCount}
         onCartClick={handleCartClick}
         onTopClick={handleTopClick}
         brandMain={t.brand.name.main}
@@ -186,6 +194,14 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
             <path d="M7 12V2M7 2L2 7M7 2L12 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square"/>
           </svg>
         </button>
+        <CartDrawer
+          items={cartItems}
+          isOpen={cartOpen}
+          onClose={() => setCartOpen(false)}
+          onRemove={handleRemove}
+          totalLabel="Total"
+          emptyLabel={t.toast.empty}
+        />
       </div>
       <ItemModal
         item={activeItem}
