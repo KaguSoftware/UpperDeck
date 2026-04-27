@@ -38,3 +38,10 @@ a {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+
+@keyframes flicker {
+  0%, 100% { transform: scaleY(1) scaleX(1); opacity: 1; }
+  30% { transform: scaleY(1.15) scaleX(0.92); opacity: 0.85; }
+  60% { transform: scaleY(0.9) scaleX(1.06); opacity: 0.95; }
+  80% { transform: scaleY(1.08) scaleX(0.96); opacity: 0.9; }
+}
