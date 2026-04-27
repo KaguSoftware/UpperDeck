@@ -1,5 +1,5 @@
 export type FilterPillsProps = {
-  categories: string[];
-  active: string;
-  onSelect: (cat: string, btn: HTMLButtonElement) => void;
+  items: { id: string; label: string }[];
+  activeId: string;
+  onSelect: (id: string, btn: HTMLButtonElement) => void;
 };

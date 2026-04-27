@@ -1,5 +1,14 @@
 import type { PlacedCard } from "@/components/MenuCard/types";
 
+export type MenuItem = {
+  cat: string;
+  name: string;
+  price: number;
+  emoji: string;
+  desc: string;
+  spicy?: boolean;
+};
+
 export type LayoutResult = {
   placed: PlacedCard[];
   totalH: number;
@@ -9,7 +18,8 @@ export type MenuStageProps = {
   stageWidth: number;
   onOpen: (card: PlacedCard) => void;
   stageRef: React.RefObject<HTMLDivElement | null>;
-  catLabel: (cat: string) => string;
+  categories: { slug: string; name: string }[];
+  items: MenuItem[];
   itemLabel: (count: number) => string;
 };
 

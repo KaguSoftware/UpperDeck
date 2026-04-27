@@ -9,19 +9,23 @@ import { ItemModal } from "@/components/ItemModal/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
-import { CATEGORIES, ITEM_COUNT } from "@/data/menu";
 import { COLLAPSE_THRESHOLD } from "@/components/Hero/constants";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
+import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
+
+const ALL_SLUG = "__all";
 
 type PhoneMenuProps = {
   messages: Messages;
+  categories: PublicCategory[];
+  items: PublicMenuItem[];
 };
 
-export function PhoneMenu({ messages: t }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   const [cart, setCart] = useState(0);
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
-  const [activeCategory, setActiveCategory] = useState(t.filter.all);
+  const [activeSlug, setActiveSlug] = useState(ALL_SLUG);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
@@ -66,16 +70,15 @@ export function PhoneMenu({ messages: t }: PhoneMenuProps) {
   }, [activeItem, flashToast, t.toast]);
 
   const handlePillSelect = useCallback(
-    (cat: string, btn: HTMLButtonElement) => {
-      setActiveCategory(cat);
+    (slug: string, btn: HTMLButtonElement) => {
+      setActiveSlug(slug);
       isAutoScrollingRef.current = true;
 
-      if (cat === t.filter.all) {
+      if (slug === ALL_SLUG) {
         stageWrapRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        const rawCat = Object.entries(t.categories).find(([, v]) => v === cat)?.[0] ?? cat;
         const target = stageRef.current?.querySelector<HTMLElement>(
-          `[data-cat="${CSS.escape(rawCat)}"]`
+          `[data-cat="${CSS.escape(slug)}"]`
         );
         if (target) {
           stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
@@ -84,7 +87,7 @@ export function PhoneMenu({ messages: t }: PhoneMenuProps) {
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       setTimeout(() => { isAutoScrollingRef.current = false; }, 600);
     },
-    [t.filter.all, t.categories]
+    []
   );
 
   const handleScroll = useCallback(() => {
@@ -97,19 +100,21 @@ export function PhoneMenu({ messages: t }: PhoneMenuProps) {
 
     if (isAutoScrollingRef.current) return;
     const headers = stage.querySelectorAll<HTMLElement>("[data-cat]");
-    let current = t.filter.all;
+    let current = ALL_SLUG;
     if (scrollTop >= 20) {
       headers.forEach((h) => {
         if (h.offsetTop - 40 <= scrollTop) {
-          const rawCat = h.dataset.cat ?? "";
-          current = t.categories[rawCat as keyof typeof t.categories] ?? rawCat;
+          current = h.dataset.cat ?? ALL_SLUG;
         }
       });
     }
-    setActiveCategory(current);
-  }, [t.filter.all, t.categories]);
+    setActiveSlug(current);
+  }, []);
 
-  const allCategories = [t.filter.all, ...CATEGORIES.map((c) => t.categories[c as keyof typeof t.categories] ?? c)];
+  const pillItems = [
+    { id: ALL_SLUG, label: t.filter.all },
+    ...categories.map((c) => ({ id: c.slug, label: c.name })),
+  ];
 
   return (
     <div className="fixed inset-0 flex flex-col">
@@ -123,7 +128,7 @@ export function PhoneMenu({ messages: t }: PhoneMenuProps) {
       />
       <Hero
         collapsed={heroCollapsed}
-        itemCount={ITEM_COUNT}
+        itemCount={items.length}
         headline1={t.hero.headline1}
         headline2={t.hero.headline2}
         headline3={t.hero.headline3}
@@ -132,20 +137,21 @@ export function PhoneMenu({ messages: t }: PhoneMenuProps) {
         itemsLabel={t.hero.items}
       />
       <FilterPills
-        categories={allCategories}
-        active={activeCategory}
+        items={pillItems}
+        activeId={activeSlug}
         onSelect={handlePillSelect}
       />
       <div
         ref={stageWrapRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto bg-[#fff1c2] relative [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex-1 min-h-0 overflow-y-auto bg-bg relative [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <MenuStage
           stageWidth={stageWidth}
           onOpen={setActiveItem}
           stageRef={stageRef}
-          catLabel={(cat) => t.categories[cat as keyof typeof t.categories] ?? cat}
+          categories={categories}
+          items={items}
           itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
         />
       </div>
