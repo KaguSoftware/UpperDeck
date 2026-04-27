@@ -34,6 +34,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
   const heroRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const isAutoScrollingRef = useRef(false);
+  const isHeroResizingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
@@ -61,6 +62,12 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
     ro.observe(hero);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    isHeroResizingRef.current = true;
+    const t = setTimeout(() => { isHeroResizingRef.current = false; }, 750);
+    return () => clearTimeout(t);
+  }, [heroCollapsed]);
 
   const flashToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -120,7 +127,9 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
     if (!wrap || !stage) return;
     const scrollTop = wrap.scrollTop;
 
-    setHeroCollapsed(scrollTop > COLLAPSE_THRESHOLD);
+    if (!isHeroResizingRef.current) {
+      setHeroCollapsed(scrollTop > COLLAPSE_THRESHOLD);
+    }
 
     if (isAutoScrollingRef.current) return;
     const headers = stage.querySelectorAll<HTMLElement>("[data-cat]");
