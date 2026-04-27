@@ -32,7 +32,7 @@ export default async function MenuList() {
 
       <div className="border-2 border-green bg-white overflow-x-auto">
         <div className="min-w-xl">
-          <div className="grid grid-cols-[3rem_1fr_1fr_6rem_5rem_8rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
+          <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
             <div></div>
             <div>Name</div>
             <div>Category</div>
@@ -43,7 +43,7 @@ export default async function MenuList() {
           {(data ?? []).map((item) => (
             <div
               key={item.id}
-              className="grid grid-cols-[3rem_1fr_1fr_6rem_5rem_8rem] gap-3 items-center px-4 py-3 border-b border-green/20 last:border-b-0"
+              className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 items-center px-4 py-3 border-b border-green/20 last:border-b-0"
             >
               <div className="w-10 h-10 bg-bg-deep border border-green/20 overflow-hidden flex items-center justify-center shrink-0">
                 {item.image_url ? (

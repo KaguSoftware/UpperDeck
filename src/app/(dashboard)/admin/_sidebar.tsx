@@ -68,7 +68,12 @@ export function AdminShell({
             <Link
               key={item.href}
               href={item.href}
-              className="block px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase text-green hover:bg-bg border-l-4 border-transparent hover:border-orange"
+              className={[
+                "block px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase text-green border-l-4",
+                pathname === item.href
+                  ? "bg-bg border-orange"
+                  : "border-transparent hover:bg-bg hover:border-orange",
+              ].join(" ")}
             >
               {item.label}
             </Link>
