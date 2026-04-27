@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useLayoutEffect } from "react";
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from "react";
 import { TopBar } from "@/components/TopBar/components";
 import { Hero } from "@/components/Hero/components";
 import { FilterPills } from "@/components/FilterPills/components";
@@ -33,6 +33,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
 
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const pillsNavRef = useRef<HTMLElement>(null);
   const isAutoScrollingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -90,6 +91,17 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
     []
   );
 
+  useEffect(() => {
+    const nav = pillsNavRef.current;
+    if (!nav) return;
+    const btn = nav.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(activeSlug)}"]`);
+    btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [activeSlug]);
+
+  const handleTopClick = useCallback(() => {
+    stageWrapRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const handleScroll = useCallback(() => {
     const wrap = stageWrapRef.current;
     const stage = stageRef.current;
@@ -121,6 +133,7 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
       <TopBar
         cartCount={cart}
         onCartClick={handleCartClick}
+        onTopClick={handleTopClick}
         brandMain={t.brand.name.main}
         brandAccent={t.brand.name.accent}
         brandSub={t.brand.sub}
@@ -140,20 +153,36 @@ export function PhoneMenu({ messages: t, categories, items }: PhoneMenuProps) {
         items={pillItems}
         activeId={activeSlug}
         onSelect={handlePillSelect}
+        navRef={pillsNavRef}
       />
-      <div
-        ref={stageWrapRef}
-        onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto bg-bg relative [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <MenuStage
-          stageWidth={stageWidth}
-          onOpen={setActiveItem}
-          stageRef={stageRef}
-          categories={categories}
-          items={items}
-          itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
-        />
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={stageWrapRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <MenuStage
+            stageWidth={stageWidth}
+            onOpen={setActiveItem}
+            stageRef={stageRef}
+            categories={categories}
+            items={items}
+            itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleTopClick}
+          aria-label="Scroll to top"
+          className={[
+            "absolute bottom-4 right-4 w-10 h-10 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300 z-9999",
+            heroCollapsed ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
+          ].join(" ")}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 12V2M7 2L2 7M7 2L12 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square"/>
+          </svg>
+        </button>
       </div>
       <ItemModal
         item={activeItem}

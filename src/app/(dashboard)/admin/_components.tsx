@@ -11,6 +11,7 @@ export function Field({
   required,
   step,
   min,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -19,6 +20,7 @@ export function Field({
   required?: boolean;
   step?: string;
   min?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -32,6 +34,7 @@ export function Field({
         required={required}
         step={step}
         min={min}
+        placeholder={placeholder}
         className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
       />
     </label>

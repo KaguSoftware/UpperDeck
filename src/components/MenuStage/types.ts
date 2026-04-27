@@ -5,6 +5,9 @@ export type MenuItem = {
   name: string;
   price: number;
   image_url: string | null;
+  emoji: string;
+  highlight: "green-fill" | "orange-fill" | null;
+  hook: string;
   desc: string;
   spicy?: boolean;
 };

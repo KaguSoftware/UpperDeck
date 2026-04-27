@@ -24,8 +24,12 @@ export type MenuItem = {
   category_id: string;
   name_en: string;
   name_tr: string;
+  hook_en: string;
+  hook_tr: string;
   desc_en: string;
   desc_tr: string;
+  emoji: string;
+  highlight: "green-fill" | "orange-fill" | null;
   image_url: string | null;
   price: number;
   spicy: boolean;
@@ -68,8 +72,12 @@ type MenuItemInsert = {
   category_id: string;
   name_en: string;
   name_tr: string;
+  hook_en?: string;
+  hook_tr?: string;
   desc_en?: string;
   desc_tr?: string;
+  emoji?: string;
+  highlight?: "green-fill" | "orange-fill" | null;
   image_url?: string | null;
   price: number;
   spicy?: boolean;

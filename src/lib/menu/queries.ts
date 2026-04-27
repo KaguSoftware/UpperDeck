@@ -5,8 +5,11 @@ export type PublicCategory = { slug: string; name: string };
 export type PublicMenuItem = {
   cat: string;
   name: string;
+  hook: string;
   desc: string;
   image_url: string | null;
+  emoji: string;
+  highlight: "green-fill" | "orange-fill" | null;
   price: number;
   spicy: boolean;
 };
@@ -29,7 +32,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "category_id, name_en, name_tr, desc_en, desc_tr, image_url, price, spicy, sort_order"
+      "category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sort_order"
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -60,8 +63,11 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
     .map((r) => ({
       cat: catById.get(r.category_id)!.slug,
       name: locale === "tr" ? r.name_tr : r.name_en,
+      hook: locale === "tr" ? r.hook_tr : r.hook_en,
       desc: locale === "tr" ? r.desc_tr : r.desc_en,
       image_url: r.image_url,
+      emoji: r.emoji,
+      highlight: r.highlight as "green-fill" | "orange-fill" | null,
       price: r.price,
       spicy: r.spicy,
     }));

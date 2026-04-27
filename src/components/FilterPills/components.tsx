@@ -1,8 +1,8 @@
 import type { FilterPillsProps } from "./types";
 
-export function FilterPills({ items, activeId, onSelect }: FilterPillsProps) {
+export function FilterPills({ items, activeId, onSelect, navRef }: FilterPillsProps) {
   return (
-    <nav className="shrink-0 py-2.5 pl-4.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav ref={navRef} className="shrink-0 py-2.5 pl-4.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map(({ id, label }, i) => {
         const isActive = id === activeId;
         const isAccent = i === 0 && id === "__all";

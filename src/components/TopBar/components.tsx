@@ -4,6 +4,7 @@ import type { TopBarProps } from "./types";
 export function TopBar({
   cartCount,
   onCartClick,
+  onTopClick,
   brandMain,
   brandAccent,
   brandSub,
@@ -11,7 +12,7 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <div className="shrink-0 px-4.5 pt-2 pb-2.5 flex items-center justify-between gap-2.5 bg-bg border-b-2 border-green">
-      <div className="flex items-center gap-2.5">
+      <button type="button" onClick={onTopClick} className="flex items-center gap-2.5 cursor-pointer border-0 bg-transparent p-0">
         <div className="w-[54px] h-[54px] bg-white rounded-full grid place-items-center overflow-hidden shrink-0">
           <Image src="/upperdeck-logo.png" alt="Upperdeck" width={54} height={54} priority />
         </div>
@@ -24,7 +25,7 @@ export function TopBar({
             {brandSub}
           </div>
         </div>
-      </div>
+      </button>
       <button
         type="button"
         onClick={onCartClick}
