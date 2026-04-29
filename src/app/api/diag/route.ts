@@ -1,54 +1,84 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
+import { getServerClient } from "@/lib/supabase/server";
+import { submitOrder } from "@/lib/orders/submit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const pubKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+export async function GET(req: NextRequest) {
+  const supabase = await getServerClient();
 
-  // 1) Auth state via the same client the app uses
-  const cookieStore = await cookies();
-  const ssrClient = createServerClient(supaUrl, pubKey, {
-    cookies: {
-      getAll() { return cookieStore.getAll(); },
-      setAll() { /* noop */ },
-    },
-  });
-  const { data: u } = await ssrClient.auth.getUser();
+  // Pick a real menu item
+  const { data: items } = await supabase
+    .from("menu_items")
+    .select("id, name_en, price")
+    .gt("price", 0)
+    .limit(1);
+  const m = items?.[0];
+  if (!m) return NextResponse.json({ error: "no items" });
 
-  // 2) Same-as-app insert (uses cookies/session if present)
-  const sampleItem = {
-    menu_item_id: "b6d8b136-c0a1-40eb-ab25-079f446763bb",
-    name_en: "Diag",
-    name_tr: "Diag",
-    price: 1,
-    qty: 1,
+  const payload = {
+    table_number: 1,
+    items: [
+      { menu_item_id: m.id, name_en: m.name_en, name_tr: m.name_en, price: m.price, qty: 1 },
+    ],
+    note: "diag-three-paths",
+    total: m.price,
   };
-  const { error: ssrInsertErr, status: ssrInsertStatus } = await ssrClient
-    .from("orders")
-    .insert({ table_number: 1, items: [sampleItem], note: "diag-ssr", total: 1 });
 
-  // 3) Pure anon insert — fresh client with no cookies/session at all
-  const anonClient = createServerClient(supaUrl, pubKey, {
-    cookies: { getAll: () => [], setAll: () => {} },
-  });
-  const { error: anonInsertErr, status: anonInsertStatus } = await anonClient
+  // Path A: raw insert via the server client (cookies-aware)
+  const { error: rawErr } = await supabase
     .from("orders")
-    .insert({ table_number: 1, items: [sampleItem], note: "diag-anon", total: 1 });
+    .insert({ table_number: payload.table_number, items: payload.items, note: payload.note, total: payload.total });
+
+  // Path B: direct submitOrder call (route-handler context, no action POST)
+  const directResult = await submitOrder(payload);
+
+  // Path C: invoke the actual server-action POST, forwarding cookies
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  const origin = req.nextUrl.origin;
+
+  // Find action ID — try prod manifest first, fall back to dev
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  const candidates = [
+    ".next/server/app/(public)/[locale]/page/server-reference-manifest.json",
+    ".next/dev/server/app/(public)/[locale]/page/server-reference-manifest.json",
+  ];
+  let actionId: string | null = null;
+  for (const c of candidates) {
+    const raw = await fs.readFile(path.resolve(c), "utf8").catch(() => "");
+    if (!raw) continue;
+    try {
+      const json = JSON.parse(raw) as { node?: Record<string, { exportedName: string }> };
+      for (const [id, e] of Object.entries(json.node ?? {})) {
+        if (e.exportedName === "submitOrder") { actionId = id; break; }
+      }
+    } catch { /* */ }
+    if (actionId) break;
+  }
+
+  let actionStatus: number | null = null;
+  let actionBody: string | null = null;
+  if (actionId) {
+    const r = await fetch(`${origin}/en`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/x-component",
+        "Next-Action": actionId,
+        Cookie: cookieHeader,
+      },
+      body: JSON.stringify([payload]),
+    });
+    actionStatus = r.status;
+    actionBody = await r.text();
+  }
 
   return NextResponse.json({
-    runtime: process.env.NEXT_RUNTIME ?? "node",
-    region: process.env.VERCEL_REGION ?? null,
-    deploymentEnv: process.env.VERCEL_ENV ?? "local",
-    supaUrl,
-    pubKeyPrefix: pubKey.slice(0, 18),
-    pubKeyLen: pubKey.length,
-    isLoggedIn: Boolean(u?.user),
-    userId: u?.user?.id ?? null,
-    userEmail: u?.user?.email ?? null,
-    ssrInsert: { status: ssrInsertStatus, error: ssrInsertErr },
-    anonInsert: { status: anonInsertStatus, error: anonInsertErr },
+    rawInsertError: rawErr,
+    directSubmitOrder: directResult,
+    actionId,
+    actionStatus,
+    actionBody,
   });
 }
