@@ -1,57 +1,54 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const supabase = await getServerClient();
-  const { data: items } = await supabase
-    .from("menu_items")
-    .select("id, name_en, price")
-    .gt("price", 0)
-    .limit(1);
-  const m = items?.[0];
-  if (!m) return NextResponse.json({ error: "no menu items" });
+export async function GET() {
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const pubKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
 
-  // Forward the caller's cookies so the action runs with the same session
-  const cookieHeader = req.headers.get("cookie") ?? "";
-
-  // Find the action ID for submitOrder from the dev manifest
-  const fs = await import("node:fs/promises");
-  const manifestPath = ".next/dev/server/app/(public)/[locale]/page/server-reference-manifest.json";
-  const raw = await fs.readFile(manifestPath, "utf8").catch(() => "");
-  let actionId: string | null = null;
-  try {
-    const json = JSON.parse(raw) as { node: Record<string, { exportedName: string }> };
-    for (const [id, entry] of Object.entries(json.node ?? {})) {
-      if (entry.exportedName === "submitOrder") { actionId = id; break; }
-    }
-  } catch { /* ignore */ }
-
-  if (!actionId) return NextResponse.json({ error: "could not find action id", manifestSize: raw.length });
-
-  const body = JSON.stringify([
-    {
-      table_number: 1,
-      items: [
-        { menu_item_id: m.id, name_en: m.name_en, name_tr: m.name_en, price: m.price, qty: 1 },
-      ],
-      note: "diag-via-action",
-      total: m.price,
+  // 1) Auth state via the same client the app uses
+  const cookieStore = await cookies();
+  const ssrClient = createServerClient(supaUrl, pubKey, {
+    cookies: {
+      getAll() { return cookieStore.getAll(); },
+      setAll() { /* noop */ },
     },
-  ]);
-
-  const r = await fetch("http://localhost:3000/en", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/x-component",
-      "Next-Action": actionId,
-      Cookie: cookieHeader,
-    },
-    body,
   });
-  const text = await r.text();
+  const { data: u } = await ssrClient.auth.getUser();
 
-  return NextResponse.json({ status: r.status, actionId, response: text });
+  // 2) Same-as-app insert (uses cookies/session if present)
+  const sampleItem = {
+    menu_item_id: "b6d8b136-c0a1-40eb-ab25-079f446763bb",
+    name_en: "Diag",
+    name_tr: "Diag",
+    price: 1,
+    qty: 1,
+  };
+  const { error: ssrInsertErr, status: ssrInsertStatus } = await ssrClient
+    .from("orders")
+    .insert({ table_number: 1, items: [sampleItem], note: "diag-ssr", total: 1 });
+
+  // 3) Pure anon insert — fresh client with no cookies/session at all
+  const anonClient = createServerClient(supaUrl, pubKey, {
+    cookies: { getAll: () => [], setAll: () => {} },
+  });
+  const { error: anonInsertErr, status: anonInsertStatus } = await anonClient
+    .from("orders")
+    .insert({ table_number: 1, items: [sampleItem], note: "diag-anon", total: 1 });
+
+  return NextResponse.json({
+    runtime: process.env.NEXT_RUNTIME ?? "node",
+    region: process.env.VERCEL_REGION ?? null,
+    deploymentEnv: process.env.VERCEL_ENV ?? "local",
+    supaUrl,
+    pubKeyPrefix: pubKey.slice(0, 18),
+    pubKeyLen: pubKey.length,
+    isLoggedIn: Boolean(u?.user),
+    userId: u?.user?.id ?? null,
+    userEmail: u?.user?.email ?? null,
+    ssrInsert: { status: ssrInsertStatus, error: ssrInsertErr },
+    anonInsert: { status: anonInsertStatus, error: anonInsertErr },
+  });
 }
