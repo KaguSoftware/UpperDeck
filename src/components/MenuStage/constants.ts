@@ -1,9 +1,9 @@
 import type { Size } from "@/components/MenuCard/types";
 
 export const SIZE_PX: Record<Size, { w: number; h: number }> = {
-  "size-s": { w: 112, h: 112 },
-  "size-m": { w: 140, h: 140 },
-  "size-l": { w: 168, h: 168 },
+  "size-s": { w: 112, h: 148 },
+  "size-m": { w: 120, h: 170 },
+  "size-l": { w: 150, h: 210 },
 };
 
 export const MIN_GAP = 6;

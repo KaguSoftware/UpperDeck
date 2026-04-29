@@ -100,7 +100,7 @@ export function MenuStage({ stageWidth, onOpen, stageRef, categories, items, ite
               {itemLabel(catItems.length)}
             </span>
           </div>
-          <div className="relative w-full" style={{ height: totalH }}>
+          <div className="relative w-full" style={{ minHeight: totalH }}>
             {placed.map((card, i) => (
               <MenuCard key={`${slug}-${i}`} card={card} index={i} onOpen={onOpen} />
             ))}
