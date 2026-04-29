@@ -164,7 +164,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
       try { sessionStorage.removeItem(CART_STORAGE_KEY); } catch { /* ignore */ }
       setCheckoutState({ status: "idle" });
       setCartOpen(false);
-      flashToast(`${t.toast.orderSentPrefix}${tableNumber}`);
+      flashToast(`${t.toast.orderSentPrefix}${tableNumber && tableNumber > 0 ? tableNumber : "—"}`);
     } else if (result.error === "validation") {
       setCheckoutState({
         status: "validation",

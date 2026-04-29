@@ -71,8 +71,9 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
       .map((i) => `  • ${i.qty}× ${i.name_en} — ${(i.price * i.qty).toLocaleString()} ₺`)
       .join("\n");
     const noteLine = note?.trim() ? `\n📝 <i>${note.trim()}</i>` : "";
+    const tableLabel = table_number > 0 ? `Table ${table_number}` : "Unknown Table";
     void sendTelegramMessage(
-      `🛎 <b>New Order — Table ${table_number}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
+      `🛎 <b>New Order — ${tableLabel}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
     );
 
     return { ok: true, orderId: data.id };
