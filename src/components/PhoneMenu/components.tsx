@@ -139,12 +139,12 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
   }, [activeItem, flashToast, t.toast]);
 
   const doSubmit = useCallback(async () => {
-    if (!tableNumber || cartItems.length === 0) return;
+    if (cartItems.length === 0) return;
     setCheckoutState({ status: "pending" });
 
     const clientTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
     const result = await submitOrder({
-      table_number: tableNumber,
+      table_number: tableNumber ?? 0,
       _simulateFailure: simulateFailure,
       items: cartItems.map((i) => ({
         menu_item_id: i.menu_item_id,
@@ -305,7 +305,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
         <CartDrawer
           items={cartItems}
           isOpen={cartOpen}
-          onClose={() => setCartOpen(false)}
+          onClose={() => { setCartOpen(false); setNote(""); }}
           onRemove={handleRemove}
           onIncrement={handleIncrement}
           onDecrement={handleDecrement}

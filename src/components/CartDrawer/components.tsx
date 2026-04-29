@@ -31,7 +31,7 @@ export function CartDrawer({
   const isPending = checkoutState.status === "pending";
   const isOffline = checkoutState.status === "offline";
   const isValidationError = checkoutState.status === "validation";
-  const canSend = items.length > 0 && tableNumber !== null && !isPending;
+  const canSend = items.length > 0 && !isPending;
 
   return (
     <div
@@ -54,33 +54,20 @@ export function CartDrawer({
           </button>
         </div>
 
-        {/* table number */}
-        <div className="shrink-0 flex items-center gap-3 px-4.5 py-3 border-b border-green/20">
-          <label className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase whitespace-nowrap">
-            {tableLabel}
-          </label>
-          {tableFromQr ? (
+        {/* table number — only shown when set via QR */}
+        {tableNumber !== null && tableNumber > 0 && (
+          <div className="shrink-0 flex items-center gap-3 px-4.5 py-3 border-b border-green/20">
+            <label className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase whitespace-nowrap">
+              {tableLabel}
+            </label>
             <div className="flex items-center gap-2">
               <span className="font-bowlby text-[16px] text-orange">{tableNumber}</span>
               <span className="font-ui text-[10px] bg-green text-bg px-1.5 py-0.5 uppercase tracking-widest">
                 {tableFromQrLabel}
               </span>
             </div>
-          ) : (
-            <input
-              type="number"
-              min={1}
-              max={999}
-              value={tableNumber ?? ""}
-              onChange={(e) => {
-                const v = e.target.value === "" ? null : Math.min(999, Math.max(1, parseInt(e.target.value, 10)));
-                onTableChange(isNaN(v as number) ? null : v);
-              }}
-              className="font-ui text-[14px] text-green bg-transparent border-b-2 border-green/40 focus:border-orange outline-none w-16 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              placeholder="—"
-            />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* validation error banner */}
         {isValidationError && (

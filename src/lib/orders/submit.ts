@@ -13,7 +13,7 @@ const ItemSchema = z.object({
 });
 
 const OrderSchema = z.object({
-  table_number: z.int().min(1).max(999),
+  table_number: z.int().min(0).max(999),
   items: z.array(ItemSchema).min(1),
   note: z.string().max(200).default(""),
   total: z.number().nonnegative(),
