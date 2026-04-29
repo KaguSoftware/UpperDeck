@@ -72,9 +72,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ? `\n📝 ${order.note.trim()}`
     : "";
 
+  const tableLabel = order.table_number > 0 ? `Table ${order.table_number}` : "Unknown Table";
   const text =
     `🔔 <b>NEW ORDER</b> · #${shortId}\n` +
-    `<b>Table ${order.table_number}</b> · ₺${Number(order.total).toFixed(2)}\n` +
+    `<b>${tableLabel}</b> · ₺${Number(order.total).toFixed(2)}\n` +
     `—\n` +
     `${itemLines}` +
     `${noteLine}`;

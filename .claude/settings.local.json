@@ -9,7 +9,28 @@
       "Bash(NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=anon_key_placeholder_long_enough_to_pass_zod_validation SUPABASE_SERVICE_ROLE_KEY=service_role_key_placeholder_long_enough npx next build)",
       "Bash(NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder npm run build)",
       "Bash(node -e \"require\\('zod'\\)\")",
-      "Bash(node -e \"const {z}=require\\('zod'\\); console.log\\(typeof z.int\\)\")"
+      "Bash(node -e \"const {z}=require\\('zod'\\); console.log\\(typeof z.int\\)\")",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(xargs grep *)",
+      "Bash(cp /tmp/test-order.mjs c:/Users/MnS/Kagu/demo/UpperDeckMenu/scripts/_diag-order.mjs)",
+      "Bash(node scripts/_diag-order.mjs)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/en)",
+      "Bash(curl -sS http://localhost:3000/api/_diag)",
+      "Bash(curl -sS http://localhost:3000/api/diag)",
+      "Bash(curl -sS http://localhost:3000/en)",
+      "Bash(grep -o 'data-next-url[^\"]*\\\\|\"\\\\$ACTION[^\"]*\\\\|\"action\":\"[^\"]*')",
+      "Bash(grep -oE '\\\\\\\\\"\\\\$F[a-zA-Z0-9_-]+\\\\\\\\\"')",
+      "Bash(ls node_modules/playwright node_modules/puppeteer)",
+      "Bash(which playwright *)",
+      "Bash(curl -sS -X POST http://localhost:3000/en -H 'Content-Type: application/json' -H 'Accept: text/x-component' -H 'Next-Action: 40d4c8da741702242ae5972323c23f613e21499979' --data '[{\"table_number\":7,\"items\":[{\"menu_item_id\":\"8e7fe2bf-fa50-48e7-91b2-246c8ff4ca08\",\"name_en\":\"Test\",\"name_tr\":\"Test\",\"price\":50,\"qty\":2}],\"note\":\"action test\",\"total\":100}]' --max-time 15)",
+      "Bash(python -m json.tool)",
+      "Bash(curl -sS -X POST http://localhost:3000/en -H 'Content-Type: application/json' -H 'Accept: text/x-component' -H 'Next-Action: 40d4c8da741702242ae5972323c23f613e21499979' --data '[{\"table_number\":12,\"items\":[{\"menu_item_id\":\"8e7fe2bf-fa50-48e7-91b2-246c8ff4ca08\",\"name_en\":\"Verify\",\"name_tr\":\"Verify\",\"price\":50,\"qty\":1}],\"note\":\"post-fix\",\"total\":50}]' --max-time 15)",
+      "Bash(kill %1)",
+      "Bash(jobs)",
+      "Bash(node scripts/_check-policies.mjs)",
+      "Bash(curl -sS -X POST http://localhost:3000/en -H 'Content-Type: application/json' -H 'Accept: text/x-component' -H 'Next-Action: 40d4c8da741702242ae5972323c23f613e21499979' --data '[{\"table_number\":3,\"items\":[{\"menu_item_id\":\"8e7fe2bf-fa50-48e7-91b2-246c8ff4ca08\",\"name_en\":\"Probe\",\"name_tr\":\"Probe\",\"price\":50,\"qty\":1}],\"note\":\"probe-after-fix\",\"total\":50}]' --max-time 15)"
     ]
   }
 }

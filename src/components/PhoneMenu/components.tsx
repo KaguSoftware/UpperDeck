@@ -7,6 +7,7 @@ import { FilterPills } from "@/components/FilterPills/components";
 import { MenuStage } from "@/components/MenuStage/components";
 import { ItemModal } from "@/components/ItemModal/components";
 import { CartDrawer } from "@/components/CartDrawer/components";
+import { WaiterButton } from "@/components/WaiterButton/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
@@ -134,12 +135,12 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
   }, [activeItem, flashToast, t.toast]);
 
   const doSubmit = useCallback(async () => {
-    if (!tableNumber || cartItems.length === 0) return;
+    if (cartItems.length === 0) return;
     setCheckoutState({ status: "pending" });
 
     const clientTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
     const result = await submitOrder({
-      table_number: tableNumber,
+      table_number: tableNumber ?? 0,
       _simulateFailure: simulateFailure,
       items: cartItems.map((i) => ({
         menu_item_id: i.menu_item_id,
@@ -159,7 +160,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
       try { sessionStorage.removeItem(CART_STORAGE_KEY); } catch { /* ignore */ }
       setCheckoutState({ status: "idle" });
       setCartOpen(false);
-      flashToast(`${t.toast.orderSentPrefix}${tableNumber}`);
+      flashToast(`${t.toast.orderSentPrefix}${tableNumber && tableNumber > 0 ? tableNumber : "—"}`);
     } else if (result.error === "validation") {
       setCheckoutState({
         status: "validation",
@@ -308,10 +309,17 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
             <path d="M7 12V2M7 2L2 7M7 2L12 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square"/>
           </svg>
         </button>
+        <WaiterButton
+          tableNumber={tableNumber ?? 0}
+          labelTitle={t.waiter.title}
+          labelBill={t.waiter.bill}
+          labelWaiter={t.waiter.call}
+          labelCancel={t.waiter.cancel}
+        />
         <CartDrawer
           items={cartItems}
           isOpen={cartOpen}
-          onClose={() => setCartOpen(false)}
+          onClose={() => { setCartOpen(false); setNote(""); }}
           onRemove={handleRemove}
           onIncrement={handleIncrement}
           onDecrement={handleDecrement}

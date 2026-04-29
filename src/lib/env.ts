@@ -7,6 +7,8 @@ const PublicSchema = z.object({
 
 const ServerSchema = PublicSchema.extend({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+  TELEGRAM_BOT_TOKEN: z.string().min(10).optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
 });
 
 type Env = z.infer<typeof ServerSchema>;
@@ -20,6 +22,8 @@ function getEnv(): Env {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
   };
 
   const result = ServerSchema.safeParse(raw);
