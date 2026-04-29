@@ -22,7 +22,7 @@ const OrderSchema = z.object({
 
 export type SubmitOrderPayload = z.input<typeof OrderSchema>;
 export type SubmitOrderResult =
-  | { ok: true; orderId: string }
+  | { ok: true }
   | { ok: false; error: "validation" | "network" | "server"; message?: string };
 
 export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOrderResult> {
@@ -57,11 +57,9 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
 
     const queryPromise = supabase
       .from("orders")
-      .insert({ table_number, items, note, total: serverTotal })
-      .select("id")
-      .single();
+      .insert({ table_number, items, note, total: serverTotal });
 
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+    const { error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
       return { ok: false, error: "server", message: error.message };
@@ -76,7 +74,7 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
       `🛎 <b>New Order — ${tableLabel}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
     );
 
-    return { ok: true, orderId: data.id };
+    return { ok: true };
   } catch (err) {
     const isAbort = err instanceof Error && err.name === "AbortError";
     return { ok: false, error: isAbort ? "network" : "server", message: isAbort ? "Request timed out" : String(err) };
