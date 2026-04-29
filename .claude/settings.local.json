@@ -9,7 +9,8 @@
       "Bash(NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=anon_key_placeholder_long_enough_to_pass_zod_validation SUPABASE_SERVICE_ROLE_KEY=service_role_key_placeholder_long_enough npx next build)",
       "Bash(NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder npm run build)",
       "Bash(node -e \"require\\('zod'\\)\")",
-      "Bash(node -e \"const {z}=require\\('zod'\\); console.log\\(typeof z.int\\)\")"
+      "Bash(node -e \"const {z}=require\\('zod'\\); console.log\\(typeof z.int\\)\")",
+      "Bash(git push *)"
     ]
   }
 }
