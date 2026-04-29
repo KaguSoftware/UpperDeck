@@ -72,7 +72,7 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
       .join("\n");
     const noteLine = note?.trim() ? `\n📝 <i>${note.trim()}</i>` : "";
     const tableLabel = table_number > 0 ? `Table ${table_number}` : "Unknown Table";
-    void sendTelegramMessage(
+    await sendTelegramMessage(
       `🛎 <b>New Order — ${tableLabel}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
     );
 
