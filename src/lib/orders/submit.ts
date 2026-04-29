@@ -62,6 +62,15 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
     const { error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
+      console.error("[submitOrder] insert failed", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        table_number,
+        itemCount: items.length,
+        total: serverTotal,
+      });
       return { ok: false, error: "server", message: error.message };
     }
 
@@ -77,6 +86,7 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
     return { ok: true };
   } catch (err) {
     const isAbort = err instanceof Error && err.name === "AbortError";
+    console.error("[submitOrder] threw", err);
     return { ok: false, error: isAbort ? "network" : "server", message: isAbort ? "Request timed out" : String(err) };
   }
 }
