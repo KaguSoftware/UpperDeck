@@ -10,7 +10,9 @@
       "Bash(NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder npm run build)",
       "Bash(node -e \"require\\('zod'\\)\")",
       "Bash(node -e \"const {z}=require\\('zod'\\); console.log\\(typeof z.int\\)\")",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
