@@ -3,10 +3,13 @@ import { env } from "./env";
 const API = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
 export async function sendTelegramMessage(text: string): Promise<void> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    console.warn("[telegram] skipped — TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
+    return;
+  }
 
   try {
-    await fetch(`${API}/sendMessage`, {
+    const res = await fetch(`${API}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -15,7 +18,11 @@ export async function sendTelegramMessage(text: string): Promise<void> {
         parse_mode: "HTML",
       }),
     });
-  } catch {
-    // Non-critical — don't let Telegram failure break order submission
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[telegram] sendMessage failed", res.status, body);
+    }
+  } catch (err) {
+    console.error("[telegram] fetch threw", err);
   }
 }
