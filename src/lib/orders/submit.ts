@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/server";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 const ItemSchema = z.object({
   menu_item_id: z.string().uuid(),
@@ -65,6 +66,14 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
     if (error) {
       return { ok: false, error: "server", message: error.message };
     }
+
+    const itemLines = items
+      .map((i) => `  • ${i.qty}× ${i.name_en} — ${(i.price * i.qty).toLocaleString()} ₺`)
+      .join("\n");
+    const noteLine = note?.trim() ? `\n📝 <i>${note.trim()}</i>` : "";
+    void sendTelegramMessage(
+      `🛎 <b>New Order — Table ${table_number}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
+    );
 
     return { ok: true, orderId: data.id };
   } catch (err) {

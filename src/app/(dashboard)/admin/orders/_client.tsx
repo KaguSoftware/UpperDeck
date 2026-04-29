@@ -257,11 +257,12 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
   // ── realtime subscription ────────────────────────────────────────────────
   useEffect(() => {
     const supabase = getBrowserClient();
-    let channel = supabase.channel("orders-stream");
+    const channelName = `orders-stream-${Math.random().toString(36).slice(2)}`;
+    let channel = supabase.channel(channelName);
 
     function subscribe() {
       channel = supabase
-        .channel("orders-stream")
+        .channel(channelName)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "orders" },
