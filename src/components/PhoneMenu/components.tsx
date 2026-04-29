@@ -295,15 +295,13 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
             <path d="M7 12V2M7 2L2 7M7 2L12 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square"/>
           </svg>
         </button>
-        {tableNumber !== null && (
-          <WaiterButton
-            tableNumber={tableNumber}
-            labelTitle={t.waiter.title}
-            labelBill={t.waiter.bill}
-            labelWaiter={t.waiter.call}
-            labelCancel={t.waiter.cancel}
-          />
-        )}
+        <WaiterButton
+          tableNumber={tableNumber ?? 0}
+          labelTitle={t.waiter.title}
+          labelBill={t.waiter.bill}
+          labelWaiter={t.waiter.call}
+          labelCancel={t.waiter.cancel}
+        />
         <CartDrawer
           items={cartItems}
           isOpen={cartOpen}
