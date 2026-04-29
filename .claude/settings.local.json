@@ -28,7 +28,9 @@
       "Bash(python -m json.tool)",
       "Bash(curl -sS -X POST http://localhost:3000/en -H 'Content-Type: application/json' -H 'Accept: text/x-component' -H 'Next-Action: 40d4c8da741702242ae5972323c23f613e21499979' --data '[{\"table_number\":12,\"items\":[{\"menu_item_id\":\"8e7fe2bf-fa50-48e7-91b2-246c8ff4ca08\",\"name_en\":\"Verify\",\"name_tr\":\"Verify\",\"price\":50,\"qty\":1}],\"note\":\"post-fix\",\"total\":50}]' --max-time 15)",
       "Bash(kill %1)",
-      "Bash(jobs)"
+      "Bash(jobs)",
+      "Bash(node scripts/_check-policies.mjs)",
+      "Bash(curl -sS -X POST http://localhost:3000/en -H 'Content-Type: application/json' -H 'Accept: text/x-component' -H 'Next-Action: 40d4c8da741702242ae5972323c23f613e21499979' --data '[{\"table_number\":3,\"items\":[{\"menu_item_id\":\"8e7fe2bf-fa50-48e7-91b2-246c8ff4ca08\",\"name_en\":\"Probe\",\"name_tr\":\"Probe\",\"price\":50,\"qty\":1}],\"note\":\"probe-after-fix\",\"total\":50}]' --max-time 15)"
     ]
   }
 }
