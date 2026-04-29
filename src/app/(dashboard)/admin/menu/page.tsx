@@ -5,7 +5,12 @@ import { deleteItem } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function MenuList() {
+type SortKey = "name" | "category" | "sort_order";
+
+export default async function MenuList({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
+  const { sort } = await searchParams;
+  const sortKey: SortKey = sort === "name" ? "name" : sort === "category" ? "category" : "sort_order";
+
   const supabase = await getServerClient();
   const { data, error } = await supabase
     .from("menu_items")
@@ -15,11 +20,27 @@ export default async function MenuList() {
 
   if (error) throw new Error(error.message);
 
+  const items = [...(data ?? [])].sort((a, b) => {
+    if (sortKey === "name") return a.name_en.localeCompare(b.name_en);
+    if (sortKey === "category") {
+      const ca = (a.categories as { name_en: string } | null)?.name_en ?? "";
+      const cb = (b.categories as { name_en: string } | null)?.name_en ?? "";
+      return ca.localeCompare(cb) || a.name_en.localeCompare(b.name_en);
+    }
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name_en.localeCompare(b.name_en);
+  });
+
+  const sortOptions: { key: SortKey; label: string }[] = [
+    { key: "sort_order", label: "Default" },
+    { key: "name", label: "Alphabetic" },
+    { key: "category", label: "Category" },
+  ];
+
   return (
     <>
       <PageHeader
         title="Menu"
-        subtitle={`${data?.length ?? 0} items`}
+        subtitle={`${items.length} items`}
         action={
           <Link
             href="/admin/menu/new"
@@ -29,6 +50,24 @@ export default async function MenuList() {
           </Link>
         }
       />
+
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/60">Sort:</span>
+        {sortOptions.map(({ key, label }) => (
+          <Link
+            key={key}
+            href={key === "sort_order" ? "/admin/menu" : `/admin/menu?sort=${key}`}
+            className={[
+              "px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] border-2",
+              sortKey === key
+                ? "bg-green text-bg border-green"
+                : "bg-transparent text-green border-green/30 hover:border-green",
+            ].join(" ")}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
 
       <div className="border-2 border-green bg-white overflow-x-auto">
         <div className="min-w-xl">
@@ -40,7 +79,7 @@ export default async function MenuList() {
             <div className="text-center">Status</div>
             <div></div>
           </div>
-          {(data ?? []).map((item) => (
+          {items.map((item) => (
             <div
               key={item.id}
               className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 items-center px-4 py-3 border-b border-green/20 last:border-b-0"
@@ -88,7 +127,7 @@ export default async function MenuList() {
               </div>
             </div>
           ))}
-          {(!data || data.length === 0) && (
+          {items.length === 0 && (
             <div className="px-4 py-10 text-center text-[12px] text-green/60 font-semibold uppercase tracking-[0.18em]">
               No menu items yet
             </div>

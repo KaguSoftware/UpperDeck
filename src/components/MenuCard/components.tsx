@@ -7,6 +7,12 @@ const NAME_SIZE: Record<string, string> = {
   "size-l": "text-[16px]",
 };
 
+const IMG_H: Record<string, number> = {
+  "size-s": 88,
+  "size-m": 100,
+  "size-l": 126,
+};
+
 export function MenuCard({ card, index, onOpen }: MenuCardProps) {
   const blobBg = BLOB_BG_BY_FILL[card.fill];
 
@@ -52,7 +58,7 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
         style={{ position: "relative" }}
         onClick={() => onOpen(card)}
       >
-        <div className="w-full aspect-square grid place-items-center relative overflow-hidden mb-1.5">
+        <div className="w-full grid place-items-center relative overflow-hidden mb-1.5" style={{ height: IMG_H[card.sz] }}>
           <div className="absolute inset-[6%]" style={{ background: blobBg }} />
           {card.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
