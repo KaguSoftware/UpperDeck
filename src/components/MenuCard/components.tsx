@@ -65,7 +65,7 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
             <img
               src={card.image_url}
               alt=""
-              className="relative w-full h-full object-cover"
+              className="relative w-full h-full object-contain"
             />
           ) : (
             <span className="relative text-[40px] leading-none">{card.emoji}</span>
