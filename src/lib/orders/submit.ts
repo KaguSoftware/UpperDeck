@@ -48,18 +48,12 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
     });
   }
 
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new DOMException("Request timed out", "AbortError")), 5000)
-  );
-
   try {
     const supabase = await getServerClient();
 
-    const queryPromise = supabase
+    const { error } = await supabase
       .from("orders")
       .insert({ table_number, items, note, total: serverTotal });
-
-    const { error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
       console.error("[submitOrder] insert failed", {
@@ -85,8 +79,7 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
 
     return { ok: true };
   } catch (err) {
-    const isAbort = err instanceof Error && err.name === "AbortError";
     console.error("[submitOrder] threw", err);
-    return { ok: false, error: isAbort ? "network" : "server", message: isAbort ? "Request timed out" : String(err) };
+    return { ok: false, error: "server", message: String(err) };
   }
 }
