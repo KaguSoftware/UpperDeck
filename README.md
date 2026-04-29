@@ -74,6 +74,70 @@ Run these manually after deploying or after a fresh local setup:
 - [ ] `/admin/users` (admin only): invite a new user as "owner", change their role
 - [ ] Visit `/en` and `/tr` — seeded items appear, your new item appears, items marked unavailable do not appear
 
+## Reliability setup
+
+### Keep Supabase warm (cron-job.org)
+
+Supabase free-tier projects **pause after 7 days of inactivity**. A lightweight
+health endpoint and a free cron job prevent this.
+
+1. Sign up at **https://cron-job.org** (free, no credit card required).
+2. Create a new job:
+   - **URL:** `https://<your-deploy-url>/api/health`
+   - **Method:** GET
+   - **Schedule:** every 6 hours (four times a day is more than enough)
+   - **Notifications:** enable *email on failure*
+3. Save and enable the job.
+
+Why this works: the `/api/health` route runs a lightweight `SELECT` against
+Supabase on every ping, which counts as activity and resets the inactivity
+clock. The email alert gives you a ≤6 h window to notice if the DB or the
+deployment goes down before your first customer of the day does.
+
+---
+
+## Free-tier costs
+
+| Service | Free tier limits | Notes |
+|---|---|---|
+| **Supabase** | 500 MB DB · 5 GB egress · 500 K Edge Function invocations/month · unlimited Realtime API requests (200 peak concurrent connections) | Sufficient for a single café indefinitely. Upgrade to Pro ($25/mo) only if you exceed egress or need daily backups. |
+| **cron-job.org** | Free | No limits relevant to this use case. |
+| **Telegram Bot API** | Free | No rate-limit concerns for a single café. |
+| **Vercel Hobby** | Free | ⚠ Hobby is *non-commercial use only* per Vercel's ToS. For a paying café client choose one of: (a) **Vercel Pro** — $20/mo, removes the restriction; (b) **Cloudflare Pages** — free tier allows commercial use, Next.js supported via `@cloudflare/next-on-pages`. |
+
+---
+
+## Smoke test checklist
+
+Run these manually after deploying or after a fresh local setup:
+
+- [ ] Sign up a test user via the Supabase dashboard (Authentication → Users → Invite)
+- [ ] Promote them to admin in the SQL editor:
+
+  ```sql
+  update public.profiles set role = 'admin' where id = '<that-user-uuid>';
+  ```
+
+- [ ] Sign in at `/login`
+- [ ] `/admin` shows three stat cards (categories, items, users)
+- [ ] `/admin/categories`: create a new category, edit it, delete it
+- [ ] `/admin/menu`: create a new item, toggle availability off, delete it
+- [ ] `/admin/users` (admin only): invite a new user as "owner", change their role
+- [ ] Visit `/en` and `/tr` — seeded items appear, your new item appears, items marked unavailable do not appear
+
+### Orders flow
+
+- [ ] From a phone (not the admin), open `/?t=12` — cart shows table 12 locked with "from QR" badge
+- [ ] Add 2 items, add a note, tap **Send Order**
+- [ ] Confirm success toast appears and cart clears
+- [ ] In another tab, `/admin/orders` shows the new order within 2 s (after clicking **Start shift** for audio)
+- [ ] Sidebar pill shows **● Live**
+- [ ] Telegram staff group receives the formatted message with inline buttons
+- [ ] Tap **✓ Seen** in Telegram → order card status updates everywhere within a few seconds
+- [ ] Tap **🍽 Served** → status updates, inline buttons are removed from the Telegram message
+- [ ] In dev: check **DEV: simulate failure** in the cart drawer, tap **Send Order** → "Show this to a member of staff" fallback screen appears with a **Try again** button
+- [ ] `GET /api/health` returns `{"ok":true,"db":"ok"}` with status 200
+
 ## Not yet built (ask before adding)
 
 - Image upload to Supabase Storage (replace emoji with photos)

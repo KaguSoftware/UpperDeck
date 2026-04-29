@@ -28,11 +28,22 @@ const tr: Messages = {
     price: "Fiyat",
     addToOrder: "Siparişe Ekle",
   },
+  cart: {
+    title: "Siparişiniz",
+    table_number: "Masa numarası",
+    table_from_qr: "QR'dan",
+    note_placeholder: "Özel istekler, alerjiler…",
+    send: "Siparişi Gönder",
+    subtotal: "Ara Toplam",
+    try_again: "Tekrar dene",
+    error_validation: "Siparişinizde bir sorun var. Lütfen kontrol edip tekrar deneyin.",
+  },
   toast: {
     empty: "Siparişin boş",
     itemsOnDeckOne: "{count} ürün sepette",
     itemsOnDeckMany: "{count} ürün sepette",
     addedPrefix: "Eklendi · ",
+    orderSentPrefix: "Sipariş alındı! Masa ",
   },
   ticker: [
     "Smash Burger",

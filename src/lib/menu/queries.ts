@@ -3,6 +3,7 @@ import { getServerClient } from "@/lib/supabase/server";
 
 export type PublicCategory = { slug: string; name: string };
 export type PublicMenuItem = {
+  id: string;
   cat: string;
   name: string;
   hook: string;
@@ -32,7 +33,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sort_order"
+      "id, category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sort_order"
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -61,6 +62,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
       return a.name_en.localeCompare(b.name_en);
     })
     .map((r) => ({
+      id: r.id,
       cat: catById.get(r.category_id)!.slug,
       name: locale === "tr" ? r.name_tr : r.name_en,
       hook: locale === "tr" ? r.hook_tr : r.hook_en,

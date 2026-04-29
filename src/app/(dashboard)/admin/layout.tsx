@@ -5,6 +5,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { profile } = await requireRole(["admin", "owner"]);
 
   const nav = [
+    { href: "/admin/orders", label: "Orders" },
     { href: "/admin", label: "Dashboard" },
     { href: "/admin/menu", label: "Menu" },
     { href: "/admin/categories", label: "Categories" },

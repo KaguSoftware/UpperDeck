@@ -12,11 +12,22 @@ type EnShape = {
   filter: { all: string };
   stage: { item: string; items: string };
   modal: { spicy: string; price: string; addToOrder: string };
+  cart: {
+    title: string;
+    table_number: string;
+    table_from_qr: string;
+    note_placeholder: string;
+    send: string;
+    subtotal: string;
+    try_again: string;
+    error_validation: string;
+  };
   toast: {
     empty: string;
     itemsOnDeckOne: string;
     itemsOnDeckMany: string;
     addedPrefix: string;
+    orderSentPrefix: string;
   };
   ticker: string[];
   categories: Record<string, string>;
@@ -50,11 +61,22 @@ const en: EnShape = {
     price: "Price",
     addToOrder: "Add to Order",
   },
+  cart: {
+    title: "Your Order",
+    table_number: "Table number",
+    table_from_qr: "from QR",
+    note_placeholder: "Special requests, allergies…",
+    send: "Send Order",
+    subtotal: "Subtotal",
+    try_again: "Try again",
+    error_validation: "Something looks wrong with your order. Please check and try again.",
+  },
   toast: {
     empty: "Your order is empty",
     itemsOnDeckOne: "{count} item on the deck",
     itemsOnDeckMany: "{count} items on the deck",
     addedPrefix: "Added · ",
+    orderSentPrefix: "Order received! Table ",
   },
   ticker: [
     "Smashed Burgers",

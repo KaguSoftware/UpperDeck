@@ -1,0 +1,10 @@
+TODO: Replace this file (and remove the .txt extension) with a short notification sound.
+
+Requirements:
+- Format: MP3
+- Duration: ≤ 2 seconds
+- Filename: notification.mp3
+- Location: public/notification.mp3
+
+The orders screen will play this sound when a new order arrives (only after staff clicks "Start shift").
+If the file is missing or the browser blocks autoplay, it fails silently — no error is shown to staff.

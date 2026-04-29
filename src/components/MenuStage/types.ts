@@ -1,6 +1,7 @@
 import type { PlacedCard } from "@/components/MenuCard/types";
 
 export type MenuItem = {
+  id: string;
   cat: string;
   name: string;
   price: number;

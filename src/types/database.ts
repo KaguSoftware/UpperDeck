@@ -1,5 +1,40 @@
 export type Role = "admin" | "owner";
 
+export type OrderStatus = "new" | "seen" | "preparing" | "served" | "cancelled";
+
+export type OrderItem = {
+  menu_item_id: string;
+  name_en: string;
+  name_tr: string;
+  price: number;
+  qty: number;
+};
+
+export type Order = {
+  id: string;
+  table_number: number;
+  items: OrderItem[];
+  total: number;
+  status: OrderStatus;
+  note: string;
+  created_at: string;
+  updated_at: string;
+  seen_at: string | null;
+  served_at: string | null;
+};
+
+export type OrderInsert = {
+  table_number: number;
+  items: OrderItem[];
+  total: number;
+  note?: string;
+};
+
+export type OrderUpdate = Partial<{
+  status: OrderStatus;
+  note: string;
+}>;
+
 export type Profile = {
   id: string;
   role: Role;
@@ -117,6 +152,12 @@ export type Database = {
             referencedColumns: ["id"];
           }
         ];
+      };
+      orders: {
+        Row: Order;
+        Insert: OrderInsert;
+        Update: OrderUpdate;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
