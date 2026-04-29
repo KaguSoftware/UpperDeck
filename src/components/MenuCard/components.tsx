@@ -52,41 +52,42 @@ export function MenuCard({ card, index, onOpen }: MenuCardProps) {
         style={{ position: "relative" }}
         onClick={() => onOpen(card)}
       >
-        <div className="w-full aspect-square grid place-items-center relative overflow-hidden mb-1.5">
-          <div className="absolute inset-[6%]" style={{ background: blobBg }} />
-          {card.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={card.image_url}
-              alt=""
-              className="relative w-full h-full object-cover"
-            />
-          ) : (
-            <span className="relative text-[40px] leading-none">{card.emoji}</span>
-          )}
-        </div>
-        <div
-          className={[
-            "font-bowlby uppercase leading-[0.92] tracking-[-0.3px] mb-1",
-            nameColor,
-            NAME_SIZE[card.sz],
-          ].join(" ")}
-        >
-          {card.name}
-        </div>
-        <div className="flex justify-between items-end mt-auto gap-1">
-          <span className={["text-[7px] tracking-[0.06em] font-semibold lowercase", descColor].join(" ")}>
-            {card.hook}
-          </span>
-          <span
-            className={[
-              "font-ui font-extrabold text-[9px] text-orange whitespace-nowrap",
-              isOrange ? "bg-white text-orange px-1 py-px" : "",
-            ].join(" ")}
-          >
-            {card.price} ₺
-          </span>
-        </div>
+        {card.image_url ? (
+          <>
+            {/* image fills entire card */}
+            <div className="absolute inset-0 overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={card.image_url} alt="" className="w-full h-full object-cover" />
+            </div>
+            {/* text overlay at bottom */}
+            <div className="absolute inset-x-0 bottom-0 px-2 py-1.5 flex justify-between items-end gap-1" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)" }}>
+              <div className={["font-bowlby uppercase leading-[0.92] tracking-[-0.3px] text-white", NAME_SIZE[card.sz]].join(" ")}>
+                {card.name}
+              </div>
+              <span className="font-ui font-extrabold text-[9px] bg-white text-orange px-1 py-px whitespace-nowrap shrink-0">
+                {card.price} ₺
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-full aspect-square grid place-items-center relative overflow-hidden mb-1.5">
+              <div className="absolute inset-[6%]" style={{ background: blobBg }} />
+              <span className="relative text-[40px] leading-none">{card.emoji}</span>
+            </div>
+            <div className={["font-bowlby uppercase leading-[0.92] tracking-[-0.3px] mb-1", nameColor, NAME_SIZE[card.sz]].join(" ")}>
+              {card.name}
+            </div>
+            <div className="flex justify-between items-end mt-auto gap-1">
+              <span className={["text-[7px] tracking-[0.06em] font-semibold lowercase", descColor].join(" ")}>
+                {card.hook}
+              </span>
+              <span className={["font-ui font-extrabold text-[9px] text-orange whitespace-nowrap", isOrange ? "bg-white text-orange px-1 py-px" : ""].join(" ")}>
+                {card.price} ₺
+              </span>
+            </div>
+          </>
+        )}
         {card.spicy && (
           <span className={["absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center text-[14px] leading-none", isGreen ? "bg-orange" : "bg-green"].join(" ")}>
             🌶
