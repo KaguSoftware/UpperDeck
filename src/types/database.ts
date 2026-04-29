@@ -49,6 +49,9 @@ export type Category = {
   name_en: string;
   name_tr: string;
   sort_order: number;
+  image_url: string | null;
+  emoji: string | null;
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -92,6 +95,9 @@ type CategoryInsert = {
   name_en: string;
   name_tr: string;
   sort_order?: number;
+  image_url?: string | null;
+  emoji?: string | null;
+  parent_id?: string | null;
   created_by?: string | null;
 };
 
@@ -100,6 +106,9 @@ type CategoryUpdate = Partial<{
   name_en: string;
   name_tr: string;
   sort_order: number;
+  image_url: string | null;
+  emoji: string | null;
+  parent_id: string | null;
 }>;
 
 type MenuItemInsert = {

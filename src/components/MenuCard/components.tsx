@@ -1,97 +1,68 @@
 import type { MenuCardProps } from "./types";
-import { BLOB_BG_BY_FILL } from "./constants";
 
-const NAME_SIZE: Record<string, string> = {
-  "size-s": "text-[11px]",
-  "size-m": "text-[13px]",
-  "size-l": "text-[16px]",
-};
-
-export function MenuCard({ card, index, onOpen }: MenuCardProps) {
-  const blobBg = BLOB_BG_BY_FILL[card.fill];
-
+export function MenuCard({ card, onOpen }: MenuCardProps) {
   const isGreen = card.fill === "green-fill";
   const isOrange = card.fill === "orange-fill";
 
-  const cardBase =
-    "w-full text-ink p-2 border-2 border-green cursor-pointer flex flex-col transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.04] active:rotate-0";
   const cardFill = isGreen
-    ? "bg-green border-green"
+    ? "bg-green/10 border-green"
     : isOrange
-    ? "bg-orange border-orange"
+    ? "bg-orange/10 border-orange/40"
     : "bg-white";
 
-  const nameColor = isGreen
-    ? "text-bg"
+  const insetShadow = isGreen
+    ? "inset 0 0 0 4px rgba(57,87,72,0.25)"
     : isOrange
-    ? "text-white"
-    : "text-green";
+    ? "inset 0 0 0 4px rgba(227,93,7,0.2)"
+    : undefined;
 
-  const descColor = isGreen
-    ? "text-bg opacity-85"
-    : isOrange
-    ? "text-white opacity-95"
-    : "text-green opacity-[0.82]";
+  const nameColor = "text-green";
+  const descColor = "text-green opacity-[0.72]";
 
   return (
-    <div
-      className="absolute"
-      style={{
-        left: card.x,
-        top: card.y,
-        width: card.w,
-        transform: `rotate(${card.rot}deg)`,
-        zIndex: index,
-      }}
+    <button
+      type="button"
+      data-item={card.id}
+      className={[
+        "w-full flex items-stretch gap-0 border-b-2 border-green cursor-pointer text-left transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.02]",
+        cardFill,
+      ].join(" ")}
+      style={insetShadow ? { boxShadow: insetShadow } : undefined}
+      onClick={() => onOpen(card)}
     >
+      {/* square image/emoji thumbnail */}
+      <div className="shrink-0 w-20 h-20 grid place-items-center overflow-hidden bg-bg-deep">
+        {card.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={card.image_url} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-[36px] leading-none">{card.emoji}</span>
+        )}
+      </div>
 
-      <button
-        type="button"
-        className={[cardBase, cardFill, card.spicy ? "spicy" : ""].filter(Boolean).join(" ")}
-        style={{ position: "relative" }}
-        onClick={() => onOpen(card)}
-      >
-        <div className="w-full aspect-square grid place-items-center relative overflow-hidden mb-1.5">
-          <div className="absolute inset-[6%]" style={{ background: blobBg }} />
-          {card.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={card.image_url}
-              alt=""
-              className="relative w-full h-full object-cover"
-            />
-          ) : (
-            <span className="relative text-[40px] leading-none">{card.emoji}</span>
+      {/* text */}
+      <div className={["flex-1 h-20 flex flex-col justify-center px-3 py-2.5 min-w-0 overflow-hidden border-l-4", isGreen ? "border-green/30" : isOrange ? "border-orange/30" : "border-transparent"].join(" ")}>
+        <div className={["font-bowlby text-[15px] uppercase leading-[0.92] tracking-[-0.3px] shrink-0", nameColor].join(" ")}>
+          {card.name}
+          {card.spicy && (
+            <span className={["ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px]", isGreen ? "bg-orange" : "bg-green"].join(" ")}>
+              🌶
+            </span>
           )}
         </div>
-        <div
-          className={[
-            "font-bowlby uppercase leading-[0.92] tracking-[-0.3px] mb-1",
-            nameColor,
-            NAME_SIZE[card.sz],
-          ].join(" ")}
-        >
-          {card.name}
-        </div>
-        <div className="flex justify-between items-end mt-auto gap-1">
-          <span className={["text-[7px] tracking-[0.06em] font-semibold lowercase", descColor].join(" ")}>
-            {card.hook}
-          </span>
-          <span
-            className={[
-              "font-ui font-extrabold text-[9px] text-orange whitespace-nowrap",
-              isOrange ? "bg-white text-orange px-1 py-px" : "",
-            ].join(" ")}
-          >
-            {card.price} ₺
-          </span>
-        </div>
-        {card.spicy && (
-          <span className={["absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center text-[14px] leading-none", isGreen ? "bg-orange" : "bg-green"].join(" ")}>
-            🌶
-          </span>
+        {card.desc && (
+          <div className={["text-[10px] tracking-[0.03em] font-normal mt-0.5 leading-[1.35] overflow-hidden line-clamp-2", descColor].join(" ")}>
+            {card.desc}
+          </div>
         )}
-      </button>
-    </div>
+      </div>
+
+      {/* price */}
+      <div className="shrink-0 flex items-center pr-3.5">
+        <span className="font-ui font-extrabold text-[13px] whitespace-nowrap text-orange">
+          {card.price} ₺
+        </span>
+      </div>
+    </button>
   );
 }

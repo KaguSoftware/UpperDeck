@@ -13,20 +13,21 @@ export default async function EditCategoryPage({
 }) {
   const { id } = await params;
   const supabase = await getServerClient();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [{ data, error }, { data: parents }] = await Promise.all([
+    supabase.from("categories").select("*").eq("id", id).single(),
+    supabase.from("categories").select("id, name_en").is("parent_id", null).order("sort_order"),
+  ]);
 
   if (error || !data) notFound();
 
+  // exclude self from parent options
+  const parentOptions = (parents ?? []).filter((p) => p.id !== id);
   const update = updateCategory.bind(null, id);
 
   return (
     <>
       <PageHeader title="Edit Category" subtitle={data.name_en} />
-      <CategoryForm action={update} initial={data} />
+      <CategoryForm action={update} initial={data} parentOptions={parentOptions} />
     </>
   );
 }

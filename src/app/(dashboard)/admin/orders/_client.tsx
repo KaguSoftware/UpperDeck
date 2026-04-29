@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useTransition } from "react";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/realtime-js";
 import type { Order, OrderStatus } from "@/types/database";
@@ -87,8 +87,19 @@ function ElapsedBadge({ createdAt, status }: { createdAt: string; status: OrderS
 
 // ─── OrderCard ───────────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: Order }) {
+function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (id: string, status: OrderStatus) => void }) {
   const urgent = isStale(order);
+  const [, startTransition] = useTransition();
+
+  function handleStatus(status: OrderStatus) {
+    onStatusChange(order.id, status);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("id", order.id);
+      fd.set("status", status);
+      await updateOrderStatus(fd);
+    });
+  }
 
   return (
     <div
@@ -147,17 +158,15 @@ function OrderCard({ order }: { order: Order }) {
       {/* actions */}
       <div className="flex flex-wrap gap-2 border-t border-green/20 pt-3">
         {ACTION_BUTTONS.map(({ status, label }) => (
-          <form key={status} action={updateOrderStatus}>
-            <input type="hidden" name="id"     value={order.id} />
-            <input type="hidden" name="status" value={status}   />
-            <button
-              type="submit"
-              disabled={order.status === status}
-              className="border-2 border-green text-green font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase px-3 py-1.5 bg-transparent cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:bg-green hover:text-bg transition-colors"
-            >
-              {label}
-            </button>
-          </form>
+          <button
+            key={status}
+            type="button"
+            disabled={order.status === status}
+            onClick={() => handleStatus(status)}
+            className="border-2 border-green text-green font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase px-3 py-1.5 bg-transparent cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:bg-green hover:text-bg transition-colors"
+          >
+            {label}
+          </button>
         ))}
       </div>
     </div>
@@ -337,6 +346,11 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
     setAudioArmed(true);
   }, []);
 
+  // ── optimistic status update ─────────────────────────────────────────────
+  const handleStatusChange = useCallback((id: string, status: OrderStatus) => {
+    setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status } : o));
+  }, []);
+
   // ── derived ──────────────────────────────────────────────────────────────
   const staleCount = orders.filter(isStale).length;
 
@@ -398,7 +412,7 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {orders.map((order) => (
-            <OrderCard key={order.id} order={order} />
+            <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} />
           ))}
         </div>
       )}

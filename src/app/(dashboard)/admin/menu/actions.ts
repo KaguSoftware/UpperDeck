@@ -62,6 +62,13 @@ export async function updateItem(id: string, formData: FormData) {
   redirect("/admin/menu");
 }
 
+export async function toggleAvailability(id: string, is_available: boolean) {
+  const { supabase } = await requireRole(["admin", "owner"]);
+  const { error } = await supabase.from("menu_items").update({ is_available }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/menu");
+}
+
 export async function deleteItem(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
   const { supabase } = await requireRole(["admin", "owner"]);

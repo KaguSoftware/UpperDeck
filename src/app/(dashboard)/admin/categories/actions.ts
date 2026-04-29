@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { getServerClient } from "@/lib/supabase/server";
 
 const CategorySchema = z.object({
   slug: z
@@ -14,24 +15,42 @@ const CategorySchema = z.object({
     .trim(),
   name_en: z.string().min(1).max(60).trim(),
   name_tr: z.string().min(1).max(60).trim(),
-  sort_order: z.coerce.number().int().default(0),
+  image_url: z.string().url().nullable().optional(),
+  emoji: z.string().max(10).nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
 });
 
 function parse(formData: FormData) {
+  const rawImageUrl = formData.get("image_url");
+  const rawEmoji = formData.get("emoji");
+  const rawParentId = formData.get("parent_id");
   return CategorySchema.parse({
     slug: formData.get("slug"),
     name_en: formData.get("name_en"),
     name_tr: formData.get("name_tr"),
-    sort_order: formData.get("sort_order") ?? 0,
+    image_url: rawImageUrl && rawImageUrl !== "" ? rawImageUrl : null,
+    emoji: rawEmoji && rawEmoji !== "" ? rawEmoji : null,
+    parent_id: rawParentId && rawParentId !== "" ? rawParentId : null,
   });
 }
 
 export async function createCategory(formData: FormData) {
   const { user, supabase } = await requireRole(["admin", "owner"]);
   const data = parse(formData);
+
+  const { data: maxRow } = await supabase
+    .from("categories")
+    .select("sort_order")
+    .is("parent_id", null)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .single();
+
+  const sort_order = (maxRow?.sort_order ?? 0) + 1;
+
   const { error } = await supabase
     .from("categories")
-    .insert({ ...data, created_by: user.id });
+    .insert({ ...data, sort_order, created_by: user.id });
   if (error) throw new Error(error.message);
   revalidatePath("/admin/categories");
   revalidatePath("/admin");
@@ -54,4 +73,47 @@ export async function deleteCategory(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin/categories");
   revalidatePath("/admin");
+}
+
+async function reorderTopLevel(id: string, direction: "up" | "down") {
+  const supabase = await getServerClient();
+
+  // Fetch only the current row and its immediate neighbour
+  const { data: curr, error: e1 } = await supabase
+    .from("categories")
+    .select("id, sort_order")
+    .eq("id", id)
+    .single();
+  if (e1 || !curr) throw new Error(e1?.message ?? "Not found");
+
+  const neighbourQ = supabase
+    .from("categories")
+    .select("id, sort_order")
+    .is("parent_id", null)
+    .limit(1);
+
+  const { data: neighbours, error: e2 } =
+    direction === "up"
+      ? await neighbourQ.lt("sort_order", curr.sort_order).order("sort_order", { ascending: false })
+      : await neighbourQ.gt("sort_order", curr.sort_order).order("sort_order", { ascending: true });
+
+  if (e2) throw new Error(e2.message);
+  const neighbour = neighbours?.[0];
+  if (!neighbour) return;
+
+  // Swap just the two sort_order values
+  await Promise.all([
+    supabase.from("categories").update({ sort_order: neighbour.sort_order }).eq("id", curr.id),
+    supabase.from("categories").update({ sort_order: curr.sort_order }).eq("id", neighbour.id),
+  ]);
+
+  revalidatePath("/admin/categories");
+}
+
+export async function moveCategoryUp(id: string) {
+  await reorderTopLevel(z.string().uuid().parse(id), "up");
+}
+
+export async function moveCategoryDown(id: string) {
+  await reorderTopLevel(z.string().uuid().parse(id), "down");
 }
