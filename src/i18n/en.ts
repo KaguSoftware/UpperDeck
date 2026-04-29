@@ -31,6 +31,7 @@ type EnShape = {
   };
   ticker: string[];
   categories: Record<string, string>;
+  waiter: { title: string; bill: string; call: string; cancel: string };
 };
 
 const en: EnShape = {
@@ -89,6 +90,12 @@ const en: EnShape = {
     "Open Late",
     "Order at the Counter",
   ],
+  waiter: {
+    title: "Call Waiter",
+    bill: "Hesap (Bill)",
+    call: "Call Waiter",
+    cancel: "Cancel",
+  },
   categories: {
     Breakfast: "Breakfast",
     Chicken: "Chicken",

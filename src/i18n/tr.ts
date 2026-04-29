@@ -56,6 +56,12 @@ const tr: Messages = {
     "Geç Saate Kadar Açık",
     "Sayaçtan Sipariş",
   ],
+  waiter: {
+    title: "Garson Çağır",
+    bill: "Hesap",
+    call: "Garson Çağır",
+    cancel: "İptal",
+  },
   categories: {
     Breakfast: "Kahvaltı",
     Chicken: "Tavuk",
