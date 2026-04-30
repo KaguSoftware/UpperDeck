@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getServerClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/telegram";
 
 const ItemSchema = z.object({
@@ -31,7 +31,6 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
     return { ok: false, error: "validation", message: parsed.error.issues[0]?.message };
   }
 
-  // DEV ONLY — short-circuit before touching Supabase
   if (parsed.data._simulateFailure && process.env.NODE_ENV === "development") {
     return { ok: false, error: "network", message: "simulated" };
   }
@@ -49,7 +48,9 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
   }
 
   try {
-    const supabase = await getServerClient();
+    // Public ordering endpoint — service role bypasses RLS. Validation is
+    // done above by Zod and the server-computed total is authoritative.
+    const supabase = getAdminClient();
 
     const { error } = await supabase
       .from("orders")
