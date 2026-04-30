@@ -20,8 +20,8 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
           >
             {/* thumbnail — collapses to 0 height when compact */}
             <div
-              className="w-28 overflow-hidden flex items-center justify-center bg-bg-deep transition-all duration-300"
-              style={{ height: compact ? 0 : 80 }}
+              className="w-24 overflow-hidden flex items-center justify-center bg-bg-deep transition-all duration-300"
+              style={{ height: compact ? 0 : 56 }}
             >
               {image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -30,7 +30,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
                 <span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>
               )}
             </div>
-            <span className="w-28 px-2 py-1 text-center leading-[1.4] wrap-break-word flex-1 flex items-center justify-center">{label}</span>
+            <span className="w-24 px-2 py-1 text-center leading-[1.4] wrap-break-word flex-1 flex items-center justify-center">{label}</span>
           </button>
         );
       })}

@@ -26,7 +26,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             onClick={() => onOpen(card)}
         >
             {/* square image/emoji thumbnail */}
-            <div className="shrink-0 w-16 h-16 grid place-items-center overflow-hidden bg-bg-deep">
+            <div className="shrink-0 w-32 h-32 grid place-items-center overflow-hidden bg-bg-deep">
                 {card.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -44,13 +44,13 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             {/* text */}
             <div
                 className={[
-                    "flex-1 h-16 flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden",
+                    "flex-1 h-32 flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden",
                     "",
                 ].join(" ")}
             >
                 <div
                     className={[
-                        "font-bowlby text-[13px] uppercase leading-[0.92] tracking-[-0.3px] shrink-0",
+                        "font-bowlby text-[17px] uppercase leading-[0.92] tracking-[-0.3px] shrink-0",
                         nameColor,
                     ].join(" ")}
                 >
@@ -69,7 +69,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                 {card.desc && (
                     <div
                         className={[
-                            "text-[10px] tracking-[0.03em] font-normal mt-0.5 leading-[1.35] overflow-hidden line-clamp-2",
+                            "text-[13px] tracking-[0.03em] font-normal mt-0.5 leading-[1.35] overflow-hidden line-clamp-2",
                             descColor,
                         ].join(" ")}
                     >

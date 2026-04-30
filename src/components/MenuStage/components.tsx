@@ -80,12 +80,12 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
                 onClick={() => setCollapsed((prev) => ({ ...prev, [slug]: !isCollapsed }))}
               >
                 {/* category image — full width, 2-card height (160px) */}
-                <div className="w-full h-40 overflow-hidden bg-bg-deep flex items-center justify-center">
+                <div className="w-full h-28 overflow-hidden bg-bg-deep flex items-center justify-center">
                   {image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={image_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-[56px] leading-none">{emoji ?? "🍽"}</span>
+                    <span className="text-[40px] leading-none">{emoji ?? "🍽"}</span>
                   )}
                 </div>
                 {/* name + count row */}
@@ -139,7 +139,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
                               style={{ gridTemplateRows: isSubCollapsed ? "0fr" : "1fr" }}
                             >
                               <div className="overflow-hidden">
-                                <div className="pt-2 px-2">
+                                <div className="p-4">
                                 {group.cards.map((card, i) => (
                                   <MenuCard key={`${slug}-${gi}-${i}`} card={card} index={i} onOpen={onOpen} />
                                 ))}
