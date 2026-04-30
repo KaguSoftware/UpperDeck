@@ -141,7 +141,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
                               <div className="overflow-hidden">
                                 <div className="pt-2 px-2">
                                 {group.cards.map((card, i) => (
-                                  <MenuCard key={`${slug}-${gi}-${i}`} card={card} index={i} onOpen={onOpen} subcategory />
+                                  <MenuCard key={`${slug}-${gi}-${i}`} card={card} index={i} onOpen={onOpen} />
                                 ))}
                                 </div>
                               </div>
