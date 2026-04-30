@@ -8,7 +8,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 const RoleSchema = z.enum(["admin", "owner"]);
 
 export async function setRole(formData: FormData) {
-  const { user: actor } = await requireRole("admin");
+  const { user: actor } = await requireRole("owner");
 
   const userId = z.string().uuid().parse(formData.get("user_id"));
   const role = RoleSchema.parse(formData.get("role"));
@@ -18,6 +18,20 @@ export async function setRole(formData: FormData) {
   }
 
   const admin = getAdminClient();
+
+  if (role !== "owner") {
+    const [{ data: target }, { count }] = await Promise.all([
+      admin.from("profiles").select("role").eq("id", userId).single(),
+      admin
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "owner"),
+    ]);
+    if (target?.role === "owner" && (count ?? 0) <= 1) {
+      throw new Error("Cannot remove the last owner.");
+    }
+  }
+
   const { error } = await admin.from("profiles").update({ role }).eq("id", userId);
   if (error) throw new Error(error.message);
 
@@ -30,7 +44,7 @@ const InviteSchema = z.object({
 });
 
 export async function inviteUser(formData: FormData) {
-  await requireRole("admin");
+  await requireRole("owner");
   const { email, role } = InviteSchema.parse({
     email: formData.get("email"),
     role: formData.get("role"),

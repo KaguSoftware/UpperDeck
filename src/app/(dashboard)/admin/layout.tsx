@@ -9,7 +9,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/menu", label: "Menu" },
     { href: "/admin/categories", label: "Categories" },
     { href: "/admin/settings", label: "Settings" },
-    ...(profile.role === "admin"
+    ...(profile.role === "owner"
       ? [{ href: "/admin/users", label: "Users", admin: true }]
       : []),
   ];
