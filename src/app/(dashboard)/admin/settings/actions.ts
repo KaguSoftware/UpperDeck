@@ -27,7 +27,7 @@ export async function saveHeroSettings(formData: FormData) {
     featured_badge: raw("featured_badge"),
   });
 
-  const upserts = [
+  const rows = [
     { key: "hero_mode", value: parsed.hero_mode },
     { key: "hero_media_url", value: parsed.hero_media_url ?? "" },
     { key: "hero_media_type", value: parsed.hero_media_type ?? "" },
@@ -36,13 +36,13 @@ export async function saveHeroSettings(formData: FormData) {
     { key: "featured_badge", value: parsed.featured_badge ?? "" },
   ];
 
-  for (const row of upserts) {
-    const { error } = await supabase
-      .from("settings")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .upsert(row as any, { onConflict: "key" });
-    if (error) throw new Error(error.message);
-  }
+  // The `settings` table is not in the generated Database type yet, so the
+  // upsert payload needs a cast. Validation above guarantees shape.
+  const { error } = await supabase
+    .from("settings")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .upsert(rows as any, { onConflict: "key" });
+  if (error) throw new Error(error.message);
 
   revalidatePath("/admin/settings");
   revalidatePath("/en");
