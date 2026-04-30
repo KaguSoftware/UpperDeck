@@ -50,3 +50,19 @@ a {
   60% { transform: scaleY(0.9) scaleX(1.06); opacity: 0.95; }
   80% { transform: scaleY(1.08) scaleX(0.96); opacity: 0.9; }
 }
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #f0e1aa 25%,
+    #fff1c2 50%,
+    #f0e1aa 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
