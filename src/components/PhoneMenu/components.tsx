@@ -10,6 +10,7 @@ import { CartDrawer } from "@/components/CartDrawer/components";
 import { WaiterButton } from "@/components/WaiterButton/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
+import { Footer } from "@/components/Footer/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem, CheckoutState } from "@/components/CartDrawer/types";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
@@ -51,12 +52,14 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
   const [activeSlug, setActiveSlug] = useState("");
   const [heroCollapsed, setHeroCollapsed] = useState(false);
+  const [footerVisible, setFooterVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const topbarRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,12 +231,17 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     if (!wrap || !stage) return;
 
     const scrollTop = wrap.scrollTop;
+    const wrapHeight = wrap.clientHeight;
 
     setHeroCollapsed((prev) => {
       if (!prev && scrollTop > COLLAPSE_AT) return true;
       if (prev && scrollTop < EXPAND_AT) return false;
       return prev;
     });
+
+    if (footerRef.current) {
+      setFooterVisible(footerRef.current.offsetTop < scrollTop + wrapHeight - 64);
+    }
 
     if (isAutoScrollingRef.current) return;
 
@@ -299,6 +307,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
             items={items}
             itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
           />
+          <div ref={footerRef}><Footer /></div>
         </div>
         <button
           type="button"
@@ -306,7 +315,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           aria-label="Scroll to top"
           className={[
             "absolute bottom-4 right-4 w-10 h-10 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300 z-9999",
-            heroCollapsed ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
+            heroCollapsed && !footerVisible ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
           ].join(" ")}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -319,6 +328,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
+          hidden={footerVisible}
         />
       </div>
       <CartDrawer

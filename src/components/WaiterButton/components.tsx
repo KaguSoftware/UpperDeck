@@ -9,11 +9,12 @@ type WaiterButtonProps = {
   labelWaiter: string;
   labelTitle: string;
   labelCancel: string;
+  hidden?: boolean;
 };
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, hidden }: WaiterButtonProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [isPending, startTransition] = useTransition();
 
@@ -36,7 +37,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
         type="button"
         onClick={open}
         aria-label="Call waiter"
-        className="absolute bottom-4 left-4 z-9999 w-12 h-12 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg"
+        className={["absolute bottom-4 left-4 z-9999 w-12 h-12 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300", hidden ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"].join(" ")}
       >
         {/* bell icon */}
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

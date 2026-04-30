@@ -1,6 +1,6 @@
 import type { MenuCardProps } from "./types";
 
-export function MenuCard({ card, onOpen, subcategory }: MenuCardProps) {
+export function MenuCard({ card, onOpen }: MenuCardProps) {
     const isGreen = card.fill === "green-fill";
     const isOrange = card.fill === "orange-fill";
 
@@ -26,7 +26,7 @@ export function MenuCard({ card, onOpen, subcategory }: MenuCardProps) {
             onClick={() => onOpen(card)}
         >
             {/* square image/emoji thumbnail */}
-            <div className={`shrink-0 w-16 h-16 grid place-items-center overflow-hidden bg-bg-deep${subcategory ? " border-l-2 border-green" : ""}`}>
+            <div className="shrink-0 w-16 h-16 grid place-items-center overflow-hidden bg-bg-deep">
                 {card.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -44,10 +44,8 @@ export function MenuCard({ card, onOpen, subcategory }: MenuCardProps) {
             {/* text */}
             <div
                 className={[
-                    "flex-1 h-16 flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden border-l-2",
-                    isGreen || isOrange
-                        ? "border-green/30"
-                        : "border-transparent",
+                    "flex-1 h-16 flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden",
+                    "",
                 ].join(" ")}
             >
                 <div
