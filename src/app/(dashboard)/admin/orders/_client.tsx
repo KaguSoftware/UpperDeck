@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/realtime-js";
 import type { Order, OrderStatus } from "@/types/database";
-import { useRealtimeConnection } from "../_realtime-context";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -161,13 +160,7 @@ function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (i
 export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
   const [orders, setOrders]           = useState<Order[]>(initialOrders);
   const [audioArmed, setAudioArmed]   = useState(false);
-  const [connectionState, setLocalConnectionState] = useState<ConnectionState>("connecting");
-  const { setConnectionState: setContextConnectionState } = useRealtimeConnection();
-
-  const setConnectionState = (s: ConnectionState) => {
-    setLocalConnectionState(s);
-    setContextConnectionState(s);
-  };
+  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
 
   const audioRef        = useRef<HTMLAudioElement | null>(null);
   const audioArmedRef   = useRef(false);
