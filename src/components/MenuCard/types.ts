@@ -17,4 +17,5 @@ export type MenuCardProps = {
   card: PlacedCard;
   index: number;
   onOpen: (card: PlacedCard) => void;
+  subcategory?: boolean;
 };

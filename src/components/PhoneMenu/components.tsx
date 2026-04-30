@@ -103,6 +103,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
 
   const handleCartClick = useCallback(() => {
+    setHeroCollapsed(true);
     setCartOpen(true);
   }, []);
 

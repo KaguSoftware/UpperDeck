@@ -123,7 +123,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
                             {/* subcategory header — tappable to collapse its items */}
                             <button
                               type="button"
-                              className="w-full flex items-center justify-between px-3.5 py-2 bg-bg-deep border-b-2 border-green/30 cursor-pointer"
+                              className="w-full flex items-center justify-between px-3.5 py-2 bg-bg-deep border-b-2 border-t-4 border-green/20 cursor-pointer"
                               onClick={() => setSubCollapsed((prev) => ({ ...prev, [subKey]: !isSubCollapsed }))}
                             >
                               <span className="font-ui font-extrabold text-[13px] tracking-[0.12em] uppercase text-green/70">
@@ -135,13 +135,15 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
                             </button>
                             {/* subcategory items */}
                             <div
-                              className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                              className="grid transition-[grid-template-rows] duration-300 ease-in-out border-l-4 border-green/20"
                               style={{ gridTemplateRows: isSubCollapsed ? "0fr" : "1fr" }}
                             >
                               <div className="overflow-hidden">
+                                <div className="pt-2 px-2">
                                 {group.cards.map((card, i) => (
-                                  <MenuCard key={`${slug}-${gi}-${i}`} card={card} index={i} onOpen={onOpen} />
+                                  <MenuCard key={`${slug}-${gi}-${i}`} card={card} index={i} onOpen={onOpen} subcategory />
                                 ))}
+                                </div>
                               </div>
                             </div>
                           </>

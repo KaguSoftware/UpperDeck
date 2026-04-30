@@ -1,6 +1,6 @@
 import type { MenuCardProps } from "./types";
 
-export function MenuCard({ card, onOpen }: MenuCardProps) {
+export function MenuCard({ card, onOpen, subcategory }: MenuCardProps) {
     const isGreen = card.fill === "green-fill";
     const isOrange = card.fill === "orange-fill";
 
@@ -19,14 +19,14 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             type="button"
             data-item={card.id}
             className={[
-                "w-full flex items-stretch gap-0 border-b-2 border-green cursor-pointer text-left transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.02]",
+                "w-full flex items-stretch gap-0 border-2 border-green cursor-pointer text-left transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.02]",
                 cardFill,
             ].join(" ")}
             style={insetShadow ? { boxShadow: insetShadow } : undefined}
             onClick={() => onOpen(card)}
         >
             {/* square image/emoji thumbnail */}
-            <div className="shrink-0 w-20 h-20 grid place-items-center overflow-hidden bg-bg-deep">
+            <div className={`shrink-0 w-16 h-16 grid place-items-center overflow-hidden bg-bg-deep${subcategory ? " border-l-2 border-green" : ""}`}>
                 {card.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -35,7 +35,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <span className="text-[36px] leading-none">
+                    <span className="text-[28px] leading-none">
                         {card.emoji}
                     </span>
                 )}
@@ -44,7 +44,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             {/* text */}
             <div
                 className={[
-                    "flex-1 h-20 flex flex-col justify-center px-3 py-2.5 min-w-0 overflow-hidden border-l-4",
+                    "flex-1 h-16 flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden border-l-2",
                     isGreen || isOrange
                         ? "border-green/30"
                         : "border-transparent",
@@ -52,7 +52,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             >
                 <div
                     className={[
-                        "font-bowlby text-[15px] uppercase leading-[0.92] tracking-[-0.3px] shrink-0",
+                        "font-bowlby text-[13px] uppercase leading-[0.92] tracking-[-0.3px] shrink-0",
                         nameColor,
                     ].join(" ")}
                 >
