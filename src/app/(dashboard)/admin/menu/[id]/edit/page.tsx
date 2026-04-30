@@ -3,6 +3,7 @@ import { getServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "../../../_components";
 import { MenuItemForm } from "../../_form";
 import { updateItem } from "../../actions";
+import { buildCategoryOptions } from "../../_category-options";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +17,18 @@ export default async function EditItemPage({
 
   const [itemRes, catRes] = await Promise.all([
     supabase.from("menu_items").select("*").eq("id", id).single(),
-    supabase.from("categories").select("id, name_en").order("sort_order"),
+    supabase.from("categories").select("id, name_en, parent_id").order("sort_order"),
   ]);
 
   if (itemRes.error || !itemRes.data) notFound();
 
+  const categories = buildCategoryOptions(catRes.data ?? []);
   const update = updateItem.bind(null, id);
 
   return (
     <>
       <PageHeader title="Edit Item" subtitle={itemRes.data.name_en} />
-      <MenuItemForm action={update} categories={catRes.data ?? []} initial={itemRes.data} />
+      <MenuItemForm action={update} categories={categories} initial={itemRes.data} />
     </>
   );
 }

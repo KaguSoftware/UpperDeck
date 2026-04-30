@@ -3,6 +3,7 @@ import type { PlacedCard } from "@/components/MenuCard/types";
 export type MenuItem = {
   id: string;
   cat: string;
+  subcat?: string | null;
   name: string;
   price: number;
   image_url: string | null;
@@ -19,10 +20,9 @@ export type LayoutResult = {
 };
 
 export type MenuStageProps = {
-  stageWidth: number;
   onOpen: (card: PlacedCard) => void;
   stageRef: React.RefObject<HTMLDivElement | null>;
-  categories: { slug: string; name: string }[];
+  categories: { slug: string; name: string; emoji: string | null; image_url: string | null; subcategories: { slug: string; name: string }[] }[];
   items: MenuItem[];
   itemLabel: (count: number) => string;
 };

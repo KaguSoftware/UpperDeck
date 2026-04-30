@@ -2,7 +2,7 @@ import { PhoneMenu } from "@/components/PhoneMenu/components";
 import { getMessages } from "@/i18n";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
-import { getPublicMenu } from "@/lib/menu/queries";
+import { getPublicMenu, getHeroSettings } from "@/lib/menu/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +19,10 @@ export default async function Home({
 }) {
   const [{ locale }, sp] = await Promise.all([params, searchParams]);
   const lang: Locale = locales.includes(locale as Locale) ? (locale as Locale) : defaultLocale;
-  const [messages, { categories, items }] = await Promise.all([
+  const [messages, { categories, items }, heroSettings] = await Promise.all([
     Promise.resolve(getMessages(lang)),
     getPublicMenu(lang),
+    getHeroSettings(),
   ]);
 
   const rawT = typeof sp.t === "string" ? parseInt(sp.t, 10) : NaN;
@@ -33,6 +34,12 @@ export default async function Home({
       categories={categories}
       items={items}
       initialTableNumber={initialTableNumber}
+      heroMode={heroSettings.heroMode}
+      heroMediaUrl={heroSettings.heroMediaUrl}
+      heroMediaType={heroSettings.heroMediaType}
+      featuredItem={heroSettings.featuredItem}
+      featuredLabel={heroSettings.featuredLabel}
+      featuredBadge={heroSettings.featuredBadge}
     />
   );
 }

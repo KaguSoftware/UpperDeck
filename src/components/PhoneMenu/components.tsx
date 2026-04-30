@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useLayoutEffect, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { TopBar } from "@/components/TopBar/components";
 import { Hero } from "@/components/Hero/components";
 import { FilterPills } from "@/components/FilterPills/components";
@@ -32,9 +32,15 @@ type PhoneMenuProps = {
   categories: PublicCategory[];
   items: PublicMenuItem[];
   initialTableNumber?: number;
+  heroMode?: "none" | "media" | "featured";
+  heroMediaUrl?: string | null;
+  heroMediaType?: "image" | "video" | null;
+  featuredItem?: { id: string; name: string; image_url: string | null; emoji: string } | null;
+  featuredLabel?: string | null;
+  featuredBadge?: string | null;
 };
 
-export function PhoneMenu({ messages: t, categories, items, initialTableNumber }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredLabel, featuredBadge }: PhoneMenuProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
@@ -47,8 +53,6 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
-  const [stageWidth, setStageWidth] = useState(0);
-
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
@@ -87,14 +91,6 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
     }, 200);
   }, [cartItems, tableNumber, note]);
 
-  useLayoutEffect(() => {
-    const el = stageWrapRef.current;
-    if (!el) return;
-    setStageWidth(el.clientWidth);
-    const ro = new ResizeObserver(() => setStageWidth(el.clientWidth));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const flashToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -213,6 +209,17 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
     stageWrapRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  const handleFeaturedClick = useCallback(() => {
+    if (!featuredItem) return;
+    const target = stageRef.current?.querySelector<HTMLElement>(
+      `[data-item="${CSS.escape(featuredItem.id)}"]`
+    );
+    if (!target) return;
+    isAutoScrollingRef.current = true;
+    stageWrapRef.current?.scrollTo({ top: target.offsetTop - 8, behavior: "smooth" });
+    setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
+  }, [featuredItem]);
+
   const handleScroll = useCallback(() => {
     const wrap = stageWrapRef.current;
     const stage = stageRef.current;
@@ -238,7 +245,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
     setActiveSlug(current);
   }, []);
 
-  const pillItems = categories.map((c) => ({ id: c.slug, label: c.name }));
+  const pillItems = categories.map((c) => ({ id: c.slug, label: c.name, image_url: c.image_url, emoji: c.emoji }));
 
   return (
     <div className="fixed inset-0 flex flex-col">
@@ -260,12 +267,20 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
         headline4={t.hero.headline4}
         openHours={t.hero.openHours}
         itemsLabel={t.hero.items}
+        heroMode={heroMode}
+        heroMediaUrl={heroMediaUrl}
+        heroMediaType={heroMediaType}
+        featuredItem={featuredItem}
+        featuredLabel={featuredLabel}
+        featuredBadge={featuredBadge}
+        onFeaturedClick={handleFeaturedClick}
       />
       <FilterPills
         items={pillItems}
         activeId={activeSlug}
         onSelect={handlePillSelect}
         navRef={pillsNavRef}
+        compact={heroCollapsed}
       />
       <div className="relative flex-1 min-h-0">
         <div
@@ -274,7 +289,6 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber }
           className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <MenuStage
-            stageWidth={stageWidth}
             onOpen={setActiveItem}
             stageRef={stageRef}
             categories={categories}
