@@ -19,6 +19,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Upperdeck American Diner",
   description: "Burgers, waffles & whatever else.",
+  icons: { icon: "/upperdeck-logo.png" },
 };
 
 export function generateStaticParams() {

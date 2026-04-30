@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
 
 type WaiterButtonProps = {
@@ -39,12 +40,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
         aria-label="Call waiter"
         className={["absolute bottom-4 left-4 z-9999 w-12 h-12 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300", hidden ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"].join(" ")}
       >
-        {/* bell icon */}
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10 2C10 2 6 4.5 6 10V14H14V10C14 4.5 10 2 10 2Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-          <path d="M8 14C8 15.1 8.9 16 10 16C11.1 16 12 15.1 12 14" stroke="currentColor" strokeWidth="1.8"/>
-          <line x1="10" y1="2" x2="10" y2="0.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-        </svg>
+        <Bell size={20} strokeWidth={1.8} />
       </button>
 
       {/* backdrop + popup */}
