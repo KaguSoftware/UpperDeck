@@ -4,7 +4,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
     const isGreen = card.fill === "green-fill";
     const isOrange = card.fill === "orange-fill";
 
-    const cardFill = isGreen || isOrange ? "bg-green/10" : "bg-white";
+    const cardFill = isOrange ? "bg-orange/10" : isGreen ? "bg-green/10" : "bg-white";
     const insetShadow = isGreen
         ? "inset 0 0 0 4px rgba(57,87,72,0.25)"
         : isOrange

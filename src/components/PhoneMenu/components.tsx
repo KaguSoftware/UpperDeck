@@ -56,6 +56,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
+  const topbarRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -249,15 +250,17 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
 
   return (
     <div className="fixed inset-0 flex flex-col">
-      <TopBar
-        cartCount={cartCount}
-        onCartClick={handleCartClick}
-        onTopClick={handleTopClick}
-        brandMain={t.brand.name.main}
-        brandAccent={t.brand.name.accent}
-        brandSub={t.brand.sub}
-        orderLabel={t.topbar.order}
-      />
+      <div ref={topbarRef}>
+        <TopBar
+          cartCount={cartCount}
+          onCartClick={handleCartClick}
+          onTopClick={handleTopClick}
+          brandMain={t.brand.name.main}
+          brandAccent={t.brand.name.accent}
+          brandSub={t.brand.sub}
+          orderLabel={t.topbar.order}
+        />
+      </div>
       <Hero
         collapsed={heroCollapsed}
         itemCount={items.length}
@@ -316,33 +319,34 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
         />
-        <CartDrawer
-          items={cartItems}
-          isOpen={cartOpen}
-          onClose={() => { setCartOpen(false); setNote(""); }}
-          onRemove={handleRemove}
-          onIncrement={handleIncrement}
-          onDecrement={handleDecrement}
-          onTableChange={setTableNumber}
-          onNoteChange={setNote}
-          onCheckout={handleCheckout}
-          onRetry={handleRetry}
-          tableNumber={tableNumber}
-          note={note}
-          checkoutState={checkoutState}
-          totalLabel={t.cart.title}
-          subtotalLabel={t.cart.subtotal}
-          emptyLabel={t.toast.empty}
-          tableLabel={t.cart.table_number}
-          tableFromQrLabel={t.cart.table_from_qr}
-          notePlaceholder={t.cart.note_placeholder}
-          sendLabel={t.cart.send}
-          tryAgainLabel={t.cart.try_again}
-          tableFromQr={tableLocked}
-          simulateFailure={simulateFailure}
-          onSimulateFailureChange={setSimulateFailure}
-        />
       </div>
+      <CartDrawer
+        items={cartItems}
+        isOpen={cartOpen}
+        onClose={() => { setCartOpen(false); setNote(""); }}
+        onRemove={handleRemove}
+        onIncrement={handleIncrement}
+        onDecrement={handleDecrement}
+        onTableChange={setTableNumber}
+        onNoteChange={setNote}
+        onCheckout={handleCheckout}
+        onRetry={handleRetry}
+        tableNumber={tableNumber}
+        note={note}
+        checkoutState={checkoutState}
+        totalLabel={t.cart.title}
+        subtotalLabel={t.cart.subtotal}
+        emptyLabel={t.toast.empty}
+        tableLabel={t.cart.table_number}
+        tableFromQrLabel={t.cart.table_from_qr}
+        notePlaceholder={t.cart.note_placeholder}
+        sendLabel={t.cart.send}
+        tryAgainLabel={t.cart.try_again}
+        tableFromQr={tableLocked}
+        simulateFailure={simulateFailure}
+        onSimulateFailureChange={setSimulateFailure}
+        topOffset={topbarRef.current?.offsetHeight ?? 0}
+      />
       <ItemModal
         item={activeItem}
         onClose={() => setActiveItem(null)}

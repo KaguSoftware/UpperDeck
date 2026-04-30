@@ -37,4 +37,5 @@ export type CartDrawerProps = {
   tableFromQr?: boolean;
   simulateFailure?: boolean;
   onSimulateFailureChange?: (v: boolean) => void;
+  topOffset?: number;
 };
