@@ -25,8 +25,8 @@ export async function getHeroSettings(): Promise<HeroSettings> {
     .select("key, value")
     .in("key", ["hero_mode", "hero_media_url", "hero_media_type", "featured_item_id", "featured_label", "featured_badge"]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const get = (key: string) => (data as any[])?.find((r: any) => r.key === key)?.value ?? null;
+  const rows = (data ?? []) as { key: string; value: string | null }[];
+  const get = (key: string) => rows.find((r) => r.key === key)?.value ?? null;
 
   const heroMode = (get("hero_mode") || "none") as "none" | "media" | "featured";
   const url = get("hero_media_url") || null;

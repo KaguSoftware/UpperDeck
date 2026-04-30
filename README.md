@@ -40,6 +40,9 @@ backed by Supabase. Two roles: `admin` (platform) and `owner` (restaurant).
 
 ## Architecture
 
+For the full map (routing, data flow, orders pipeline, conventions), see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Quick summary:
+
 - `src/proxy.ts` (Next.js 16 file convention; replaced the old `middleware.ts`).
   Refreshes the Supabase session, gates `/admin/*`, and prepends locale for
   public routes.
@@ -106,24 +109,6 @@ deployment goes down before your first customer of the day does.
 | **Vercel Hobby** | Free | ⚠ Hobby is *non-commercial use only* per Vercel's ToS. For a paying café client choose one of: (a) **Vercel Pro** — $20/mo, removes the restriction; (b) **Cloudflare Pages** — free tier allows commercial use, Next.js supported via `@cloudflare/next-on-pages`. |
 
 ---
-
-## Smoke test checklist
-
-Run these manually after deploying or after a fresh local setup:
-
-- [ ] Sign up a test user via the Supabase dashboard (Authentication → Users → Invite)
-- [ ] Promote them to admin in the SQL editor:
-
-  ```sql
-  update public.profiles set role = 'admin' where id = '<that-user-uuid>';
-  ```
-
-- [ ] Sign in at `/login`
-- [ ] `/admin` shows three stat cards (categories, items, users)
-- [ ] `/admin/categories`: create a new category, edit it, delete it
-- [ ] `/admin/menu`: create a new item, toggle availability off, delete it
-- [ ] `/admin/users` (admin only): invite a new user as "owner", change their role
-- [ ] Visit `/en` and `/tr` — seeded items appear, your new item appears, items marked unavailable do not appear
 
 ### Orders flow
 
