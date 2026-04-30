@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useTransition } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/realtime-js";
 import type { Order, OrderStatus } from "@/types/database";
-import { updateOrderStatus, getRecentOrders } from "./actions";
 import { useRealtimeConnection } from "../_realtime-context";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
@@ -12,7 +11,6 @@ type ConnectionState = "connecting" | "connected" | "disconnected";
 const STALE_SECS = 90;
 const STALE_REPEAT_MS = 30_000;
 const RECONNECT_INTERVAL_MS = 5_000;
-const POLL_INTERVAL_MS = 10_000;
 
 function elapsedSecs(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -49,14 +47,6 @@ const ACTION_BUTTONS: { status: OrderStatus; label: string }[] = [
   { status: "cancelled", label: "Cancel"    },
 ];
 
-// Merge two order arrays: server data wins, maintain created_at desc order.
-function mergeOrders(local: Order[], incoming: Order[]): Order[] {
-  const map = new Map<string, Order>(local.map((o) => [o.id, o]));
-  for (const o of incoming) map.set(o.id, o);
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-}
 
 function isStale(order: Order): boolean {
   return order.status === "new" && elapsedSecs(order.created_at) > STALE_SECS;
@@ -89,16 +79,9 @@ function ElapsedBadge({ createdAt, status }: { createdAt: string; status: OrderS
 
 function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (id: string, status: OrderStatus) => void }) {
   const urgent = isStale(order);
-  const [, startTransition] = useTransition();
 
   function handleStatus(status: OrderStatus) {
     onStatusChange(order.id, status);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("id", order.id);
-      fd.set("status", status);
-      await updateOrderStatus(fd);
-    });
   }
 
   return (
@@ -191,7 +174,6 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
   // staleTimers: orderId → interval id for the repeating alarm
   const staleTimers     = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
   const reconnectTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const connStateRef    = useRef<ConnectionState>("connecting");
 
   // Keep refs in sync
@@ -259,8 +241,7 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
 
   // ── reconnect + poll helpers ─────────────────────────────────────────────
   const stopReconnectAndPoll = useCallback(() => {
-    if (reconnectTimer.current)  { clearInterval(reconnectTimer.current);  reconnectTimer.current  = null; }
-    if (pollTimer.current)       { clearInterval(pollTimer.current);       pollTimer.current       = null; }
+    if (reconnectTimer.current) { clearInterval(reconnectTimer.current); reconnectTimer.current = null; }
   }, []);
 
   // ── realtime subscription ────────────────────────────────────────────────
@@ -309,17 +290,6 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
               }, RECONNECT_INTERVAL_MS);
             }
 
-            // Poll every 10s as fallback
-            if (!pollTimer.current) {
-              pollTimer.current = setInterval(async () => {
-                try {
-                  const fresh = await getRecentOrders();
-                  setOrders((prev) => mergeOrders(prev, fresh));
-                } catch {
-                  // poll failure is silent — the disconnect banner is already shown
-                }
-              }, POLL_INTERVAL_MS);
-            }
           } else {
             setConnectionState("connecting");
           }
