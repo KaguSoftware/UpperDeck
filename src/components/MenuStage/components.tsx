@@ -1,26 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { mulberry32, hashStr } from "@/lib/rng";
 import { MenuCard } from "@/components/MenuCard/components";
 import type { Fill } from "@/components/MenuCard/types";
 import type { MenuItem, MenuStageProps } from "./types";
-
-function pickFill(rand: () => number): Fill {
-  const r = rand();
-  if (r < 0.12) return "green-fill";
-  if (r < 0.22) return "orange-fill";
-  return "";
-}
 
 export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, featuredItemId, featuredDiscount }: MenuStageProps) {
   const sections = useMemo(() => {
     return categories.map(({ slug, name, emoji, image_url, subcategories }) => {
       const catItems = items.filter((m) => m.cat === slug);
-      const rand = mulberry32(hashStr(slug));
       const enrich = (item: MenuItem) => ({
         ...item,
-        fill: item.highlight ?? pickFill(rand),
+        fill: (item.highlight ?? "") as Fill,
         sz: "size-m" as const,
         rot: 0, w: 0, h: 0, x: 0, y: 0,
         discountPct: (featuredItemId && item.id === featuredItemId && featuredDiscount) ? featuredDiscount : null,
