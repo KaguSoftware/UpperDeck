@@ -100,7 +100,14 @@ export function ItemModal({
             )}
             <div className="flex justify-between items-center py-2.5 border-t-2 border-b-2 border-green mb-3.5">
               <span className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase">{priceLabel}</span>
-              <span className="font-bowlby text-[24px] text-orange">{item.price} ₺</span>
+              {item.discountPct ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="font-ui font-extrabold text-[14px] text-green/40 line-through">{item.price} ₺</span>
+                  <span className="font-bowlby text-[24px] text-orange">{Math.round(item.price * (1 - item.discountPct / 100))} ₺</span>
+                </div>
+              ) : (
+                <span className="font-bowlby text-[24px] text-orange">{item.price} ₺</span>
+              )}
             </div>
             <button
               type="button"

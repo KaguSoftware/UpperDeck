@@ -46,7 +46,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
   return (
     <div className="border-2 border-green bg-white overflow-x-auto">
       <div className="min-w-xl">
-        <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
+        <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[13px] font-extrabold uppercase tracking-[0.18em] text-green">
           <div></div>
           <div>Name</div>
           <div>Category</div>
@@ -71,15 +71,15 @@ export function MenuList({ initial }: { initial: Item[] }) {
               )}
             </div>
             <div>
-              <div className="font-bowlby text-[15px] uppercase text-green leading-none">{item.name_en}</div>
+              <div className="font-bowlby text-[20px] uppercase text-green leading-none">{item.name_en}</div>
               {item.spicy && (
                 <span className="inline-block mt-1 bg-orange text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em]">
                   Spicy
                 </span>
               )}
             </div>
-            <div className="text-[12px] font-semibold text-green/80">{item.category_name}</div>
-            <div className="text-right font-ui font-extrabold text-[14px] text-orange">
+            <div className="font-bowlby text-[20px] uppercase text-green/80 leading-none">{item.category_name}</div>
+            <div className="text-right font-ui font-extrabold text-[16px] text-orange">
               {Number(item.price).toFixed(0)} ₺
             </div>
             <div className="flex justify-center">

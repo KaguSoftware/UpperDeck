@@ -75,22 +75,26 @@ export async function deleteCategory(formData: FormData) {
   revalidatePath("/admin");
 }
 
-async function reorderTopLevel(id: string, direction: "up" | "down") {
+async function reorderCategory(id: string, direction: "up" | "down") {
   const supabase = await getServerClient();
 
-  // Fetch only the current row and its immediate neighbour
+  // Fetch the current row including its parent_id so we scope neighbours correctly
   const { data: curr, error: e1 } = await supabase
     .from("categories")
-    .select("id, sort_order")
+    .select("id, sort_order, parent_id")
     .eq("id", id)
     .single();
   if (e1 || !curr) throw new Error(e1?.message ?? "Not found");
 
-  const neighbourQ = supabase
+  // Build neighbour query scoped to the same level (same parent_id or both top-level)
+  let neighbourQ = supabase
     .from("categories")
     .select("id, sort_order")
-    .is("parent_id", null)
     .limit(1);
+
+  neighbourQ = curr.parent_id
+    ? neighbourQ.eq("parent_id", curr.parent_id)
+    : neighbourQ.is("parent_id", null);
 
   const { data: neighbours, error: e2 } =
     direction === "up"
@@ -111,9 +115,9 @@ async function reorderTopLevel(id: string, direction: "up" | "down") {
 }
 
 export async function moveCategoryUp(id: string) {
-  await reorderTopLevel(z.string().uuid().parse(id), "up");
+  await reorderCategory(z.string().uuid().parse(id), "up");
 }
 
 export async function moveCategoryDown(id: string) {
-  await reorderTopLevel(z.string().uuid().parse(id), "down");
+  await reorderCategory(z.string().uuid().parse(id), "down");
 }

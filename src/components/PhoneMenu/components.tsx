@@ -37,11 +37,13 @@ type PhoneMenuProps = {
   heroMediaUrl?: string | null;
   heroMediaType?: "image" | "video" | null;
   featuredItem?: { id: string; name: string; image_url: string | null; emoji: string } | null;
+  featuredItemId?: string | null;
   featuredLabel?: string | null;
   featuredBadge?: string | null;
+  featuredDiscount?: number | null;
 };
 
-export function PhoneMenu({ messages: t, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredLabel, featuredBadge }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
@@ -129,11 +131,12 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
 
   const handleAdd = useCallback(() => {
     if (!activeItem) return;
-    const { id: menu_item_id, name, price } = activeItem;
+    const { id: menu_item_id, name, price, discountPct } = activeItem;
+    const effectivePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
     setCartItems((prev) => {
       const existing = prev.find((i) => i.id === menu_item_id);
-      if (existing) return prev.map((i) => i.id === menu_item_id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: menu_item_id, menu_item_id, name, price, qty: 1 }];
+      if (existing) return prev.map((i) => i.id === menu_item_id ? { ...i, qty: i.qty + 1, price: effectivePrice } : i);
+      return [...prev, { id: menu_item_id, menu_item_id, name, price: effectivePrice, qty: 1 }];
     });
     setActiveItem(null);
     flashToast(`${t.toast.addedPrefix}${name}`);
@@ -285,6 +288,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
         featuredItem={featuredItem}
         featuredLabel={featuredLabel}
         featuredBadge={featuredBadge}
+        featuredDiscount={featuredDiscount}
         onFeaturedClick={handleFeaturedClick}
       />
       <FilterPills
@@ -306,6 +310,8 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
             categories={categories}
             items={items}
             itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
+            featuredItemId={heroMode === "featured" ? featuredItemId : null}
+            featuredDiscount={featuredDiscount}
           />
           <div ref={footerRef}><Footer /></div>
         </div>
@@ -315,7 +321,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           aria-label="Scroll to top"
           className={[
             "absolute bottom-4 right-4 w-10 h-10 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300 z-9999",
-            heroCollapsed && !footerVisible ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
+            heroCollapsed && !footerVisible && !activeItem ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
           ].join(" ")}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -328,7 +334,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
-          hidden={footerVisible}
+          hidden={footerVisible || !!activeItem}
         />
       </div>
       <CartDrawer

@@ -10,8 +10,9 @@ export type HeroProps = {
   heroMode?: "none" | "media" | "featured";
   heroMediaUrl?: string | null;
   heroMediaType?: "image" | "video" | null;
-  featuredItem?: { id: string; name: string; image_url: string | null; emoji: string } | null;
+  featuredItem?: { id: string; name: string; image_url: string | null; emoji: string; price?: number } | null;
   featuredLabel?: string | null;
   featuredBadge?: string | null;
+  featuredDiscount?: number | null;
   onFeaturedClick?: () => void;
 };

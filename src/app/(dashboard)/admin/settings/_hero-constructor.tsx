@@ -40,6 +40,7 @@ export function HeroConstructor({
   defaultItemId,
   defaultLabel,
   defaultBadge,
+  defaultDiscount,
 }: {
   defaultMode: HeroMode;
   defaultMediaUrl?: string | null;
@@ -48,6 +49,7 @@ export function HeroConstructor({
   defaultItemId?: string | null;
   defaultLabel?: string | null;
   defaultBadge?: string | null;
+  defaultDiscount?: number | null;
 }) {
   const [mode, setMode] = useState<HeroMode>(defaultMode);
 
@@ -228,6 +230,25 @@ export function HeroConstructor({
             </span>
           </label>
 
+          {/* discount */}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
+              Discount %
+            </span>
+            <input
+              type="number"
+              name="featured_discount"
+              defaultValue={defaultDiscount ?? ""}
+              min={0}
+              max={99}
+              placeholder="e.g. 20"
+              className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
+            />
+            <span className="text-[10px] text-green/40">
+              Shows a strikethrough original price and discounted price on the featured card. Leave empty for no discount.
+            </span>
+          </label>
+
           {/* badge */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
@@ -237,11 +258,11 @@ export function HeroConstructor({
               type="text"
               name="featured_badge"
               defaultValue={defaultBadge ?? ""}
-              placeholder="e.g. 20% OFF LIMITED TIME"
+              placeholder="e.g. LIMITED TIME"
               className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
             />
             <span className="text-[10px] text-green/40">
-              Pill shown top-right. Leave empty to hide.
+              Pill shown bottom-right. Leave empty to hide.
             </span>
           </label>
       </div>

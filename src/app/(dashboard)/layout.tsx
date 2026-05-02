@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Bowlby_One, Inter } from "next/font/google";
+import { Teko, Inter } from "next/font/google";
 import "../globals.css";
 
-const bowlbyOne = Bowlby_One({
+const teko = Teko({
   variable: "--font-bowlby-one",
   subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "500", "600", "700"],
 });
 
 const inter = Inter({
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function DashboardRoot({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${bowlbyOne.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${teko.variable} ${inter.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-bg text-ink font-ui">{children}</body>
     </html>
   );

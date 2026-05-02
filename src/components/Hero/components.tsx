@@ -15,6 +15,7 @@ export function Hero({
   featuredItem,
   featuredLabel,
   featuredBadge,
+  featuredDiscount,
   onFeaturedClick,
 }: HeroProps) {
 
@@ -41,6 +42,10 @@ export function Hero({
   if (heroMode === "featured" && featuredItem) {
     const marqueeLine = featuredLabel?.trim() || featuredItem.name;
     const tripled = [marqueeLine, marqueeLine, marqueeLine];
+    const hasDiscount = featuredDiscount != null && featuredDiscount > 0 && featuredItem.price != null;
+    const discountedPrice = hasDiscount
+      ? Math.round(featuredItem.price! * (1 - featuredDiscount! / 100))
+      : null;
 
     return (
       <div

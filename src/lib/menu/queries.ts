@@ -6,6 +6,7 @@ export type FeaturedItem = {
   name: string;
   image_url: string | null;
   emoji: string;
+  price: number;
 };
 
 export type HeroSettings = {
@@ -15,6 +16,7 @@ export type HeroSettings = {
   featuredItemId: string | null;
   featuredLabel: string | null;
   featuredBadge: string | null;
+  featuredDiscount: number | null;
   featuredItem: FeaturedItem | null;
 };
 
@@ -23,7 +25,7 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   const { data } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", ["hero_mode", "hero_media_url", "hero_media_type", "featured_item_id", "featured_label", "featured_badge"]);
+    .in("key", ["hero_mode", "hero_media_url", "hero_media_type", "featured_item_id", "featured_label", "featured_badge", "featured_discount"]);
 
   const rows = (data ?? []) as { key: string; value: string | null }[];
   const get = (key: string) => rows.find((r) => r.key === key)?.value ?? null;
@@ -34,20 +36,22 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   const featuredItemId = get("featured_item_id") || null;
   const featuredLabel = get("featured_label") || null;
   const featuredBadge = get("featured_badge") || null;
+  const rawDiscount = get("featured_discount");
+  const featuredDiscount = rawDiscount ? parseInt(rawDiscount, 10) || null : null;
 
   let featuredItem: FeaturedItem | null = null;
   if (heroMode === "featured" && featuredItemId) {
     const { data: item } = await supabase
       .from("menu_items")
-      .select("id, name_en, image_url, emoji")
+      .select("id, name_en, image_url, emoji, price")
       .eq("id", featuredItemId)
       .single();
     if (item) {
-      featuredItem = { id: item.id, name: item.name_en, image_url: item.image_url, emoji: item.emoji };
+      featuredItem = { id: item.id, name: item.name_en, image_url: item.image_url, emoji: item.emoji, price: item.price };
     }
   }
 
-  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, heroMediaType: type || null, featuredItemId, featuredLabel, featuredBadge, featuredItem };
+  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, heroMediaType: type || null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
 }
 
 export type PublicCategory = {

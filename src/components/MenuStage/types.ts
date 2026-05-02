@@ -12,6 +12,7 @@ export type MenuItem = {
   hook: string;
   desc: string;
   spicy?: boolean;
+  discountPct?: number | null;
 };
 
 export type LayoutResult = {
@@ -25,6 +26,8 @@ export type MenuStageProps = {
   categories: { slug: string; name: string; emoji: string | null; image_url: string | null; subcategories: { slug: string; name: string }[] }[];
   items: MenuItem[];
   itemLabel: (count: number) => string;
+  featuredItemId?: string | null;
+  featuredDiscount?: number | null;
 };
 
 export type SectionData = {

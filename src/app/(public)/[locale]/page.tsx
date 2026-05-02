@@ -38,8 +38,10 @@ export default async function Home({
       heroMediaUrl={heroSettings.heroMediaUrl}
       heroMediaType={heroSettings.heroMediaType}
       featuredItem={heroSettings.featuredItem}
+      featuredItemId={heroSettings.featuredItemId}
       featuredLabel={heroSettings.featuredLabel}
       featuredBadge={heroSettings.featuredBadge}
+      featuredDiscount={heroSettings.featuredDiscount}
     />
   );
 }

@@ -13,7 +13,7 @@ function pickFill(rand: () => number): Fill {
   return "";
 }
 
-export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: MenuStageProps) {
+export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, featuredItemId, featuredDiscount }: MenuStageProps) {
   const sections = useMemo(() => {
     return categories.map(({ slug, name, emoji, image_url, subcategories }) => {
       const catItems = items.filter((m) => m.cat === slug);
@@ -23,6 +23,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel }: Me
         fill: item.highlight ?? pickFill(rand),
         sz: "size-m" as const,
         rot: 0, w: 0, h: 0, x: 0, y: 0,
+        discountPct: (featuredItemId && item.id === featuredItemId && featuredDiscount) ? featuredDiscount : null,
       });
 
       // If there are subcategories, group items by subcat

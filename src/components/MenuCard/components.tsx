@@ -19,7 +19,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             type="button"
             data-item={card.id}
             className={[
-                "w-full flex items-stretch gap-0 border-2 border-green cursor-pointer text-left transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.02]",
+                "w-full flex items-stretch gap-0 border border-green cursor-pointer text-left transition-transform duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-transform active:scale-[1.02]",
                 cardFill,
             ].join(" ")}
             style={insetShadow ? { boxShadow: insetShadow } : undefined}
@@ -79,10 +79,24 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             </div>
 
             {/* price */}
-            <div className="shrink-0 flex items-center pr-3.5">
-                <span className="font-ui font-extrabold text-[13px] whitespace-nowrap text-orange">
-                    {card.price} ₺
-                </span>
+            <div className="shrink-0 flex flex-col items-end justify-center pr-3.5 gap-0.5">
+                {card.discountPct ? (
+                    <>
+                        <span className="font-ui font-extrabold text-[11px] whitespace-nowrap text-green/50 line-through leading-none">
+                            {card.price} ₺
+                        </span>
+                        <span className="font-ui font-extrabold text-[13px] whitespace-nowrap text-orange leading-none">
+                            {Math.round(card.price * (1 - card.discountPct / 100))} ₺
+                        </span>
+                        <span className="font-ui font-extrabold text-[9px] tracking-[0.12em] uppercase text-orange/70 leading-none">
+                            -{card.discountPct}%
+                        </span>
+                    </>
+                ) : (
+                    <span className="font-ui font-extrabold text-[13px] whitespace-nowrap text-orange">
+                        {card.price} ₺
+                    </span>
+                )}
             </div>
         </button>
     );

@@ -15,6 +15,7 @@ export default async function SettingsPage() {
       "featured_item_id",
       "featured_label",
       "featured_badge",
+      "featured_discount",
     ]),
     supabase
       .from("menu_items")
@@ -32,6 +33,8 @@ export default async function SettingsPage() {
   const featuredItemId = get("featured_item_id") || null;
   const featuredLabel = get("featured_label") || null;
   const featuredBadge = get("featured_badge") || null;
+  const rawDiscount = get("featured_discount");
+  const featuredDiscount = rawDiscount ? parseInt(rawDiscount, 10) || null : null;
 
   const items = (menuItems ?? []).map((i) => ({
     id: i.id,
@@ -60,6 +63,7 @@ export default async function SettingsPage() {
           defaultItemId={featuredItemId}
           defaultLabel={featuredLabel}
           defaultBadge={featuredBadge}
+          defaultDiscount={featuredDiscount}
         />
 
         <div className="pt-2 border-t-2 border-green/20">
