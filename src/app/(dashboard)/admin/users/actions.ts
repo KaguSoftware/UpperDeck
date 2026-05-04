@@ -51,8 +51,10 @@ export async function inviteUser(formData: FormData) {
   });
 
   const admin = getAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { display_name: email.split("@")[0] },
+    redirectTo: `${siteUrl}/auth/set-password`,
   });
   if (error) throw new Error(error.message);
 
