@@ -1,9 +1,10 @@
 import { requireRole } from "@/lib/auth/require-session";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { PageHeader, Field, PrimaryButton } from "../_components";
+import { PageHeader } from "../_components";
 import { SetRoleButton } from "../_submit-buttons";
-import { setRole, inviteUser } from "./actions";
+import { setRole } from "./actions";
 import { RoleToggle } from "./_role-toggle";
+import { InviteForm } from "./_invite-form";
 
 export const dynamic = "force-dynamic";
 
@@ -95,27 +96,7 @@ export default async function UsersPage() {
 
       {!configError && (
         <>
-          {/* Invite section */}
-          <section className="mb-8">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-green/70 mb-3">
-              Invite a new staff member
-            </div>
-            <form
-              action={inviteUser}
-              className="border-2 border-green bg-white p-5 max-w-2xl"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end mb-4">
-                <Field label="Email" name="email" type="email" required />
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-                    Role
-                  </span>
-                  <RoleToggle defaultRole="admin" />
-                </div>
-              </div>
-              <PrimaryButton>Send invite</PrimaryButton>
-            </form>
-          </section>
+          <InviteForm />
 
           {/* Users table */}
           <div className="border-2 border-green bg-white overflow-x-auto">

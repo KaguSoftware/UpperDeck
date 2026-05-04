@@ -43,24 +43,32 @@ const InviteSchema = z.object({
   role: RoleSchema,
 });
 
-export async function inviteUser(formData: FormData) {
-  await requireRole("owner");
-  const { email, role } = InviteSchema.parse({
-    email: formData.get("email"),
-    role: formData.get("role"),
-  });
+export async function inviteUser(
+  _prev: { error: string | null; success: boolean },
+  formData: FormData
+): Promise<{ error: string | null; success: boolean }> {
+  try {
+    await requireRole("owner");
+    const { email, role } = InviteSchema.parse({
+      email: formData.get("email"),
+      role: formData.get("role"),
+    });
 
-  const admin = getAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { display_name: email.split("@")[0] },
-    redirectTo: `${siteUrl}/auth/set-password`,
-  });
-  if (error) throw new Error(error.message);
+    const admin = getAdminClient();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+      data: { display_name: email.split("@")[0] },
+      redirectTo: `${siteUrl}/auth/set-password`,
+    });
+    if (error) return { error: error.message, success: false };
 
-  if (data.user) {
-    await admin.from("profiles").update({ role }).eq("id", data.user.id);
+    if (data.user) {
+      await admin.from("profiles").update({ role }).eq("id", data.user.id);
+    }
+
+    revalidatePath("/admin/users");
+    return { error: null, success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unknown error", success: false };
   }
-
-  revalidatePath("/admin/users");
 }

@@ -44,7 +44,9 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\node_modules\\\\next\\\\dist\\\\docs\" -ErrorAction SilentlyContinue)",
       "Bash(Select-Object Name, PSIsContainer)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\app\\\\auth\\\\\" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\", \"\"\\) })",
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\.vercel\\\\\" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\", \"\"\\) })"
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\.vercel\\\\\" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\", \"\"\\) })",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Vercel__list_projects"
     ]
   }
 }
