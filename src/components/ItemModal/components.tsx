@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { ItemModalProps } from "./types";
 
 export function ItemModal({
@@ -13,6 +13,14 @@ export function ItemModal({
 }: ItemModalProps) {
   const isOpen = item !== null;
   const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
+
+  const [showStamp, setShowStamp] = useState(false);
+  useEffect(() => {
+    if (!item?.sold_out) { setShowStamp(false); return; }
+    setShowStamp(false);
+    const t = setTimeout(() => setShowStamp(true), 300);
+    return () => clearTimeout(t);
+  }, [item?.id, item?.sold_out]);
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
@@ -57,7 +65,12 @@ export function ItemModal({
       {item && (
         <div
           ref={sheetRef}
-          className="w-full bg-bg animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] flex flex-col relative"
+          className="w-full bg-bg flex flex-col relative"
+          style={{
+            animation: showStamp
+              ? "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1), screenShake 0.45s ease-out 0.3s"
+              : "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1)",
+          }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -73,45 +86,86 @@ export function ItemModal({
             ) : (
               <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
             )}
-            {item.sold_out && (
-              <div
-                key={item.id + "-stamp"}
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-              >
-                {/* shockwave ring */}
+            {showStamp && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {/* red flash on impact */}
                 <div
-                  className="absolute rounded-full border-2 border-[#CC2222]"
+                  className="absolute inset-0 bg-[#CC2222]"
+                  style={{ animation: "redFlash 0.3s ease-out both" }}
+                />
+                {/* shockwave ring 1 */}
+                <div
+                  className="absolute border-[#CC2222] rounded-full"
                   style={{
-                    width: 120,
-                    height: 60,
-                    animation: "shockwave 0.45s cubic-bezier(0.2,0.8,0.2,1) 0.3s both",
+                    width: 140, height: 70,
+                    animation: "shockwave 0.5s cubic-bezier(0.1,0.8,0.2,1) both",
                   }}
                 />
-                {/* stamp */}
+                {/* shockwave ring 2 — delayed */}
                 <div
+                  className="absolute border-orange rounded-full"
                   style={{
-                    animation: "stampSlam 0.35s cubic-bezier(0.2,0.8,0.2,1) both",
+                    width: 140, height: 70,
+                    animation: "shockwave2 0.65s cubic-bezier(0.1,0.8,0.2,1) 0.06s both",
                   }}
-                >
+                />
+                {/* shockwave ring 3 — most delayed */}
+                <div
+                  className="absolute border-[#CC2222] rounded-full"
+                  style={{
+                    width: 140, height: 70,
+                    animation: "shockwave3 0.8s cubic-bezier(0.1,0.8,0.2,1) 0.12s both",
+                  }}
+                />
+                {/* sparks — 8 directions */}
+                {[
+                  "translate(-70px, -50px) scale(0)",
+                  "translate(70px, -50px) scale(0)",
+                  "translate(-80px, 0px) scale(0)",
+                  "translate(80px, 0px) scale(0)",
+                  "translate(-50px, 50px) scale(0)",
+                  "translate(50px, 50px) scale(0)",
+                  "translate(0px, -65px) scale(0)",
+                  "translate(0px, 65px) scale(0)",
+                  "translate(-95px, -25px) scale(0)",
+                  "translate(95px, -25px) scale(0)",
+                  "translate(-95px, 25px) scale(0)",
+                  "translate(95px, 25px) scale(0)",
+                ].map((end, i) => (
+                  <div
+                    key={i}
+                    className="absolute rounded-full"
+                    style={{
+                      width: i % 3 === 0 ? 6 : i % 3 === 1 ? 4 : 8,
+                      height: i % 3 === 0 ? 6 : i % 3 === 1 ? 4 : 8,
+                      background: i % 2 === 0 ? "#CC2222" : "#ff6a00",
+                      ["--spark-end" as string]: end,
+                      animation: `sparkFly 0.5s cubic-bezier(0.1,0.9,0.2,1) ${0.02 * i}s both`,
+                    }}
+                  />
+                ))}
+                {/* stamp */}
+                <div style={{ animation: "stampSlam 0.4s cubic-bezier(0.15,0.8,0.2,1) both" }}>
                   <div
                     style={{
-                      border: "4px solid #CC2222",
-                      padding: "4px",
-                      animation: "fireGlow 0.6s ease-in-out 0.35s infinite",
+                      border: "5px solid #CC2222",
+                      padding: "5px",
+                      animation: "fireGlow 0.5s ease-in-out 0.4s infinite",
                     }}
                   >
-                    <div style={{ border: "2px solid #CC2222", padding: "6px 14px" }}>
+                    <div style={{ border: "2.5px solid #CC2222", padding: "8px 18px" }}>
                       <span
                         style={{
                           color: "#CC2222",
                           fontFamily: "var(--font-bowlby, Impact, sans-serif)",
-                          fontSize: "28px",
+                          fontSize: "36px",
                           fontWeight: 900,
-                          letterSpacing: "0.18em",
+                          letterSpacing: "0.2em",
                           textTransform: "uppercase",
                           lineHeight: 1,
                           display: "block",
-                          animation: "flicker 0.5s ease-in-out 0.35s infinite",
+                          textShadow: "0 0 8px rgba(204,34,34,0.8), 0 0 20px rgba(227,93,7,0.6)",
+                          animation: "flicker 0.4s ease-in-out 0.4s infinite",
                         }}
                       >
                         SOLD OUT

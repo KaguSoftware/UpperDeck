@@ -61,23 +61,54 @@ a {
 }
 
 @keyframes stampSlam {
-  0%   { transform: rotate(-20deg) scale(2.5); opacity: 0; }
-  60%  { transform: rotate(-16deg) scale(0.88); opacity: 1; }
-  78%  { transform: rotate(-14deg) scale(1.06); }
-  90%  { transform: rotate(-15.5deg) scale(0.97); }
+  0%   { transform: rotate(-18deg) scale(4) translateY(-60px); opacity: 0; }
+  55%  { transform: rotate(-17deg) scale(0.82) translateY(0); opacity: 1; }
+  72%  { transform: rotate(-13deg) scale(1.12); }
+  84%  { transform: rotate(-16deg) scale(0.94); }
+  93%  { transform: rotate(-14.5deg) scale(1.04); }
   100% { transform: rotate(-15deg) scale(1); opacity: 1; }
 }
 
+@keyframes screenShake {
+  0%   { transform: translateY(0) translateX(0); }
+  15%  { transform: translateY(-8px) translateX(5px); }
+  30%  { transform: translateY(6px) translateX(-6px); }
+  45%  { transform: translateY(-5px) translateX(4px); }
+  60%  { transform: translateY(4px) translateX(-3px); }
+  75%  { transform: translateY(-2px) translateX(2px); }
+  100% { transform: translateY(0) translateX(0); }
+}
+
 @keyframes shockwave {
-  0%   { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(2.8); opacity: 0; }
+  0%   { transform: scale(1); opacity: 0.9; border-width: 4px; }
+  100% { transform: scale(4.5); opacity: 0; border-width: 1px; }
+}
+
+@keyframes shockwave2 {
+  0%   { transform: scale(1); opacity: 0.6; border-width: 3px; }
+  100% { transform: scale(6); opacity: 0; border-width: 1px; }
+}
+
+@keyframes shockwave3 {
+  0%   { transform: scale(1); opacity: 0.4; border-width: 2px; }
+  100% { transform: scale(8); opacity: 0; border-width: 1px; }
+}
+
+@keyframes redFlash {
+  0%   { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+
+@keyframes sparkFly {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: var(--spark-end); opacity: 0; }
 }
 
 @keyframes fireGlow {
-  0%, 100% { box-shadow: 0 0 6px 2px #CC2222, 0 0 14px 4px #e35d07; }
-  25%       { box-shadow: 0 0 10px 4px #e35d07, 0 0 22px 6px #CC2222; }
-  50%       { box-shadow: 0 0 8px 3px #ff6a00, 0 0 18px 5px #CC2222; }
-  75%       { box-shadow: 0 0 12px 5px #CC2222, 0 0 20px 4px #e35d07; }
+  0%, 100% { box-shadow: 0 0 12px 4px #CC2222, 0 0 30px 8px #e35d07, 0 0 50px 12px rgba(204,34,34,0.4); }
+  25%       { box-shadow: 0 0 20px 8px #e35d07, 0 0 45px 14px #CC2222, 0 0 70px 18px rgba(255,106,0,0.5); }
+  50%       { box-shadow: 0 0 16px 6px #ff6a00, 0 0 38px 10px #CC2222, 0 0 60px 16px rgba(204,34,34,0.6); }
+  75%       { box-shadow: 0 0 22px 9px #CC2222, 0 0 50px 15px #e35d07, 0 0 80px 20px rgba(255,106,0,0.4); }
 }
 
 .shimmer {
