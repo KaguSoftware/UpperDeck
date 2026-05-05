@@ -14,6 +14,7 @@ export type MenuItem = {
   spicy?: boolean;
   sold_out?: boolean;
   discountPct?: number | null;
+  addonGroupKey?: string | null;
 };
 
 export type LayoutResult = {

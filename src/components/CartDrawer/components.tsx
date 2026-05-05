@@ -27,12 +27,13 @@ export function CartDrawer({
     simulateFailure = false,
     onSimulateFailureChange,
     topOffset = 0,
+    orderCooldownSeconds = 0,
 }: CartDrawerProps) {
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
     const isPending = checkoutState.status === "pending";
     const isOffline = checkoutState.status === "offline";
     const isValidationError = checkoutState.status === "validation";
-    const canSend = items.length > 0 && !isPending;
+    const canSend = items.length > 0 && !isPending && orderCooldownSeconds === 0;
 
     return (
         <div
@@ -129,9 +130,20 @@ export function CartDrawer({
                                             +
                                         </button>
                                     </div>
-                                    <span className="font-ui font-semibold text-[13px] text-green">
-                                        {item.name}
-                                    </span>
+                                    <div>
+                                        <span className="font-ui font-semibold text-[13px] text-green">
+                                            {item.name}
+                                        </span>
+                                        {item.extras && item.extras.length > 0 && (
+                                            <div className="flex flex-col gap-0.5 mt-0.5">
+                                                {item.extras.map((ex) => (
+                                                    <span key={ex.id} className="font-ui text-[10px] text-green/60">
+                                                        + {ex.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-bowlby text-[13px] text-orange">
@@ -189,7 +201,7 @@ export function CartDrawer({
                                 disabled={!canSend}
                                 className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                {isPending ? "…" : sendLabel}
+                                {isPending ? "…" : orderCooldownSeconds > 0 ? `${orderCooldownSeconds}s` : sendLabel}
                             </button>
                             {/* DEV ONLY — remove before showing to a real customer */}
                             {process.env.NODE_ENV === "development" &&

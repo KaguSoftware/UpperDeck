@@ -13,6 +13,8 @@ import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem, CheckoutState } from "@/components/CartDrawer/types";
+import { ADDONS } from "@/components/ItemModal/addons";
+import type { AddonOption } from "@/components/ItemModal/addons";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
@@ -57,6 +59,8 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
   const [footerVisible, setFooterVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
+  const [orderCooldownSeconds, setOrderCooldownSeconds] = useState(0);
+  const orderCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
@@ -84,6 +88,21 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Order submit cooldown ticker
+  useEffect(() => {
+    if (orderCooldownSeconds <= 0) return;
+    const id = setInterval(() => {
+      const remaining = Math.ceil((orderCooldownUntil.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setOrderCooldownSeconds(0);
+        clearInterval(id);
+      } else {
+        setOrderCooldownSeconds(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [orderCooldownSeconds]);
 
   // Debounced save on every change
   useEffect(() => {
@@ -129,14 +148,18 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     });
   }, []);
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = useCallback((extras: AddonOption[]) => {
     if (!activeItem) return;
     const { id: menu_item_id, name, price, discountPct } = activeItem;
-    const effectivePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
+    const basePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
+    const extrasTotal = extras.reduce((s, e) => s + e.price, 0);
+    const effectivePrice = basePrice + extrasTotal;
+    // Items with extras get a unique cart id so they don't merge with the plain version
+    const cartId = extras.length > 0 ? `${menu_item_id}__${extras.map((e) => e.id).join("_")}` : menu_item_id;
     setCartItems((prev) => {
-      const existing = prev.find((i) => i.id === menu_item_id);
-      if (existing) return prev.map((i) => i.id === menu_item_id ? { ...i, qty: i.qty + 1, price: effectivePrice } : i);
-      return [...prev, { id: menu_item_id, menu_item_id, name, price: effectivePrice, qty: 1 }];
+      const existing = prev.find((i) => i.id === cartId);
+      if (existing) return prev.map((i) => i.id === cartId ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined }];
     });
     setActiveItem(null);
     flashToast(`${t.toast.addedPrefix}${name}`);
@@ -150,13 +173,18 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     const result = await submitOrder({
       table_number: tableNumber ?? 0,
       _simulateFailure: simulateFailure,
-      items: cartItems.map((i) => ({
-        menu_item_id: i.menu_item_id,
-        name_en: i.name,
-        name_tr: i.name,
-        price: i.price,
-        qty: i.qty,
-      })),
+      items: cartItems.map((i) => {
+        const extrasLabel = i.extras && i.extras.length > 0
+          ? ` + ${i.extras.map((e) => e.label).join(", ")}`
+          : "";
+        return {
+          menu_item_id: i.menu_item_id,
+          name_en: i.name + extrasLabel,
+          name_tr: i.name + extrasLabel,
+          price: i.price,
+          qty: i.qty,
+        };
+      }),
       note,
       total: clientTotal,
     });
@@ -168,6 +196,8 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
       try { sessionStorage.removeItem(CART_STORAGE_KEY); } catch { /* ignore */ }
       setCheckoutState({ status: "idle" });
       setCartOpen(false);
+      orderCooldownUntil.current = Date.now() + 60_000;
+      setOrderCooldownSeconds(60);
       flashToast(`${t.toast.orderSentPrefix}${tableNumber && tableNumber > 0 ? tableNumber : "—"}`);
     } else if (result.error === "validation") {
       setCheckoutState({
@@ -363,6 +393,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
         simulateFailure={simulateFailure}
         onSimulateFailureChange={setSimulateFailure}
         topOffset={topbarRef.current?.offsetHeight ?? 0}
+        orderCooldownSeconds={orderCooldownSeconds}
       />
       <ItemModal
         item={activeItem}
@@ -371,6 +402,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
         spicyLabel={t.modal.spicy}
         priceLabel={t.modal.price}
         addToOrderLabel={t.modal.addToOrder}
+        addonGroups={activeItem ? (ADDONS[activeItem.id] ?? []) : []}
       />
       <Toast message={toastMsg} show={toastShow} />
       <Ticker tags={t.ticker} />

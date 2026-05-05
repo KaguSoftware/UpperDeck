@@ -52,7 +52,8 @@
       "Bash(ls -la \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\")",
       "Read(//c/Users/MnS/Kagu/demo/**)",
       "PowerShell(head -20)",
-      "PowerShell(head -30)"
+      "PowerShell(head -30)",
+      "Bash(npm run *)"
     ]
   }
 }
