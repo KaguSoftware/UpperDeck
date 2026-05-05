@@ -46,7 +46,9 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\app\\\\auth\\\\\" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\", \"\"\\) })",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\.vercel\\\\\" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\", \"\"\\) })",
       "mcp__claude_ai_Vercel__list_teams",
-      "mcp__claude_ai_Vercel__list_projects"
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }

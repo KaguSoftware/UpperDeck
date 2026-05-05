@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { deleteItem, toggleAvailability } from "./actions";
+import { deleteItem, toggleAvailability, toggleSoldOut } from "./actions";
 
 type Item = {
   id: string;
@@ -11,6 +11,7 @@ type Item = {
   image_url: string | null;
   spicy: boolean;
   is_available: boolean;
+  sold_out: boolean;
   sort_order: number | null;
   category_name: string;
 };
@@ -25,6 +26,14 @@ export function MenuList({ initial }: { initial: Item[] }) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, is_available: next } : i)));
     startTransition(async () => {
       await toggleAvailability(id, next);
+    });
+  }
+
+  function handleToggleSoldOut(id: string, current: boolean) {
+    const next = !current;
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, sold_out: next } : i)));
+    startTransition(async () => {
+      await toggleSoldOut(id, next);
     });
   }
 
@@ -72,11 +81,22 @@ export function MenuList({ initial }: { initial: Item[] }) {
             </div>
             <div>
               <div className="font-bowlby text-[20px] uppercase text-green leading-none">{item.name_en}</div>
-              {item.spicy && (
-                <span className="inline-block mt-1 bg-orange text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em]">
-                  Spicy
-                </span>
-              )}
+              <div className="flex gap-1.5 mt-1">
+                {item.spicy && (
+                  <span className="inline-block bg-orange text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em]">
+                    Spicy
+                  </span>
+                )}
+                {item.sold_out && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSoldOut(item.id, item.sold_out)}
+                    className="inline-block bg-red-700 text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em] cursor-pointer border-0"
+                  >
+                    Sold Out ×
+                  </button>
+                )}
+              </div>
             </div>
             <div className="font-bowlby text-[20px] uppercase text-green/80 leading-none">{item.category_name}</div>
             <div className="text-right font-ui font-extrabold text-[16px] text-orange">
