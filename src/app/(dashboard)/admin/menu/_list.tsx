@@ -60,7 +60,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
           <div>Name</div>
           <div>Category</div>
           <div className="text-right">Price</div>
-          <div className="text-center">Status</div>
+          <div className="text-center">Sold Out</div>
           <div></div>
         </div>
         {items.map((item) => (
@@ -81,22 +81,13 @@ export function MenuList({ initial }: { initial: Item[] }) {
             </div>
             <div>
               <div className="font-bowlby text-[20px] uppercase text-green leading-none">{item.name_en}</div>
-              <div className="flex gap-1.5 mt-1">
-                {item.spicy && (
+              {item.spicy && (
+                <div className="mt-1">
                   <span className="inline-block bg-orange text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em]">
                     Spicy
                   </span>
-                )}
-                {item.sold_out && (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSoldOut(item.id, item.sold_out)}
-                    className="inline-block bg-red-700 text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em] cursor-pointer border-0"
-                  >
-                    Sold Out ×
-                  </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
             <div className="font-bowlby text-[20px] uppercase text-green/80 leading-none">{item.category_name}</div>
             <div className="text-right font-ui font-extrabold text-[16px] text-orange">
@@ -105,7 +96,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={() => handleToggle(item.id, item.is_available)}
+                onClick={() => handleToggleSoldOut(item.id, item.sold_out)}
                 style={{
                   position: "relative",
                   width: 40,
@@ -113,7 +104,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
                   borderRadius: 11,
                   border: "none",
                   cursor: "pointer",
-                  backgroundColor: item.is_available ? "#395748" : "#ccc",
+                  backgroundColor: item.sold_out ? "#CC2222" : "#ccc",
                   transition: "background-color 0.2s",
                   flexShrink: 0,
                 }}
@@ -122,7 +113,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
                   style={{
                     position: "absolute",
                     top: 3,
-                    left: item.is_available ? 19 : 3,
+                    left: item.sold_out ? 19 : 3,
                     width: 16,
                     height: 16,
                     borderRadius: "50%",
