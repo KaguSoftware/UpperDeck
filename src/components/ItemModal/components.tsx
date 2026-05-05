@@ -62,7 +62,7 @@ export function ItemModal({
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-          <div className="flex flex-col shrink-0 overflow-hidden" style={{ background: topBg }}>
+          <div className="relative flex flex-col shrink-0 overflow-hidden" style={{ background: topBg }}>
             {/* drag handle */}
             <div className="flex justify-center items-center h-4">
               <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
@@ -72,6 +72,54 @@ export function ItemModal({
               <img src={item.image_url} alt="" className="w-full h-52 object-cover" />
             ) : (
               <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
+            )}
+            {item.sold_out && (
+              <div
+                key={item.id + "-stamp"}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              >
+                {/* shockwave ring */}
+                <div
+                  className="absolute rounded-full border-2 border-[#CC2222]"
+                  style={{
+                    width: 120,
+                    height: 60,
+                    animation: "shockwave 0.45s cubic-bezier(0.2,0.8,0.2,1) 0.3s both",
+                  }}
+                />
+                {/* stamp */}
+                <div
+                  style={{
+                    animation: "stampSlam 0.35s cubic-bezier(0.2,0.8,0.2,1) both",
+                  }}
+                >
+                  <div
+                    style={{
+                      border: "4px solid #CC2222",
+                      padding: "4px",
+                      animation: "fireGlow 0.6s ease-in-out 0.35s infinite",
+                    }}
+                  >
+                    <div style={{ border: "2px solid #CC2222", padding: "6px 14px" }}>
+                      <span
+                        style={{
+                          color: "#CC2222",
+                          fontFamily: "var(--font-bowlby, Impact, sans-serif)",
+                          fontSize: "28px",
+                          fontWeight: 900,
+                          letterSpacing: "0.18em",
+                          textTransform: "uppercase",
+                          lineHeight: 1,
+                          display: "block",
+                          animation: "flicker 0.5s ease-in-out 0.35s infinite",
+                        }}
+                      >
+                        SOLD OUT
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
           <button

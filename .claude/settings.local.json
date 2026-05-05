@@ -48,7 +48,11 @@
       "mcp__claude_ai_Vercel__list_teams",
       "mcp__claude_ai_Vercel__list_projects",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__apply_migration"
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(ls -la \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\\")",
+      "Read(//c/Users/MnS/Kagu/demo/**)",
+      "PowerShell(head -20)",
+      "PowerShell(head -30)"
     ]
   }
 }
