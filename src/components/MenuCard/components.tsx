@@ -26,7 +26,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             onClick={() => onOpen(card)}
         >
             {/* square image/emoji thumbnail */}
-            <div className="shrink-0 w-32 h-32 grid place-items-center overflow-hidden bg-bg-deep">
+            <div className="relative shrink-0 w-32 h-32 grid place-items-center overflow-hidden bg-bg-deep">
                 {card.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -38,6 +38,44 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                     <span className="text-[28px] leading-none">
                         {card.emoji}
                     </span>
+                )}
+                {card.sold_out && (
+                    <div
+                        aria-label="Sold out"
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        style={{ transform: "rotate(-15deg)" }}
+                    >
+                        <div
+                            style={{
+                                border: "3px solid #CC2222",
+                                padding: "3px",
+                                opacity: 0.88,
+                                mixBlendMode: "multiply",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    border: "1.5px solid #CC2222",
+                                    padding: "4px 10px",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        color: "#CC2222",
+                                        fontFamily: "var(--font-bowlby, Impact, sans-serif)",
+                                        fontSize: "18px",
+                                        fontWeight: 900,
+                                        letterSpacing: "0.18em",
+                                        textTransform: "uppercase",
+                                        lineHeight: 1,
+                                        display: "block",
+                                    }}
+                                >
+                                    SOLD OUT
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
 

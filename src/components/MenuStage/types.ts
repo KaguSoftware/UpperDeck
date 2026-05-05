@@ -12,6 +12,7 @@ export type MenuItem = {
   hook: string;
   desc: string;
   spicy?: boolean;
+  sold_out?: boolean;
   discountPct?: number | null;
 };
 

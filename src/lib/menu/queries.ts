@@ -73,6 +73,7 @@ export type PublicMenuItem = {
   highlight: "green-fill" | "orange-fill" | null;
   price: number;
   spicy: boolean;
+  sold_out: boolean;
 };
 
 export async function getPublicMenu(locale: "en" | "tr"): Promise<{
@@ -93,7 +94,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "id, category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sort_order"
+      "id, category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sold_out, sort_order"
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -165,6 +166,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
         highlight: r.highlight as "green-fill" | "orange-fill" | null,
         price: r.price,
         spicy: r.spicy,
+        sold_out: r.sold_out,
       };
     });
 

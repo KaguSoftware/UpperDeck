@@ -72,6 +72,7 @@ export type MenuItem = {
   price: number;
   spicy: boolean;
   is_available: boolean;
+  sold_out: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -126,6 +127,7 @@ type MenuItemInsert = {
   price: number;
   spicy?: boolean;
   is_available?: boolean;
+  sold_out?: boolean;
   sort_order?: number;
   created_by?: string | null;
 };

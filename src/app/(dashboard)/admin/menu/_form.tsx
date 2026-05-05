@@ -59,6 +59,11 @@ export function MenuItemForm({
           name="is_available"
           defaultChecked={initial?.is_available ?? true}
         />
+        <Checkbox
+          label="Sold Out"
+          name="sold_out"
+          defaultChecked={initial?.sold_out ?? false}
+        />
       </div>
 
       <div className="md:col-span-2">

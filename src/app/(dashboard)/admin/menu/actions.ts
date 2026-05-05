@@ -18,6 +18,7 @@ const ItemSchema = z.object({
   price: z.coerce.number().nonnegative().max(100000),
   spicy: z.coerce.boolean(),
   is_available: z.coerce.boolean(),
+  sold_out: z.coerce.boolean(),
   sort_order: z.coerce.number().int().default(0),
 });
 
@@ -36,6 +37,7 @@ function parse(formData: FormData) {
     price: formData.get("price"),
     spicy: formData.get("spicy") === "on",
     is_available: formData.get("is_available") === "on",
+    sold_out: formData.get("sold_out") === "on",
     sort_order: formData.get("sort_order") ?? 0,
   });
 }
@@ -60,6 +62,13 @@ export async function updateItem(id: string, formData: FormData) {
   revalidatePath("/admin/menu");
   revalidatePath(`/admin/menu/${id}/edit`);
   redirect("/admin/menu");
+}
+
+export async function toggleSoldOut(id: string, sold_out: boolean) {
+  const { supabase } = await requireRole(["admin", "owner"]);
+  const { error } = await supabase.from("menu_items").update({ sold_out }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/menu");
 }
 
 export async function toggleAvailability(id: string, is_available: boolean) {

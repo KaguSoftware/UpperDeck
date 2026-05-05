@@ -14,7 +14,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
   const supabase = await getServerClient();
   const { data, error } = await supabase
     .from("menu_items")
-    .select("id, name_en, price, image_url, spicy, is_available, sort_order, category_id, categories(name_en)")
+    .select("id, name_en, price, image_url, spicy, is_available, sold_out, sort_order, category_id, categories(name_en)")
     .order("sort_order", { ascending: true })
     .order("name_en", { ascending: true });
 
@@ -35,6 +35,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
       image_url: item.image_url,
       spicy: item.spicy,
       is_available: item.is_available,
+      sold_out: item.sold_out,
       sort_order: item.sort_order,
       category_name: (item.categories as { name_en: string } | null)?.name_en ?? "—",
     }));
