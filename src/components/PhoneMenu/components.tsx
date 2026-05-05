@@ -13,8 +13,7 @@ import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem, CheckoutState } from "@/components/CartDrawer/types";
-import { ADDONS } from "@/components/ItemModal/addons";
-import type { AddonOption } from "@/components/ItemModal/addons";
+import type { AddonOptionPublic } from "@/lib/menu/queries";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
@@ -148,7 +147,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     });
   }, []);
 
-  const handleAdd = useCallback((extras: AddonOption[]) => {
+  const handleAdd = useCallback((extras: AddonOptionPublic[]) => {
     if (!activeItem) return;
     const { id: menu_item_id, name, price, discountPct } = activeItem;
     const basePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
@@ -402,7 +401,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
         spicyLabel={t.modal.spicy}
         priceLabel={t.modal.price}
         addToOrderLabel={t.modal.addToOrder}
-        addonGroups={activeItem ? (ADDONS[activeItem.id] ?? []) : []}
+        addonGroups={activeItem?.addonGroups ?? []}
       />
       <Toast message={toastMsg} show={toastShow} />
       <Ticker tags={t.ticker} />

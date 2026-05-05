@@ -53,7 +53,9 @@
       "Read(//c/Users/MnS/Kagu/demo/**)",
       "PowerShell(head -20)",
       "PowerShell(head -30)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npx supabase *)",
+      "Bash(del \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\components\\\\ItemModal\\\\addons.ts\")"
     ]
   }
 }

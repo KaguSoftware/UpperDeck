@@ -54,6 +54,9 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, heroMediaType: type || null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
 }
 
+export type AddonOptionPublic = { id: string; label: string; price: number };
+export type AddonGroupPublic  = { id: string; label: string; multi: boolean; options: AddonOptionPublic[] };
+
 export type PublicCategory = {
   slug: string;
   name: string;
@@ -74,6 +77,7 @@ export type PublicMenuItem = {
   price: number;
   spicy: boolean;
   sold_out: boolean;
+  addonGroups: AddonGroupPublic[];
 };
 
 export async function getPublicMenu(locale: "en" | "tr"): Promise<{
@@ -102,6 +106,17 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   if (itemsError) {
     throw new Error(`Failed to fetch menu items: ${itemsError.message}`);
   }
+
+  // Fetch all addon groups with their options in one query
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: addonRaw } = await (supabase as any)
+    .from("addon_groups")
+    .select("id, category_id, menu_item_id, label_en, label_tr, multi, sort_order, addon_options(id, label_en, label_tr, price, sort_order)")
+    .order("sort_order", { ascending: true });
+
+  type RawAddonOption = { id: string; label_en: string; label_tr: string; price: number; sort_order: number };
+  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; label_en: string; label_tr: string; multi: boolean; sort_order: number; addon_options: RawAddonOption[] };
+  const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
 
   // Build lookup: id → cat row
   const catById = new Map(cats.map((c) => [c.id, c]));
@@ -154,6 +169,27 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
     })
     .map((r) => {
       const { topSlug, subSlug } = resolveItemCat(r.category_id);
+
+      // Resolve addon groups: item-level overrides category-level
+      const cat = catById.get(r.category_id);
+      const parentCatId = cat?.parent_id ?? null;
+      const itemGroups = addonGroups.filter((g) => g.menu_item_id === r.id);
+      const catGroups  = addonGroups.filter(
+        (g) => g.category_id === r.category_id || (parentCatId && g.category_id === parentCatId)
+      );
+      const resolved = (itemGroups.length > 0 ? itemGroups : catGroups).map((g) => ({
+        id: g.id,
+        label: locale === "tr" ? g.label_tr : g.label_en,
+        multi: g.multi,
+        options: (g.addon_options ?? [])
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((o) => ({
+            id: o.id,
+            label: locale === "tr" ? o.label_tr : o.label_en,
+            price: o.price,
+          })),
+      }));
+
       return {
         id: r.id,
         cat: topSlug,
@@ -167,6 +203,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
         price: r.price,
         spicy: r.spicy,
         sold_out: r.sold_out,
+        addonGroups: resolved,
       };
     });
 

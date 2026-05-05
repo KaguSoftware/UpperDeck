@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import type { ItemModalProps } from "./types";
-import type { AddonOption } from "./addons";
+import type { ItemModalProps, AddonOption } from "./types";
 
 export function ItemModal({
   item,
