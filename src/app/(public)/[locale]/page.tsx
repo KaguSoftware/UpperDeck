@@ -3,6 +3,8 @@ import { getMessages } from "@/i18n";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
 import { getPublicMenu, getHeroSettings } from "@/lib/menu/queries";
+import { cookies } from "next/headers";
+import { verifyTableCookie } from "@/lib/table-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,14 @@ export default async function Home({
   ]);
 
   const rawT = typeof sp.t === "string" ? parseInt(sp.t, 10) : NaN;
-  const initialTableNumber = Number.isInteger(rawT) && rawT >= 1 && rawT <= 999 ? rawT : undefined;
+  const urlTable = Number.isInteger(rawT) && rawT >= 1 && rawT <= 999 ? rawT : undefined;
+
+  const cookieStore = await cookies();
+  const rawCookie = cookieStore.get("table_session")?.value;
+  const cookieTable = rawCookie ? verifyTableCookie(rawCookie) : null;
+
+  // Cookie wins (verified via /scan); URL param is fallback for dev/staff
+  const initialTableNumber = cookieTable ?? urlTable;
 
   return (
     <PhoneMenu

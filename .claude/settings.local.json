@@ -55,7 +55,13 @@
       "PowerShell(head -30)",
       "Bash(npm run *)",
       "Bash(npx supabase *)",
-      "Bash(del \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\components\\\\ItemModal\\\\addons.ts\")"
+      "Bash(del \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\components\\\\ItemModal\\\\addons.ts\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
+      "Bash(mkdir \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\app\\\\\\(public\\)\\\\[locale]\\\\scan\" 2>&1)",
+      "Bash(node -e \"const {randomBytes}=require\\('crypto'\\); console.log\\('QR_SECRET='+randomBytes\\(32\\).toString\\('hex'\\)\\); console.log\\('COOKIE_SECRET='+randomBytes\\(32\\).toString\\('hex'\\)\\);\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\MnS\\Kagu\\demo\\UpperDeckMenu\\src\\app\\(public)\\[locale]"
     ]
   }
 }
