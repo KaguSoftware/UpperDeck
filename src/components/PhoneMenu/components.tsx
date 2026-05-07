@@ -35,6 +35,7 @@ type PhoneMenuProps = {
   categories: PublicCategory[];
   items: PublicMenuItem[];
   initialTableNumber?: number;
+  disabledTables?: number[];
   heroMode?: "none" | "media" | "featured";
   heroMediaUrl?: string | null;
   heroMediaType?: "image" | "video" | null;
@@ -45,7 +46,7 @@ type PhoneMenuProps = {
   featuredDiscount?: number | null;
 };
 
-export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
@@ -386,7 +387,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
-          hidden={footerVisible || !!activeItem}
+          hidden={footerVisible || !!activeItem || disabledTables.includes(tableNumber ?? 0)}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}
         />

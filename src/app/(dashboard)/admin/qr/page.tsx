@@ -1,8 +1,10 @@
 import QRCode from "qrcode";
 import { generateToken } from "@/lib/table-auth";
 import { env } from "@/lib/env";
+import { getServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "../_components";
 import { PrintButton } from "./_print-button";
+import { TableWaiterToggle } from "./_table-toggles";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,17 @@ const TABLE_COUNT = parseInt(process.env.TABLE_COUNT ?? "20", 10);
 
 export default async function QRPage() {
   const baseUrl = env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const supabase = await getServerClient();
+
+  const { data: disabledData } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "waiter_disabled_tables")
+    .maybeSingle();
+
+  const disabledTables: number[] = disabledData?.value
+    ? (JSON.parse(disabledData.value) as number[])
+    : [];
 
   const tables = await Promise.all(
     Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {
@@ -33,7 +46,7 @@ export default async function QRPage() {
 
       <PageHeader
         title="Masa QR Kodları"
-        subtitle={`${TABLE_COUNT} masa · her 8 saatte bir yenilenir`}
+        subtitle={`${TABLE_COUNT} masa`}
         action={<PrintButton />}
       />
 
@@ -51,6 +64,12 @@ export default async function QRPage() {
             <span className="font-ui text-[7px] text-warm-gray break-all text-center leading-tight opacity-60">
               {url}
             </span>
+            <div data-no-print className="w-full">
+              <TableWaiterToggle
+                tableNumber={n}
+                disabled={disabledTables.includes(n)}
+              />
+            </div>
           </div>
         ))}
       </div>

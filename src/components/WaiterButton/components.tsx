@@ -90,7 +90,7 @@ function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: Reac
           height="24"
           viewBox="0 0 36 24"
           fill="none"
-          className="text-green"
+          className="text-orange"
           style={{
             animation: `arrowBounce 0.8s ease-in-out ${delay}ms infinite`,
           }}

@@ -3,6 +3,7 @@ import { getMessages } from "@/i18n";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
 import { getPublicMenu, getHeroSettings } from "@/lib/menu/queries";
+import { getServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { verifyTableCookie } from "@/lib/table-auth";
 
@@ -21,11 +22,18 @@ export default async function Home({
 }) {
   const [{ locale }, sp] = await Promise.all([params, searchParams]);
   const lang: Locale = locales.includes(locale as Locale) ? (locale as Locale) : defaultLocale;
-  const [messages, { categories, items }, heroSettings] = await Promise.all([
+
+  const supabase = await getServerClient();
+  const [messages, { categories, items }, heroSettings, disabledRes] = await Promise.all([
     Promise.resolve(getMessages(lang)),
     getPublicMenu(lang),
     getHeroSettings(),
+    supabase.from("settings").select("value").eq("key", "waiter_disabled_tables").maybeSingle(),
   ]);
+
+  const disabledTables: number[] = disabledRes.data?.value
+    ? (JSON.parse(disabledRes.data.value) as number[])
+    : [];
 
   const rawT = typeof sp.t === "string" ? parseInt(sp.t, 10) : NaN;
   const urlTable = Number.isInteger(rawT) && rawT >= 1 && rawT <= 999 ? rawT : undefined;
@@ -44,6 +52,7 @@ export default async function Home({
       categories={categories}
       items={items}
       initialTableNumber={initialTableNumber}
+      disabledTables={disabledTables}
       heroMode={heroSettings.heroMode}
       heroMediaUrl={heroSettings.heroMediaUrl}
       heroMediaType={heroSettings.heroMediaType}

@@ -80,6 +80,10 @@ export function ItemModal({
   const dragCurrentY = useRef(0);
 
   const onTouchStart = (e: React.TouchEvent) => {
+    if ((scrollRef.current?.scrollTop ?? 0) > 0) {
+      dragStartY.current = null;
+      return;
+    }
     dragStartY.current = e.touches[0].clientY;
     dragCurrentY.current = 0;
     if (sheetRef.current) sheetRef.current.style.transition = "none";

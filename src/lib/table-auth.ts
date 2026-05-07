@@ -16,28 +16,17 @@ function safeEqual(a: string, b: string): boolean {
   }
 }
 
-// Returns { tok, w } — both must be embedded in the QR URL
+// Returns { tok, w } — permanent tokens (w is always 0)
 export function generateToken(table: number): { tok: string; w: number } {
-  const w = Math.floor(Date.now() / 1000 / WINDOW_SECS);
-  const message = `table=${table}&w=${w}`;
-  const tok = hmacHex(env.QR_SECRET, message).slice(0, 16);
+  const w = 0;
+  const tok = hmacHex(env.QR_SECRET, `table=${table}&w=${w}`).slice(0, 16);
   return { tok, w };
 }
 
-// Accepts w as a string from the URL param
 export function verifyToken(table: number, w: string, tok: string): boolean {
-  const wNum = parseInt(w, 10);
-  if (!Number.isInteger(wNum)) return false;
-  const currentW = Math.floor(Date.now() / 1000 / WINDOW_SECS);
-  // Allow current window and the previous one (grace period)
-  for (const validW of [currentW, currentW - 1]) {
-    const expected = hmacHex(env.QR_SECRET, `table=${table}&w=${validW}`).slice(0, 16);
-    if (wNum === validW && safeEqual(expected, tok.padEnd(expected.length, " ").slice(0, expected.length))) {
-      // Use timingSafeEqual-safe comparison: compare full expected vs tok
-      if (expected.length === tok.length && safeEqual(expected, tok)) return true;
-    }
-  }
-  return false;
+  if (w !== "0") return false;
+  const expected = hmacHex(env.QR_SECRET, `table=${table}&w=0`).slice(0, 16);
+  return expected.length === tok.length && safeEqual(expected, tok);
 }
 
 function base64urlEncode(str: string): string {

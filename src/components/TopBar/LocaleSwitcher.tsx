@@ -47,20 +47,21 @@ export function LocaleSwitcher({ current }: { current: Locale }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-bg border-2 border-green z-999999 min-w-16">
+        <div className="absolute right-0 top-full mt-1 bg-bg border-2 border-green z-999999 min-w-18">
           {locales.map((locale) => (
             <a
               key={locale}
               href={hrefFor(locale)}
               onClick={() => setOpen(false)}
               className={[
-                "block px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase transition-colors",
+                "flex items-center gap-1.5 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase transition-colors whitespace-nowrap",
                 locale === current
                   ? "text-orange bg-green/5 cursor-default"
                   : "text-green hover:bg-green hover:text-bg cursor-pointer",
               ].join(" ")}
             >
-              {locale === "en" ? "🇬🇧 EN" : "🇹🇷 TR"}
+              <span>{locale === "en" ? "🇬🇧" : "🇹🇷"}</span>
+              <span>{locale === "en" ? "EN" : "TR"}</span>
             </a>
           ))}
         </div>

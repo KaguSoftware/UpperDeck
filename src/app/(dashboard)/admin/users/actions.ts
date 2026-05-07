@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -36,6 +37,7 @@ export async function setRole(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/admin/users");
+  redirect("/admin/users");
 }
 
 export async function removeUser(formData: FormData) {
@@ -62,6 +64,7 @@ export async function removeUser(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/admin/users");
+  redirect("/admin/users");
 }
 
 const InviteSchema = z.object({

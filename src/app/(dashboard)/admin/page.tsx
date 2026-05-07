@@ -14,7 +14,7 @@ export default async function AdminDashboard({
 
   const [items, available, categories] = await Promise.all([
     supabase.from("menu_items").select("id", { count: "exact", head: true }),
-    supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("is_available", true),
+    supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("is_available", true).eq("sold_out", false),
     supabase.from("categories").select("id", { count: "exact", head: true }),
   ]);
 
