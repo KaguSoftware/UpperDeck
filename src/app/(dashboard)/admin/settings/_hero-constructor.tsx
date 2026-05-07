@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import imageCompression from "browser-image-compression";
 import { getBrowserClient } from "@/lib/supabase/client";
 
 type HeroMode = "none" | "media" | "featured";
@@ -70,11 +71,25 @@ export function HeroConstructor({
     const isVideo = file.type.startsWith("video/");
     try {
       const supabase = getBrowserClient();
-      const ext = file.name.split(".").pop() ?? (isVideo ? "mp4" : "jpg");
+      let uploadFile: File | Blob = file;
+      let ext = file.name.split(".").pop() ?? (isVideo ? "mp4" : "jpg");
+      let contentType = file.type;
+
+      if (!isVideo) {
+        uploadFile = await imageCompression(file, {
+          maxSizeMB: 0.8,
+          maxWidthOrHeight: 1600,
+          useWebWorker: true,
+          fileType: "image/webp",
+        });
+        ext = "webp";
+        contentType = "image/webp";
+      }
+
       const path = `hero/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("menu-images")
-        .upload(path, file, { upsert: false });
+        .upload(path, uploadFile, { upsert: false, contentType });
       if (upErr) throw new Error(upErr.message);
       const { data } = supabase.storage.from("menu-images").getPublicUrl(path);
       setMediaUrl(data.publicUrl);

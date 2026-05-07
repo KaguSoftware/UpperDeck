@@ -219,13 +219,16 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
 
   const handleFeaturedClick = useCallback(() => {
     if (!featuredItem) return;
-    const target = stageRef.current?.querySelector<HTMLElement>(
+    const target = stageRef.current?.querySelector<HTMLButtonElement>(
       `[data-item="${CSS.escape(featuredItem.id)}"]`
     );
     if (!target) return;
     isAutoScrollingRef.current = true;
     stageWrapRef.current?.scrollTo({ top: target.offsetTop - 8, behavior: "smooth" });
-    setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
+    setTimeout(() => {
+      isAutoScrollingRef.current = false;
+      target.click();
+    }, 800);
   }, [featuredItem]);
 
   const handleScroll = useCallback(() => {
