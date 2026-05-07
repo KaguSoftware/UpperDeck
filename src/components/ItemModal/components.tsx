@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import type { ItemModalProps } from "./types";
+import { useRef, useState, useEffect, useMemo } from "react";
+import type { ItemModalProps, AddonOption } from "./types";
 
 export function ItemModal({
   item,
@@ -10,17 +10,48 @@ export function ItemModal({
   spicyLabel,
   priceLabel,
   addToOrderLabel,
+  addonGroups = [],
 }: ItemModalProps) {
   const isOpen = item !== null;
   const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
 
   const [showStamp, setShowStamp] = useState(false);
+  // selected addon IDs
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+
+  // Reset selections whenever a new item opens
+  useEffect(() => {
+    setSelected({});
+  }, [item?.id]);
+
   useEffect(() => {
     if (!item?.sold_out) { setShowStamp(false); return; }
     setShowStamp(false);
     const t = setTimeout(() => setShowStamp(true), 300);
     return () => clearTimeout(t);
   }, [item?.id, item?.sold_out]);
+
+  const selectedExtras = useMemo<AddonOption[]>(() => {
+    return addonGroups.flatMap((g) =>
+      g.options.filter((o) => selected[o.id])
+    );
+  }, [addonGroups, selected]);
+
+  const extrasTotal = selectedExtras.reduce((s, o) => s + o.price, 0);
+
+  const toggleAddon = (groupIndex: number, option: AddonOption, multi: boolean) => {
+    setSelected((prev) => {
+      if (multi) {
+        return { ...prev, [option.id]: !prev[option.id] };
+      }
+      // single-select: deselect all options in this group first
+      const groupOptionIds = addonGroups[groupIndex].options.map((o) => o.id);
+      const next = { ...prev };
+      groupOptionIds.forEach((id) => { next[id] = false; });
+      next[option.id] = !prev[option.id];
+      return next;
+    });
+  };
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
@@ -200,20 +231,54 @@ export function ItemModal({
                 {item.desc}
               </div>
             )}
+
+            {/* Add-on groups */}
+            {addonGroups.length > 0 && (
+              <div className="flex flex-col gap-3 mb-3.5">
+                {addonGroups.map((group, gi) => (
+                  <div key={gi}>
+                    <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-1.5">
+                      {group.label}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {group.options.map((opt) => {
+                        const active = !!selected[opt.id];
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleAddon(gi, opt, group.multi)}
+                            className={[
+                              "font-ui font-extrabold text-[11px] tracking-widest uppercase px-3 py-1.5 border-2 cursor-pointer transition-colors",
+                              active
+                                ? "bg-green text-bg border-green"
+                                : "bg-transparent text-green border-green/40 hover:border-green",
+                            ].join(" ")}
+                          >
+                            {opt.label}{opt.price > 0 ? ` +${opt.price}₺` : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex justify-between items-center py-2.5 border-t-2 border-b-2 border-green mb-3.5">
               <span className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase">{priceLabel}</span>
               {item.discountPct ? (
                 <div className="flex items-baseline gap-2">
                   <span className="font-ui font-extrabold text-[14px] text-green/40 line-through">{item.price} ₺</span>
-                  <span className="font-bowlby text-[24px] text-orange">{Math.round(item.price * (1 - item.discountPct / 100))} ₺</span>
+                  <span className="font-bowlby text-[24px] text-orange">{Math.round(item.price * (1 - item.discountPct / 100)) + extrasTotal} ₺</span>
                 </div>
               ) : (
-                <span className="font-bowlby text-[24px] text-orange">{item.price} ₺</span>
+                <span className="font-bowlby text-[24px] text-orange">{item.price + extrasTotal} ₺</span>
               )}
             </div>
             <button
               type="button"
-              onClick={onAdd}
+              onClick={() => onAdd(selectedExtras)}
               className="w-full bg-orange text-white border-0 py-3.5 font-bowlby text-[16px] tracking-[1.5px] uppercase cursor-pointer"
             >
               {addToOrderLabel}

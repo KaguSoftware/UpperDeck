@@ -1,8 +1,8 @@
-// Run first: npm install qrcode --save-dev
 // Usage:    node scripts/generate-table-qrs.mjs
-// Env vars: BASE_URL (default https://example.com), TABLE_COUNT (default 20)
+// Env vars: BASE_URL (default https://example.com), TABLE_COUNT (default 20), QR_SECRET (required)
 
 import QRCode from "qrcode";
+import { createHmac } from "crypto";
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -11,12 +11,29 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const BASE_URL = process.env.BASE_URL ?? "https://example.com";
 const TABLE_COUNT = parseInt(process.env.TABLE_COUNT ?? "20", 10);
+const QR_SECRET = process.env.QR_SECRET;
+
+if (!QR_SECRET) {
+  console.error("Error: QR_SECRET environment variable is required.");
+  console.error("  Example: QR_SECRET=mysecret node scripts/generate-table-qrs.mjs");
+  process.exit(1);
+}
+
+const WINDOW_SECS = 28800; // must match table-auth.ts
+
+function generateToken(table) {
+  const w = Math.floor(Date.now() / 1000 / WINDOW_SECS);
+  const message = `table=${table}&w=${w}`;
+  const tok = createHmac("sha256", QR_SECRET).update(message).digest("hex").slice(0, 16);
+  return { tok, w };
+}
 
 async function main() {
   const cells = await Promise.all(
     Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {
-      const url = `${BASE_URL}/?t=${n}`;
-      const dataUrl = await QRCode.toDataURL(url, { width: 240, margin: 2 });
+      const { tok, w } = generateToken(n);
+      const url = `${BASE_URL}/en/scan?t=${n}&w=${w}&tok=${tok}`;
+      const dataUrl = await QRCode.toDataURL(url, { width: 240, margin: 3 });
       return { n, url, dataUrl };
     })
   );

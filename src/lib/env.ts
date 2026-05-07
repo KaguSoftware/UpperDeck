@@ -10,6 +10,8 @@ const ServerSchema = PublicSchema.extend({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(10).optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  QR_SECRET: z.string().min(16),
+  COOKIE_SECRET: z.string().min(16),
 });
 
 type Env = z.infer<typeof ServerSchema>;
@@ -26,6 +28,8 @@ function getEnv(): Env {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
+    QR_SECRET: process.env.QR_SECRET,
+    COOKIE_SECRET: process.env.COOKIE_SECRET,
   };
 
   const result = ServerSchema.safeParse(raw);
@@ -39,6 +43,8 @@ function getEnv(): Env {
       return {
         NEXT_PUBLIC_SUPABASE_URL: "",
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
+        QR_SECRET: "",
+        COOKIE_SECRET: "",
       } as Env;
     }
 

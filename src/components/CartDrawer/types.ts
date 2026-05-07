@@ -1,9 +1,12 @@
+export type CartItemExtra = { id: string; label: string; price: number };
+
 export type CartItem = {
   id: string;
   menu_item_id: string;
   name: string;
   price: number;
   qty: number;
+  extras?: CartItemExtra[];
 };
 
 export type CheckoutState =
@@ -38,4 +41,5 @@ export type CartDrawerProps = {
   simulateFailure?: boolean;
   onSimulateFailureChange?: (v: boolean) => void;
   topOffset?: number;
+  orderCooldownSeconds?: number;
 };
