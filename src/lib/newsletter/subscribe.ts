@@ -9,7 +9,8 @@ export async function subscribeNewsletter(email: string): Promise<{ ok: boolean;
   }
 
   const supabase = await getServerClient();
-  const { error } = await supabase.from("newsletter").insert({ email: trimmed });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).from("newsletter").insert({ email: trimmed });
 
   if (error) {
     if (error.code === "23505") return { ok: true, alreadySubscribed: true };
