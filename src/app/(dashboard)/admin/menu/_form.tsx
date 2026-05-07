@@ -17,7 +17,7 @@ export function MenuItemForm({
       className="border-2 border-green bg-white p-6 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl"
     >
       <Select
-        label="Category"
+        label="Kategori"
         name="category_id"
         required
         defaultValue={initial?.category_id}
@@ -27,17 +27,17 @@ export function MenuItemForm({
         <ImageField defaultUrl={initial?.image_url} />
       </div>
 
-      <Field label="Name (EN)" name="name_en" required defaultValue={initial?.name_en} />
-      <Field label="Name (TR)" name="name_tr" required defaultValue={initial?.name_tr} />
+      <Field label="Ad (İNG)" name="name_en" required defaultValue={initial?.name_en} />
+      <Field label="Ad (TR)" name="name_tr" required defaultValue={initial?.name_tr} />
 
-      <Field label="Hook (EN)" name="hook_en" defaultValue={initial?.hook_en ?? ""} placeholder="e.g. sweet · crispy · bold" />
-      <Field label="Hook (TR)" name="hook_tr" defaultValue={initial?.hook_tr ?? ""} placeholder="e.g. tatlı · çıtır · cesur" />
+      <Field label="Slogan (İNG)" name="hook_en" defaultValue={initial?.hook_en ?? ""} placeholder="örn. tatlı · çıtır · cesur" />
+      <Field label="Slogan (TR)" name="hook_tr" defaultValue={initial?.hook_tr ?? ""} placeholder="örn. tatlı · çıtır · cesur" />
 
-      <Textarea label="Description (EN)" name="desc_en" defaultValue={initial?.desc_en ?? ""} />
-      <Textarea label="Description (TR)" name="desc_tr" defaultValue={initial?.desc_tr ?? ""} />
+      <Textarea label="Açıklama (İNG)" name="desc_en" defaultValue={initial?.desc_en ?? ""} />
+      <Textarea label="Açıklama (TR)" name="desc_tr" defaultValue={initial?.desc_tr ?? ""} />
 
       <Field
-        label="Price (₺)"
+        label="Fiyat (₺)"
         name="price"
         type="number"
         step="1"
@@ -46,28 +46,28 @@ export function MenuItemForm({
         defaultValue={initial?.price ?? 0}
       />
       <Field
-        label="Sort Order"
+        label="Sıralama"
         name="sort_order"
         type="number"
         defaultValue={initial?.sort_order ?? 0}
       />
 
       <div className="flex items-center gap-6">
-        <Checkbox label="Spicy" name="spicy" defaultChecked={initial?.spicy ?? false} />
+        <Checkbox label="Acılı" name="spicy" defaultChecked={initial?.spicy ?? false} />
         <Checkbox
-          label="Available"
+          label="Mevcut"
           name="is_available"
           defaultChecked={initial?.is_available ?? true}
         />
         <Checkbox
-          label="Sold Out"
+          label="Tükendi"
           name="sold_out"
           defaultChecked={initial?.sold_out ?? false}
         />
       </div>
 
       <div className="md:col-span-2">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green mb-2">Highlight</div>
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green mb-2">Vurgulama</div>
         <div className="flex gap-3">
           {(["", "green-fill", "orange-fill"] as const).map((val) => (
             <label key={val} className="flex items-center gap-2 cursor-pointer">
@@ -85,7 +85,7 @@ export function MenuItemForm({
                 {val === "green-fill" ? "G" : val === "orange-fill" ? "O" : "—"}
               </span>
               <span className="text-[11px] font-semibold text-green">
-                {val === "green-fill" ? "Green" : val === "orange-fill" ? "Orange" : "None"}
+                {val === "green-fill" ? "Yeşil" : val === "orange-fill" ? "Turuncu" : "Yok"}
               </span>
             </label>
           ))}
@@ -93,8 +93,8 @@ export function MenuItemForm({
       </div>
 
       <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">
-        <PrimaryButton>Save</PrimaryButton>
-        <GhostButton href="/admin/menu">Cancel</GhostButton>
+        <PrimaryButton>Kaydet</PrimaryButton>
+        <GhostButton href="/admin/menu">İptal</GhostButton>
       </div>
     </form>
   );

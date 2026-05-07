@@ -26,7 +26,7 @@ export default async function EditCategoryPage({
 
   return (
     <>
-      <PageHeader title="Edit Category" subtitle={data.name_en} />
+      <PageHeader title="Kategoriyi Düzenle" subtitle={data.name_en} />
       <CategoryForm action={update} initial={data} parentOptions={parentOptions} />
     </>
   );

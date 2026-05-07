@@ -1,5 +1,7 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import type { TopBarProps } from "./types";
+import { LocaleSwitcher } from "./LocaleSwitcher";
 
 export function TopBar({
   cartCount,
@@ -9,6 +11,7 @@ export function TopBar({
   brandAccent,
   brandSub,
   orderLabel,
+  locale,
 }: TopBarProps) {
   return (
     <div className="shrink-0 px-4.5 pt-2 pb-2.5 flex items-center justify-between gap-2.5 bg-bg border-b-2 border-green">
@@ -26,16 +29,21 @@ export function TopBar({
           </div>
         </div>
       </button>
-      <button
-        type="button"
-        onClick={onCartClick}
-        className="bg-orange text-white border-0 px-2.75 py-2.25 flex items-center gap-2 font-ui font-extrabold text-[9px] tracking-[0.2em] uppercase cursor-pointer"
-      >
-        <span>{orderLabel}</span>
-        <span className="bg-white text-orange min-w-5 h-5 px-1.25 grid place-items-center font-bowlby text-[11px]">
-          {cartCount}
-        </span>
-      </button>
+      <div className="flex items-center gap-2">
+        <Suspense>
+          <LocaleSwitcher current={locale} />
+        </Suspense>
+        <button
+          type="button"
+          onClick={onCartClick}
+          className="bg-orange text-white border-0 px-2.75 py-2.25 flex items-center gap-2 font-ui font-extrabold text-[9px] tracking-[0.2em] uppercase cursor-pointer"
+        >
+          <span>{orderLabel}</span>
+          <span className="bg-white text-orange min-w-5 h-5 px-1.25 grid place-items-center font-bowlby text-[11px]">
+            {cartCount}
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

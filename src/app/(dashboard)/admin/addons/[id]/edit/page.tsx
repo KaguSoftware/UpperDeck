@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import { Field, Checkbox, PrimaryButton, GhostButton, DangerButton, PageHeader } from "../../../_components";
 import { updateGroup, deleteGroup, createOption, updateOption, deleteOption } from "../../actions";
+import { AddonOptionForm } from "./_option-form";
+import { ReorderButtons } from "./_reorder-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +11,15 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await getServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: groupRaw, error } = await (supabase as any)
-    .from("addon_groups")
-    .select("*, categories(name_en), menu_items(name_en), addon_options(id, label_en, label_tr, price, sort_order)")
-    .eq("id", id)
-    .single();
+  const [{ data: groupRaw, error }, { data: allItems }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("addon_groups")
+      .select("*, categories(name_en), menu_items(name_en), addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(name_en, image_url, emoji))")
+      .eq("id", id)
+      .single(),
+    supabase.from("menu_items").select("id, name_en, image_url, emoji, price").order("name_en"),
+  ]);
 
   if (error || !groupRaw) notFound();
 
@@ -28,16 +33,23 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
     menu_item_id: string | null;
     categories: { name_en: string } | null;
     menu_items: { name_en: string } | null;
-    addon_options: { id: string; label_en: string; label_tr: string; price: number; sort_order: number }[];
+    addon_options: {
+      id: string;
+      label_en: string;
+      label_tr: string;
+      price: number;
+      sort_order: number;
+      menu_item_id: string | null;
+      menu_items: { name_en: string; image_url: string | null; emoji: string } | null;
+    }[];
   };
 
+  const menuItems = (allItems ?? []) as { id: string; name_en: string; image_url: string | null; emoji: string; price: number }[];
   const scopeName = group.category_id
     ? ((group.categories as { name_en: string } | null)?.name_en ?? "—")
     : ((group.menu_items as { name_en: string } | null)?.name_en ?? "—");
   const scopeType = group.category_id ? "Category" : "Menu Item";
-
-  const options = ((group.addon_options as { id: string; label_en: string; label_tr: string; price: number; sort_order: number }[]) ?? [])
-    .sort((a, b) => a.sort_order - b.sort_order);
+  const options = (group.addon_options ?? []).sort((a, b) => a.sort_order - b.sort_order);
 
   const updateGroupWithId = updateGroup.bind(null, id);
   const createOptionForGroup = createOption.bind(null, id);
@@ -47,94 +59,103 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
       <PageHeader
         title={group.label_en}
         subtitle={`${scopeType}: ${scopeName}`}
-        action={
-          <GhostButton href="/admin/addons">← All Add-Ons</GhostButton>
-        }
+        action={<GhostButton href="/admin/addons">← Tüm Ekstralar</GhostButton>}
       />
 
       {/* Section 1 — Group settings */}
       <section className="mb-10">
-        <h2 className="font-bowlby text-[16px] text-green uppercase tracking-[-0.3px] mb-3">Group Settings</h2>
+        <h2 className="font-bowlby text-[16px] text-green uppercase tracking-[-0.3px] mb-3">Grup Ayarları</h2>
         <form
           action={updateGroupWithId}
           className="border-2 border-green bg-white p-6 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl"
         >
-          {/* Keep scope hidden so parseGroup works */}
           <input type="hidden" name="scope" value={group.category_id ? "category" : "item"} />
           {group.category_id && <input type="hidden" name="category_id" value={group.category_id} />}
           {group.menu_item_id && <input type="hidden" name="menu_item_id" value={group.menu_item_id} />}
 
-          <Field label="Label (EN)" name="label_en" required defaultValue={group.label_en} />
-          <Field label="Label (TR)" name="label_tr" required defaultValue={group.label_tr} />
-          <Field label="Sort Order" name="sort_order" type="number" defaultValue={group.sort_order} />
+          <Field label="Etiket (İNG)" name="label_en" required defaultValue={group.label_en} />
+          <Field label="Etiket (TR)" name="label_tr" required defaultValue={group.label_tr} />
+          <Field label="Sıralama" name="sort_order" type="number" defaultValue={group.sort_order} />
 
           <div className="flex items-center">
-            <Checkbox label="Multi-select" name="multi" defaultChecked={group.multi} />
+            <Checkbox label="Çoklu seçim" name="multi" defaultChecked={group.multi} />
           </div>
 
           <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">
-            <PrimaryButton>Save Changes</PrimaryButton>
+            <PrimaryButton>Değişiklikleri Kaydet</PrimaryButton>
           </div>
         </form>
 
-        {/* Delete group */}
         <form action={deleteGroup} className="mt-4">
           <input type="hidden" name="id" value={id} />
-          <DangerButton>Delete Group &amp; All Options</DangerButton>
+          <DangerButton>Grubu ve Tüm Seçenekleri Sil</DangerButton>
         </form>
       </section>
 
       {/* Section 2 — Options */}
       <section>
         <h2 className="font-bowlby text-[16px] text-green uppercase tracking-[-0.3px] mb-3">
-          Options <span className="text-green/50 text-[13px] font-ui font-normal normal-case tracking-normal">({options.length})</span>
+          Seçenekler <span className="text-green/50 text-[13px] font-ui font-normal normal-case tracking-normal">({options.length})</span>
         </h2>
 
+        {/* Add new option — always at top */}
+        <div className="border-2 border-green/40 border-dashed p-4 mb-6">
+          <p className="font-ui font-extrabold text-[10px] tracking-[0.22em] uppercase text-green/60 mb-3">Seçenek Ekle</p>
+          <AddonOptionForm
+            groupId={id}
+            menuItems={menuItems}
+            defaultSortOrder={options.length}
+            createAction={createOptionForGroup}
+          />
+        </div>
+
+        {/* Existing options */}
         {options.length > 0 && (
-          <div className="border-2 border-green mb-6 overflow-hidden">
+          <div className="border-2 border-green overflow-hidden">
             {options.map((opt, i) => {
               const updateThisOption = updateOption.bind(null, opt.id, id);
+              const isFirst = i === 0;
+              const isLast = i === options.length - 1;
               return (
-                <div
-                  key={opt.id}
-                  className={["p-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_80px_80px_auto] gap-3 items-end", i > 0 ? "border-t border-green/20" : ""].join(" ")}
-                >
-                  <form action={updateThisOption} className="contents">
-                    <Field label="Label (EN)" name="label_en" defaultValue={opt.label_en} required />
-                    <Field label="Label (TR)" name="label_tr" defaultValue={opt.label_tr} required />
-                    <Field label="Price (₺)" name="price" type="number" defaultValue={opt.price} min="0" step="1" />
-                    <Field label="Order" name="sort_order" type="number" defaultValue={opt.sort_order} />
-                    <div className="flex items-end">
-                      <PrimaryButton>Save</PrimaryButton>
+                <div key={opt.id} className={["p-4", i > 0 ? "border-t border-green/20" : ""].join(" ")}>
+                  <div className="flex items-start gap-2">
+                    <ReorderButtons optId={opt.id} groupId={id} isFirst={isFirst} isLast={isLast} />
+
+                    {/* linked item preview + form */}
+                    <div className="flex-1 min-w-0">
+                      {opt.menu_items && (
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-10 h-10 bg-bg-deep flex items-center justify-center overflow-hidden shrink-0">
+                            {opt.menu_items.image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={opt.menu_items.image_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-[20px]">{opt.menu_items.emoji}</span>
+                            )}
+                          </div>
+                          <span className="font-ui font-semibold text-[12px] text-green/70">{opt.menu_items.name_en}</span>
+                        </div>
+                      )}
+                      <AddonOptionForm
+                        opt={opt}
+                        groupId={id}
+                        menuItems={menuItems}
+                        updateAction={updateThisOption}
+                      />
                     </div>
-                  </form>
-                  <form action={deleteOption} className="md:col-start-6 flex items-end">
-                    <input type="hidden" name="id" value={opt.id} />
-                    <input type="hidden" name="group_id" value={id} />
-                    <DangerButton>✕</DangerButton>
-                  </form>
+
+                    {/* delete */}
+                    <form action={deleteOption} className="pt-5 shrink-0">
+                      <input type="hidden" name="id" value={opt.id} />
+                      <input type="hidden" name="group_id" value={id} />
+                      <DangerButton>✕</DangerButton>
+                    </form>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
-
-        {/* Add new option */}
-        <div className="border-2 border-green/40 border-dashed p-4">
-          <p className="font-ui font-extrabold text-[10px] tracking-[0.22em] uppercase text-green/60 mb-3">Add Option</p>
-          <form
-            action={createOptionForGroup}
-            className="grid grid-cols-1 md:grid-cols-[1fr_1fr_80px_80px_auto] gap-3 items-end"
-          >
-            <Field label="Label (EN)" name="label_en" required placeholder="e.g. Fries" />
-            <Field label="Label (TR)" name="label_tr" required placeholder="e.g. Patates" />
-            <Field label="Price (₺)" name="price" type="number" defaultValue={0} min="0" step="1" />
-            <Field label="Order" name="sort_order" type="number" defaultValue={options.length} />
-            <div className="flex items-end">
-              <PrimaryButton>+ Add</PrimaryButton>
-            </div>
-          </form>
-        </div>
       </section>
     </>
   );

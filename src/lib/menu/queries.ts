@@ -54,8 +54,10 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, heroMediaType: type || null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
 }
 
-export type AddonOptionPublic = { id: string; label: string; price: number };
+export type AddonOptionPublic = { id: string; label: string; price: number; image_url: string | null; emoji: string | null };
 export type AddonGroupPublic  = { id: string; label: string; multi: boolean; options: AddonOptionPublic[] };
+
+export type SuggestedItemPublic = { id: string; name: string; price: number; image_url: string | null; emoji: string };
 
 export type PublicCategory = {
   slug: string;
@@ -78,6 +80,7 @@ export type PublicMenuItem = {
   spicy: boolean;
   sold_out: boolean;
   addonGroups: AddonGroupPublic[];
+  suggestedItems: SuggestedItemPublic[];
 };
 
 export async function getPublicMenu(locale: "en" | "tr"): Promise<{
@@ -109,14 +112,27 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
 
   // Fetch all addon groups with their options in one query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: addonRaw } = await (supabase as any)
+  const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select("id, category_id, menu_item_id, label_en, label_tr, multi, sort_order, addon_options(id, label_en, label_tr, price, sort_order)")
+    .select("id, category_id, menu_item_id, label_en, label_tr, multi, sort_order, addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(image_url, emoji))")
     .order("sort_order", { ascending: true });
+  if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
-  type RawAddonOption = { id: string; label_en: string; label_tr: string; price: number; sort_order: number };
+  type RawAddonOption = { id: string; label_en: string; label_tr: string; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
   type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; label_en: string; label_tr: string; multi: boolean; sort_order: number; addon_options: RawAddonOption[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
+
+  // Fetch all suggested groups with their items
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: suggestedRaw, error: suggestedError } = await (supabase as any)
+    .from("suggested_groups")
+    .select("id, category_id, menu_item_id, sort_order, suggested_items(id, sort_order, menu_item_id, menu_items(id, name_en, name_tr, image_url, emoji, price))")
+    .order("sort_order", { ascending: true });
+  if (suggestedError) console.warn("[getPublicMenu] suggested_groups query failed:", suggestedError.message);
+
+  type RawSuggestedItem = { id: string; sort_order: number; menu_item_id: string; menu_items: { id: string; name_en: string; name_tr: string; image_url: string | null; emoji: string; price: number } | null };
+  type RawSuggestedGroup = { id: string; category_id: string | null; menu_item_id: string | null; sort_order: number; suggested_items: RawSuggestedItem[] };
+  const suggestedGroups: RawSuggestedGroup[] = (suggestedRaw ?? []) as RawSuggestedGroup[];
 
   // Build lookup: id → cat row
   const catById = new Map(cats.map((c) => [c.id, c]));
@@ -187,8 +203,30 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
             id: o.id,
             label: locale === "tr" ? o.label_tr : o.label_en,
             price: o.price,
+            image_url: o.menu_items?.image_url ?? null,
+            emoji: o.menu_items?.emoji ?? null,
           })),
       }));
+
+      // Resolve suggested items: item-level overrides category-level
+      const sugItemGroups = suggestedGroups.filter((g) => g.menu_item_id === r.id);
+      const sugCatGroups  = suggestedGroups.filter(
+        (g) => g.category_id === r.category_id || (parentCatId && g.category_id === parentCatId)
+      );
+      const resolvedSuggested = (sugItemGroups.length > 0 ? sugItemGroups : sugCatGroups)
+        .flatMap((g) =>
+          (g.suggested_items ?? [])
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .filter((s) => s.menu_items && s.menu_item_id !== r.id)
+            .map((s) => ({
+              id: s.menu_items!.id,
+              name: locale === "tr" ? s.menu_items!.name_tr : s.menu_items!.name_en,
+              price: s.menu_items!.price,
+              image_url: s.menu_items!.image_url,
+              emoji: s.menu_items!.emoji,
+            }))
+        )
+        .filter((item, idx, arr) => arr.findIndex((x) => x.id === item.id) === idx);
 
       return {
         id: r.id,
@@ -204,6 +242,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
         spicy: r.spicy,
         sold_out: r.sold_out,
         addonGroups: resolved,
+        suggestedItems: resolvedSuggested,
       };
     });
 

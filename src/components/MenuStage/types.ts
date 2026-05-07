@@ -1,5 +1,5 @@
 import type { PlacedCard } from "@/components/MenuCard/types";
-import type { AddonGroupPublic } from "@/lib/menu/queries";
+import type { AddonGroupPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 
 export type MenuItem = {
   id: string;
@@ -16,6 +16,7 @@ export type MenuItem = {
   sold_out?: boolean;
   discountPct?: number | null;
   addonGroups?: AddonGroupPublic[];
+  suggestedItems?: SuggestedItemPublic[];
 };
 
 export type LayoutResult = {

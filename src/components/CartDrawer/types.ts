@@ -7,6 +7,7 @@ export type CartItem = {
   price: number;
   qty: number;
   extras?: CartItemExtra[];
+  itemNote?: string;
 };
 
 export type CheckoutState =
@@ -14,6 +15,19 @@ export type CheckoutState =
   | { status: "pending" }
   | { status: "offline" }
   | { status: "validation"; message: string };
+
+export type CouponProps = {
+  couponLabel: string;
+  couponPlaceholder: string;
+  couponApply: string;
+  noOfferTitle: string;
+  noOfferBody: string;
+  emailPlaceholder: string;
+  subscribeLabel: string;
+  subscribedMessage: string;
+  noCouponPrefix: string;
+  noCouponLink: string;
+};
 
 export type CartDrawerProps = {
   items: CartItem[];
@@ -38,8 +52,7 @@ export type CartDrawerProps = {
   sendLabel: string;
   tryAgainLabel: string;
   tableFromQr?: boolean;
-  simulateFailure?: boolean;
-  onSimulateFailureChange?: (v: boolean) => void;
   topOffset?: number;
   orderCooldownSeconds?: number;
+  coupon: CouponProps;
 };

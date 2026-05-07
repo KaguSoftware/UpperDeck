@@ -111,23 +111,23 @@ export function HeroConstructor({
       {/* mode toggle */}
       <div className="flex flex-col gap-2">
         <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-          Hero Mode
+          Hero Modu
         </span>
         <div className="flex gap-0">
           <ModeButton active={mode === "none"} onClick={() => setMode("none")}>
-            None
+            Yok
           </ModeButton>
           <ModeButton active={mode === "media"} onClick={() => setMode("media")}>
-            Media
+            Medya
           </ModeButton>
           <ModeButton active={mode === "featured"} onClick={() => setMode("featured")}>
-            Featured Product
+            Öne Çıkan Ürün
           </ModeButton>
         </div>
         <p className="text-[10px] text-green/40">
-          {mode === "none" && "Shows the default text banner."}
-          {mode === "media" && "Shows a custom image or video above the menu."}
-          {mode === "featured" && "Highlights a menu item with its image, a scrolling sentence, and an optional badge."}
+          {mode === "none" && "Varsayılan metin banner'ını gösterir."}
+          {mode === "media" && "Menünün üzerinde özel bir görsel veya video gösterir."}
+          {mode === "featured" && "Bir menü ürününü görseli, kayan yazısı ve isteğe bağlı rozeti ile öne çıkarır."}
         </p>
       </div>
 
@@ -155,7 +155,7 @@ export function HeroConstructor({
                 <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-[10px] text-green/40 font-bold uppercase tracking-wider text-center px-1">
-                  No media
+                  Medya yok
                 </span>
               )}
             </div>
@@ -169,7 +169,7 @@ export function HeroConstructor({
                 {uploading && (
                   <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
                 )}
-                {uploading ? "Uploading…" : mediaUrl ? "Replace" : "Upload image or video"}
+                {uploading ? "Yükleniyor…" : mediaUrl ? "Değiştir" : "Görsel veya video yükle"}
               </button>
               {mediaUrl && (
                 <button
@@ -177,16 +177,16 @@ export function HeroConstructor({
                   onClick={() => { setMediaUrl(null); setMediaType(null); }}
                   className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/50 hover:text-orange self-start"
                 >
-                  Remove
+                  Kaldır
                 </button>
               )}
               {mediaType && (
                 <span className="text-[10px] font-bold text-green/50 uppercase tracking-[0.14em]">
-                  Type: {mediaType}
+                  Tür: {mediaType}
                 </span>
               )}
               {uploadError && <p className="text-[10px] font-bold text-orange">{uploadError}</p>}
-              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF, MP4, WEBM · max 50 MB</p>
+              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF, MP4, WEBM · maks 50 MB</p>
             </div>
           </div>
       </div>
@@ -196,7 +196,7 @@ export function HeroConstructor({
           {/* item picker */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-              Item
+              Ürün
             </span>
             <select
               name="featured_item_id"
@@ -204,7 +204,7 @@ export function HeroConstructor({
               onChange={(e) => setSelectedId(e.target.value)}
               className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
             >
-              <option value="">— Pick an item —</option>
+              <option value="">— Ürün seç —</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -231,24 +231,24 @@ export function HeroConstructor({
           {/* marquee sentence */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-              Marquee Sentence
+              Kayan Yazı
             </span>
             <input
               type="text"
               name="featured_label"
               defaultValue={defaultLabel ?? ""}
-              placeholder="e.g. Our signature dish — don't miss it"
+              placeholder="örn. İmza yemeğimiz — kaçırmayın"
               className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
             />
             <span className="text-[10px] text-green/40">
-              Scrolls across the bottom of the image. Defaults to item name if empty.
+              Görselin alt kısmında kayarak geçer. Boş bırakılırsa ürün adı kullanılır.
             </span>
           </label>
 
           {/* discount */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-              Discount %
+              İndirim %
             </span>
             <input
               type="number"
@@ -256,28 +256,28 @@ export function HeroConstructor({
               defaultValue={defaultDiscount ?? ""}
               min={0}
               max={99}
-              placeholder="e.g. 20"
+              placeholder="örn. 20"
               className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
             />
             <span className="text-[10px] text-green/40">
-              Shows a strikethrough original price and discounted price on the featured card. Leave empty for no discount.
+              Öne çıkan kartta üstü çizili orijinal fiyat ve indirimli fiyat gösterir. İndirim yoksa boş bırakın.
             </span>
           </label>
 
           {/* badge */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-              Badge Text
+              Rozet Metni
             </span>
             <input
               type="text"
               name="featured_badge"
               defaultValue={defaultBadge ?? ""}
-              placeholder="e.g. LIMITED TIME"
+              placeholder="örn. SINIRLI SÜRE"
               className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
             />
             <span className="text-[10px] text-green/40">
-              Pill shown bottom-right. Leave empty to hide.
+              Sağ altta hap biçiminde gösterilir. Gizlemek için boş bırakın.
             </span>
           </label>
       </div>

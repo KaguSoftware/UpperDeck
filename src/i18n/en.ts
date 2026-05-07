@@ -11,7 +11,8 @@ type EnShape = {
   topbar: { order: string };
   filter: { all: string };
   stage: { item: string; items: string };
-  modal: { spicy: string; price: string; addToOrder: string };
+  modal: { spicy: string; price: string; addToOrder: string; specialInstructions: string; specialInstructionsPlaceholder: string };
+  coupon: { label: string; placeholder: string; apply: string; noOfferTitle: string; noOfferBody: string; emailPlaceholder: string; subscribe: string; subscribed: string; noCouponPrefix: string; noCouponLink: string };
   cart: {
     title: string;
     table_number: string;
@@ -61,6 +62,8 @@ const en: EnShape = {
     spicy: "Spicy",
     price: "Price",
     addToOrder: "Add to Order",
+    specialInstructions: "Special Instructions",
+    specialInstructionsPlaceholder: "e.g. no onions, extra sauce…",
   },
   cart: {
     title: "Your Order",
@@ -78,6 +81,18 @@ const en: EnShape = {
     itemsOnDeckMany: "{count} items on the deck",
     addedPrefix: "Added · ",
     orderSentPrefix: "Order received! Table ",
+  },
+  coupon: {
+    label: "Coupon Code",
+    placeholder: "ENTER CODE",
+    apply: "Apply",
+    noOfferTitle: "No offer found",
+    noOfferBody: "Subscribe to our newsletter and be the first to get exclusive deals.",
+    emailPlaceholder: "your@email.com",
+    subscribe: "Subscribe",
+    subscribed: "You're in! We'll be in touch.",
+    noCouponPrefix: "No coupon? Subscribe to our newsletter",
+    noCouponLink: "here",
   },
   ticker: [
     "Smashed Burgers",

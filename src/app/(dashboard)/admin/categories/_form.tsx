@@ -17,17 +17,17 @@ export function CategoryForm({
       className="border-2 border-green bg-white p-6 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl"
     >
       <Field label="Slug" name="slug" required defaultValue={initial?.slug} />
-      <Field label="Name (EN)" name="name_en" required defaultValue={initial?.name_en} />
-      <Field label="Name (TR)" name="name_tr" required defaultValue={initial?.name_tr} />
+      <Field label="Ad (İNG)" name="name_en" required defaultValue={initial?.name_en} />
+      <Field label="Ad (TR)" name="name_tr" required defaultValue={initial?.name_tr} />
       <Field label="Emoji" name="emoji" defaultValue={initial?.emoji ?? ""} />
 
       {parentOptions && (
         <Select
-          label="Parent Category (optional)"
+          label="Üst Kategori (isteğe bağlı)"
           name="parent_id"
           defaultValue={initial?.parent_id ?? ""}
           options={[
-            { value: "", label: "— None (top-level) —" },
+            { value: "", label: "— Yok (üst düzey) —" },
             ...parentOptions.map((p) => ({ value: p.id, label: p.name_en })),
           ]}
         />

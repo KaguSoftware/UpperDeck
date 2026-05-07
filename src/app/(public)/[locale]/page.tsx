@@ -40,6 +40,7 @@ export default async function Home({
   return (
     <PhoneMenu
       messages={messages}
+      locale={lang}
       categories={categories}
       items={items}
       initialTableNumber={initialTableNumber}

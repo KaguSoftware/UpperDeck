@@ -57,7 +57,7 @@ export function AdminShell({
               UPPER<span className="text-orange">DECK</span>
             </div>
             <div className="text-[8px] tracking-[0.28em] font-bold text-green/80 uppercase mt-0.5">
-              Admin
+              Yönetici
             </div>
           </div>
         </Link>
@@ -81,7 +81,7 @@ export function AdminShell({
 
         <div className="border-t-2 border-green px-4 py-3">
           <div className="text-[9px] tracking-[0.22em] font-bold text-green/60 uppercase">
-            Signed in
+            Giriş yapıldı
           </div>
           <div className="font-ui font-extrabold text-[12px] text-green truncate">
             {displayName ?? "—"}

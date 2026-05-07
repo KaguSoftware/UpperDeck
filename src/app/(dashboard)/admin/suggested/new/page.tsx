@@ -1,24 +1,28 @@
 import { Suspense } from "react";
 import { getServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "../../_components";
-import { NewAddonGroupForm } from "./_form";
+import { NewSuggestedGroupForm } from "./_form";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewAddonPage() {
+export default async function NewSuggestedPage() {
   const supabase = await getServerClient();
   const [{ data: cats }, { data: menuItems }, { count: groupCount }] = await Promise.all([
     supabase.from("categories").select("id, name_en").order("name_en"),
     supabase.from("menu_items").select("id, name_en").order("name_en"),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_groups").select("id", { count: "exact", head: true }),
+    (supabase as any).from("suggested_groups").select("id", { count: "exact", head: true }),
   ]);
 
   return (
     <>
-      <PageHeader title="Yeni Ekstra Grubu" />
+      <PageHeader title="Yeni Öneri Grubu" />
       <Suspense>
-        <NewAddonGroupForm categories={cats ?? []} items={menuItems ?? []} defaultSortOrder={groupCount ?? 0} />
+        <NewSuggestedGroupForm
+          categories={cats ?? []}
+          items={menuItems ?? []}
+          defaultSortOrder={groupCount ?? 0}
+        />
       </Suspense>
     </>
   );

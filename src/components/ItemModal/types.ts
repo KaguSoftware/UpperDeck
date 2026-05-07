@@ -1,5 +1,5 @@
 import type { PlacedCard } from "@/components/MenuCard/types";
-import type { AddonGroupPublic, AddonOptionPublic } from "@/lib/menu/queries";
+import type { AddonGroupPublic, AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 
 export type AddonGroup  = AddonGroupPublic;
 export type AddonOption = AddonOptionPublic;
@@ -7,9 +7,14 @@ export type AddonOption = AddonOptionPublic;
 export type ItemModalProps = {
   item: PlacedCard | null;
   onClose: () => void;
-  onAdd: (extras: AddonOptionPublic[]) => void;
+  onAdd: (extras: AddonOptionPublic[], itemNote: string) => void;
+  onSuggestedClick: (item: SuggestedItemPublic) => void;
   spicyLabel: string;
   priceLabel: string;
   addToOrderLabel: string;
+  specialInstructionsLabel: string;
+  specialInstructionsPlaceholder: string;
   addonGroups?: AddonGroupPublic[];
+  suggestedItems?: SuggestedItemPublic[];
+  alsoTryLabel?: string;
 };

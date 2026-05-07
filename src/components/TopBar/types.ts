@@ -1,3 +1,5 @@
+import type { Locale } from "@/i18n/config";
+
 export type TopBarProps = {
   cartCount: number;
   onCartClick: () => void;
@@ -6,4 +8,5 @@ export type TopBarProps = {
   brandAccent: string;
   brandSub: string;
   orderLabel: string;
+  locale: Locale;
 };

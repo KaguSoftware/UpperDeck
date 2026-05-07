@@ -7,21 +7,43 @@ export function ItemModal({
   item,
   onClose,
   onAdd,
+  onSuggestedClick,
   spicyLabel,
   priceLabel,
   addToOrderLabel,
+  specialInstructionsLabel,
+  specialInstructionsPlaceholder,
   addonGroups = [],
+  suggestedItems = [],
+  alsoTryLabel = "Also try this",
 }: ItemModalProps) {
   const isOpen = item !== null;
   const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
 
   const [showStamp, setShowStamp] = useState(false);
-  // selected addon IDs
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [itemNote, setItemNote] = useState("");
+  const [atBottom, setAtBottom] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Reset selections whenever a new item opens
+  // Reset selections, note, and scroll state whenever a new item opens
   useEffect(() => {
     setSelected({});
+    setItemNote("");
+    setAtBottom(false);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [item?.id]);
+
+  // Track whether the scrollable content is fully scrolled to the bottom
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    function check() {
+      setAtBottom(el!.scrollHeight - el!.scrollTop <= el!.clientHeight + 4);
+    }
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    return () => el.removeEventListener("scroll", check);
   }, [item?.id]);
 
   useEffect(() => {
@@ -96,11 +118,9 @@ export function ItemModal({
       {item && (
         <div
           ref={sheetRef}
-          className="w-full bg-bg flex flex-col relative"
+          className="w-full bg-bg flex flex-col relative max-h-[90dvh]"
           style={{
-            animation: showStamp
-              ? "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1), screenShake 0.45s ease-out 0.3s"
-              : "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1)",
+            animation: "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1)",
           }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
@@ -119,71 +139,8 @@ export function ItemModal({
             )}
             {showStamp && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {/* red flash on impact */}
-                <div
-                  className="absolute inset-0 bg-[#CC2222]"
-                  style={{ animation: "redFlash 0.3s ease-out both" }}
-                />
-                {/* shockwave ring 1 */}
-                <div
-                  className="absolute border-[#CC2222] rounded-full"
-                  style={{
-                    width: 140, height: 70,
-                    animation: "shockwave 0.5s cubic-bezier(0.1,0.8,0.2,1) both",
-                  }}
-                />
-                {/* shockwave ring 2 — delayed */}
-                <div
-                  className="absolute border-orange rounded-full"
-                  style={{
-                    width: 140, height: 70,
-                    animation: "shockwave2 0.65s cubic-bezier(0.1,0.8,0.2,1) 0.06s both",
-                  }}
-                />
-                {/* shockwave ring 3 — most delayed */}
-                <div
-                  className="absolute border-[#CC2222] rounded-full"
-                  style={{
-                    width: 140, height: 70,
-                    animation: "shockwave3 0.8s cubic-bezier(0.1,0.8,0.2,1) 0.12s both",
-                  }}
-                />
-                {/* sparks — 8 directions */}
-                {[
-                  "translate(-70px, -50px) scale(0)",
-                  "translate(70px, -50px) scale(0)",
-                  "translate(-80px, 0px) scale(0)",
-                  "translate(80px, 0px) scale(0)",
-                  "translate(-50px, 50px) scale(0)",
-                  "translate(50px, 50px) scale(0)",
-                  "translate(0px, -65px) scale(0)",
-                  "translate(0px, 65px) scale(0)",
-                  "translate(-95px, -25px) scale(0)",
-                  "translate(95px, -25px) scale(0)",
-                  "translate(-95px, 25px) scale(0)",
-                  "translate(95px, 25px) scale(0)",
-                ].map((end, i) => (
-                  <div
-                    key={i}
-                    className="absolute rounded-full"
-                    style={{
-                      width: i % 3 === 0 ? 6 : i % 3 === 1 ? 4 : 8,
-                      height: i % 3 === 0 ? 6 : i % 3 === 1 ? 4 : 8,
-                      background: i % 2 === 0 ? "#CC2222" : "#ff6a00",
-                      ["--spark-end" as string]: end,
-                      animation: `sparkFly 0.5s cubic-bezier(0.1,0.9,0.2,1) ${0.02 * i}s both`,
-                    }}
-                  />
-                ))}
-                {/* stamp */}
                 <div style={{ animation: "stampSlam 0.4s cubic-bezier(0.15,0.8,0.2,1) both" }}>
-                  <div
-                    style={{
-                      border: "5px solid #CC2222",
-                      padding: "5px",
-                      animation: "fireGlow 0.5s ease-in-out 0.4s infinite",
-                    }}
-                  >
+                  <div style={{ border: "5px solid #CC2222", padding: "5px" }}>
                     <div style={{ border: "2.5px solid #CC2222", padding: "8px 18px" }}>
                       <span
                         style={{
@@ -195,8 +152,6 @@ export function ItemModal({
                           textTransform: "uppercase",
                           lineHeight: 1,
                           display: "block",
-                          textShadow: "0 0 8px rgba(204,34,34,0.8), 0 0 20px rgba(227,93,7,0.6)",
-                          animation: "flicker 0.4s ease-in-out 0.4s infinite",
                         }}
                       >
                         SOLD OUT
@@ -214,7 +169,7 @@ export function ItemModal({
           >
             ×
           </button>
-          <div className="px-4.5 pt-4 pb-4.5">
+          <div ref={scrollRef} className="px-4.5 pt-4 pb-4.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1.5">
               {item.cat}{item.spicy ? ` · 🌶 ${spicyLabel}` : ""}
             </div>
@@ -237,31 +192,118 @@ export function ItemModal({
               <div className="flex flex-col gap-3 mb-3.5">
                 {addonGroups.map((group, gi) => (
                   <div key={gi}>
-                    <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-1.5">
+                    <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-2">
                       {group.label}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {group.options.map((opt) => {
                         const active = !!selected[opt.id];
-                        return (
+                        const hasMedia = !!(opt.image_url || opt.emoji);
+                        return hasMedia ? (
+                          /* image / emoji card */
                           <button
                             key={opt.id}
                             type="button"
                             onClick={() => toggleAddon(gi, opt, group.multi)}
                             className={[
-                              "font-ui font-extrabold text-[11px] tracking-widest uppercase px-3 py-1.5 border-2 cursor-pointer transition-colors",
-                              active
-                                ? "bg-green text-bg border-green"
-                                : "bg-transparent text-green border-green/40 hover:border-green",
+                              "flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden",
+                              active ? "border-green" : "border-green/30",
                             ].join(" ")}
                           >
-                            {opt.label}{opt.price > 0 ? ` +${opt.price}₺` : ""}
+                            <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
+                              {opt.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={opt.image_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[28px] leading-none">{opt.emoji}</span>
+                              )}
+                            </div>
+                            <div className={["px-1 py-1.5 text-center flex-1", active ? "bg-green" : "bg-transparent"].join(" ")}>
+                              <div className={["font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight", active ? "text-bg" : "text-green"].join(" ")}>
+                                {opt.label}
+                              </div>
+                              {opt.price > 0 && (
+                                <div className={["font-bowlby text-[11px] leading-tight mt-0.5", active ? "text-bg/80" : "text-orange"].join(" ")}>
+                                  +{opt.price}₺
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        ) : (
+                          /* text pill — no media linked */
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleAddon(gi, opt, group.multi)}
+                            className={[
+                              "shrink-0 border-2 cursor-pointer transition-colors px-3 py-2 flex flex-col items-center justify-center gap-0.5",
+                              active ? "border-green bg-green" : "border-green/30 bg-transparent",
+                            ].join(" ")}
+                          >
+                            <span className={["font-ui font-extrabold text-[10px] tracking-wide uppercase whitespace-nowrap", active ? "text-bg" : "text-green"].join(" ")}>
+                              {opt.label}
+                            </span>
+                            {opt.price > 0 && (
+                              <span className={["font-bowlby text-[11px]", active ? "text-bg/80" : "text-orange"].join(" ")}>
+                                +{opt.price}₺
+                              </span>
+                            )}
                           </button>
                         );
                       })}
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Special instructions */}
+            <div className="mb-3.5">
+              <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-1.5">
+                {specialInstructionsLabel}
+              </div>
+              <textarea
+                value={itemNote}
+                onChange={(e) => setItemNote(e.target.value.slice(0, 120))}
+                placeholder={specialInstructionsPlaceholder}
+                rows={2}
+                className="w-full font-ui text-[12px] text-green bg-transparent border border-green/30 focus:border-orange outline-none resize-none px-2.5 py-2 placeholder:text-green/40"
+              />
+            </div>
+
+            {/* Suggested items — "Also try this" */}
+            {suggestedItems.length > 0 && (
+              <div className="mb-3.5">
+                <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-2">
+                  {alsoTryLabel}
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {suggestedItems.map((sug) => (
+                    <button
+                      key={sug.id}
+                      type="button"
+                      onClick={() => { onClose(); onSuggestedClick(sug); }}
+                      className="flex flex-col shrink-0 w-20 border-2 border-green/30 cursor-pointer transition-colors overflow-hidden hover:border-green"
+                    >
+                      <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
+                        {sug.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={sug.image_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[28px] leading-none">{sug.emoji}</span>
+                        )}
+                      </div>
+                      <div className="px-1 py-1.5 text-center flex-1">
+                        <div className="font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight text-green">
+                          {sug.name}
+                        </div>
+                        <div className="font-bowlby text-[11px] leading-tight mt-0.5 text-orange">
+                          {sug.price}₺
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -278,11 +320,27 @@ export function ItemModal({
             </div>
             <button
               type="button"
-              onClick={() => onAdd(selectedExtras)}
+              onClick={() => onAdd(selectedExtras, itemNote.trim())}
               className="w-full bg-orange text-white border-0 py-3.5 font-bowlby text-[16px] tracking-[1.5px] uppercase cursor-pointer"
             >
               {addToOrderLabel}
             </button>
+          </div>
+
+          {/* Scroll-down hint */}
+          <div
+            className="absolute bottom-0 left-0 right-0 flex justify-center pb-2 pt-6 pointer-events-none transition-opacity duration-300"
+            style={{
+              opacity: atBottom ? 0 : 1,
+              background: "linear-gradient(to bottom, transparent, rgba(242,238,229,0.92))",
+            }}
+          >
+            <svg
+              width="20" height="20" viewBox="0 0 20 20" fill="none"
+              className="text-green animate-bounce"
+            >
+              <path d="M3 6L10 14L17 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"/>
+            </svg>
           </div>
         </div>
       )}

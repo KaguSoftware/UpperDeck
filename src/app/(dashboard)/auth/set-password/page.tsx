@@ -1,12 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserClient } from "@/lib/supabase/client";
 
 function SetPasswordForm() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = getBrowserClient();
 
@@ -18,21 +17,44 @@ function SetPasswordForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    const tokenHash = searchParams.get("token_hash");
-    const type = searchParams.get("type");
+    // Supabase detects the hash tokens automatically and fires SIGNED_IN.
+    // We listen for it and then show the form.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY" || event === "USER_UPDATED") {
+        setVerifying(false);
+      }
+    });
 
-    if (!tokenHash || type !== "invite") {
-      setVerifyError("Invalid or missing invite link. Please request a new invitation.");
-      setVerifying(false);
-      return;
+    // Also try reading the hash manually as a fallback for browsers that
+    // don't trigger onAuthStateChange fast enough.
+    const hash = window.location.hash.slice(1);
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+
+    if (accessToken && refreshToken) {
+      supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) {
+            setVerifyError(error.message);
+            setVerifying(false);
+          }
+          // setVerifying(false) will be called by onAuthStateChange
+        });
+    } else {
+      // No hash tokens — check if there's already an active session (e.g. page refresh)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setVerifying(false);
+        } else {
+          setVerifyError("Invalid or expired invite link. Please request a new invitation.");
+          setVerifying(false);
+        }
+      });
     }
 
-    supabase.auth
-      .verifyOtp({ token_hash: tokenHash, type: "invite" })
-      .then(({ error }) => {
-        if (error) setVerifyError(error.message);
-        setVerifying(false);
-      });
+    return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

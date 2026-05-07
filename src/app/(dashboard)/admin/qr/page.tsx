@@ -32,8 +32,8 @@ export default async function QRPage() {
       `}</style>
 
       <PageHeader
-        title="Table QR Codes"
-        subtitle={`${TABLE_COUNT} tables · regenerates every 8 hours`}
+        title="Masa QR Kodları"
+        subtitle={`${TABLE_COUNT} masa · her 8 saatte bir yenilenir`}
         action={<PrintButton />}
       />
 
@@ -44,7 +44,7 @@ export default async function QRPage() {
             className="qr-cell border-2 border-green flex flex-col items-center gap-2 p-4 bg-white"
           >
             <span className="font-bowlby text-[22px] uppercase text-green leading-none tracking-[-0.5px]">
-              Table {n}
+              Masa {n}
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={dataUrl} alt={`QR code for table ${n}`} className="w-[120px] h-[120px]" />

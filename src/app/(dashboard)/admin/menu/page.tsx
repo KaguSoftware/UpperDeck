@@ -41,26 +41,26 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
     }));
 
   const sortOptions: { key: SortKey; label: string }[] = [
-    { key: "category", label: "Category" },
-    { key: "name", label: "Alphabetic" },
+    { key: "category", label: "Kategori" },
+    { key: "name", label: "Alfabetik" },
   ];
 
   return (
     <>
       <PageHeader
-        title="Menu"
-        subtitle={`${items.length} items`}
+        title="Menü"
+        subtitle={`${items.length} ürün`}
         action={
           <Link
             href="/admin/menu/new"
             className="bg-orange text-white px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase"
           >
-            + New Item
+            + Yeni Ürün
           </Link>
         }
       />
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/60">Sort:</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/60">Sırala:</span>
         {sortOptions.map(({ key, label }) => (
           <Link
             key={key}

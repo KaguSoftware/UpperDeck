@@ -27,6 +27,8 @@ const tr: Messages = {
     spicy: "Acılı",
     price: "Fiyat",
     addToOrder: "Siparişe Ekle",
+    specialInstructions: "Özel İstek",
+    specialInstructionsPlaceholder: "örn. soğansız, bol sos…",
   },
   cart: {
     title: "Siparişiniz",
@@ -44,6 +46,18 @@ const tr: Messages = {
     itemsOnDeckMany: "{count} ürün sepette",
     addedPrefix: "Eklendi · ",
     orderSentPrefix: "Sipariş alındı! Masa ",
+  },
+  coupon: {
+    label: "İndirim Kodu",
+    placeholder: "KOD GİR",
+    apply: "Uygula",
+    noOfferTitle: "Geçerli teklif bulunamadı",
+    noOfferBody: "Bültenimize abone olun, özel fırsatlardan ilk siz haberdar olun.",
+    emailPlaceholder: "eposta@adresiniz.com",
+    subscribe: "Abone Ol",
+    subscribed: "Harika! Sizi haberdar edeceğiz.",
+    noCouponPrefix: "Kupon yok mu? Bültenimize abone olun",
+    noCouponLink: "buradan",
   },
   ticker: [
     "Smash Burger",

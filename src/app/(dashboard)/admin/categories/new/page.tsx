@@ -20,7 +20,7 @@ export default async function NewCategoryPage({
 
   return (
     <>
-      <PageHeader title="New Category" />
+      <PageHeader title="Yeni Kategori" />
       <CategoryForm
         action={createCategory}
         parentOptions={parents ?? []}

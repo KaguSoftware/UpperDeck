@@ -5,6 +5,7 @@ import { SetRoleButton } from "../_submit-buttons";
 import { setRole } from "./actions";
 import { RoleToggle } from "./_role-toggle";
 import { InviteForm } from "./_invite-form";
+import { RemoveButton } from "./_remove-button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,8 +48,8 @@ export default async function UsersPage() {
   return (
     <>
       <PageHeader
-        title="Users"
-        subtitle={configError ? "configuration error" : `${rows.length} accounts`}
+        title="Kullanıcılar"
+        subtitle={configError ? "yapılandırma hatası" : `${rows.length} hesap`}
       />
 
       {/* Role description cards */}
@@ -58,10 +59,10 @@ export default async function UsersPage() {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 1L10.2 5.5L15 6.3L11.5 9.7L12.4 14.5L8 12.1L3.6 14.5L4.5 9.7L1 6.3L5.8 5.5L8 1Z" />
             </svg>
-            <span className="font-bowlby uppercase text-[15px]">Owner</span>
+            <span className="font-bowlby uppercase text-[15px]">Sahip</span>
           </div>
           <p className="font-ui text-[11px] opacity-70">
-            Full access. Invites staff, manages roles, controls everything.
+            Tam erişim. Personel davet eder, rolleri yönetir, her şeyi kontrol eder.
           </p>
         </div>
         <div className="flex-1 min-w-[160px] bg-white border-2 border-green px-4 py-3">
@@ -72,7 +73,7 @@ export default async function UsersPage() {
             <span className="font-bowlby uppercase text-[15px]">Admin</span>
           </div>
           <p className="font-ui text-[11px] opacity-70 text-green">
-            Manages menu, categories, settings and orders. Cannot manage users.
+            Menü, kategoriler, ayarlar ve siparişleri yönetir. Kullanıcıları yönetemez.
           </p>
         </div>
       </div>
@@ -80,15 +81,15 @@ export default async function UsersPage() {
       {configError && (
         <div className="border-2 border-orange bg-white p-5 mb-8 max-w-2xl">
           <div className="font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase text-orange mb-2">
-            Configuration required
+            Yapılandırma Gerekli
           </div>
           <p className="text-[13px] text-green/80 mb-3">
-            User management requires a Supabase service role key. Add{" "}
+            Kullanıcı yönetimi için Supabase servis rolü anahtarı gereklidir.{" "}
             <code className="bg-bg-deep px-1 py-0.5 font-mono text-[12px]">
               SUPABASE_SERVICE_ROLE_KEY
             </code>{" "}
-            to your{" "}
-            <code className="bg-bg-deep px-1 py-0.5 font-mono text-[12px]">.env.local</code> file.
+            değerini{" "}
+            <code className="bg-bg-deep px-1 py-0.5 font-mono text-[12px]">.env.local</code> dosyanıza ekleyin.
           </p>
           <p className="text-[11px] text-green/50 font-mono">{configError}</p>
         </div>
@@ -100,12 +101,13 @@ export default async function UsersPage() {
 
           {/* Users table */}
           <div className="border-2 border-green bg-white overflow-x-auto">
-            <div className="min-w-[480px]">
+            <div className="min-w-180">
               {/* Header */}
-              <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-4 py-3 border-b-2 border-green bg-bg-deep text-[10px] font-extrabold uppercase tracking-[0.18em] text-green items-center">
+              <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-4 py-3 border-b-2 border-green bg-bg-deep text-[10px] font-extrabold uppercase tracking-[0.18em] text-green items-center">
                 <div className="w-10" />
-                <div>User</div>
-                <div>Role</div>
+                <div>Kullanıcı</div>
+                <div>Rol</div>
+                <div>Rol değiştir</div>
                 <div />
               </div>
 
@@ -123,7 +125,7 @@ export default async function UsersPage() {
                 return (
                   <div
                     key={row.id}
-                    className="grid grid-cols-[auto_1fr_auto_auto] gap-4 items-center px-4 py-3 border-b border-green/20 last:border-b-0"
+                    className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center px-4 py-3 border-b border-green/20 last:border-b-0"
                   >
                     {/* Avatar */}
                     <div className="w-10 h-10 rounded-full bg-bg-deep border-2 border-green flex items-center justify-center shrink-0">
@@ -141,7 +143,7 @@ export default async function UsersPage() {
                         {row.email}
                       </div>
                       <div className="font-ui text-[9px] text-green/40 tracking-[0.18em] uppercase mt-0.5">
-                        Joined {joinedDate}
+                        Katıldı: {joinedDate}
                       </div>
                     </div>
 
@@ -159,12 +161,12 @@ export default async function UsersPage() {
                       </span>
                       {isSelf && (
                         <span className="text-[8px] text-orange tracking-[0.2em] uppercase font-extrabold">
-                          you
+                          siz
                         </span>
                       )}
                     </div>
 
-                    {/* Actions */}
+                    {/* Role form */}
                     <div className="shrink-0">
                       {!isSelf && (
                         <form action={setRole} className="flex gap-2 items-end">
@@ -173,6 +175,11 @@ export default async function UsersPage() {
                           <SetRoleButton />
                         </form>
                       )}
+                    </div>
+
+                    {/* Remove */}
+                    <div className="shrink-0">
+                      {!isSelf && <RemoveButton userId={row.id} email={row.email} />}
                     </div>
                   </div>
                 );

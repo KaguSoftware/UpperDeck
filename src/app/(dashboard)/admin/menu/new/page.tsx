@@ -17,7 +17,7 @@ export default async function NewItemPage() {
 
   return (
     <>
-      <PageHeader title="New Item" subtitle="Add to menu" />
+      <PageHeader title="Yeni Ürün" subtitle="Menüye ekle" />
       <MenuItemForm action={createItem} categories={categories} />
     </>
   );

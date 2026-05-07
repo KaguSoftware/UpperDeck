@@ -1,4 +1,8 @@
+"use client";
+
+import { useRef, useState } from "react";
 import { OfflineFallback } from "./_offline-fallback";
+import { CouponSection } from "./CouponSection";
 import type { CartDrawerProps } from "./types";
 
 export function CartDrawer({
@@ -24,16 +28,40 @@ export function CartDrawer({
     sendLabel,
     tryAgainLabel,
     tableFromQr = false,
-    simulateFailure = false,
-    onSimulateFailureChange,
     topOffset = 0,
     orderCooldownSeconds = 0,
+    coupon,
 }: CartDrawerProps) {
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
     const isPending = checkoutState.status === "pending";
     const isOffline = checkoutState.status === "offline";
     const isValidationError = checkoutState.status === "validation";
     const canSend = items.length > 0 && !isPending && orderCooldownSeconds === 0;
+
+    const dragY = useRef(0);
+    const startY = useRef(0);
+    const [translateY, setTranslateY] = useState(0);
+
+    function onPointerDown(e: React.PointerEvent) {
+        startY.current = e.clientY;
+        dragY.current = 0;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e: React.PointerEvent) {
+        if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
+        const delta = Math.max(0, e.clientY - startY.current);
+        dragY.current = delta;
+        setTranslateY(delta);
+    }
+    function onPointerUp(e: React.PointerEvent) {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        if (dragY.current > 80) {
+            setTranslateY(0);
+            onClose();
+        } else {
+            setTranslateY(0);
+        }
+    }
 
     return (
         <div
@@ -46,7 +74,22 @@ export function CartDrawer({
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col">
+            <div
+                className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col"
+                style={{
+                    transform: `translateY(${translateY}px)`,
+                    transition: translateY === 0 ? "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)" : "none",
+                }}
+            >
+                {/* drag handle */}
+                <div
+                    className="flex justify-center items-center w-full bg-green py-2.5 shrink-0 touch-none cursor-grab active:cursor-grabbing"
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                >
+                    <div className="w-10 h-0.75 rounded-full bg-orange" />
+                </div>
                 {/* header */}
                 <div className="flex items-center justify-between px-4.5 py-3 border-b-2 border-green shrink-0">
                     <span className="font-bowlby text-[20px] text-green uppercase tracking-[-0.5px]">
@@ -143,6 +186,11 @@ export function CartDrawer({
                                                 ))}
                                             </div>
                                         )}
+                                        {item.itemNote && (
+                                            <span className="font-ui text-[10px] text-orange/80 italic mt-0.5">
+                                                {item.itemNote}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -194,6 +242,7 @@ export function CartDrawer({
                                 {total.toLocaleString()} ₺
                             </span>
                         </div>
+                        <CouponSection {...coupon} />
                         <div className="px-4.5 pb-4">
                             <button
                                 type="button"
@@ -203,25 +252,6 @@ export function CartDrawer({
                             >
                                 {isPending ? "…" : orderCooldownSeconds > 0 ? `${orderCooldownSeconds}s` : sendLabel}
                             </button>
-                            {/* DEV ONLY — remove before showing to a real customer */}
-                            {process.env.NODE_ENV === "development" &&
-                                onSimulateFailureChange && (
-                                    <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={simulateFailure}
-                                            onChange={(e) =>
-                                                onSimulateFailureChange(
-                                                    e.target.checked
-                                                )
-                                            }
-                                            className="w-3 h-3 accent-orange"
-                                        />
-                                        <span className="font-ui text-[10px] text-orange/70 tracking-widest uppercase">
-                                            DEV: simulate failure
-                                        </span>
-                                    </label>
-                                )}
                         </div>
                     </div>
                 )}

@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 const descriptions: Record<string, string> = {
-  owner: "Full access including user management",
-  admin: "Menu, orders & settings only",
+  owner: "Kullanıcı yönetimi dahil tam erişim",
+  admin: "Yalnızca menü, siparişler ve ayarlar",
 };
 
 export function RoleToggle({

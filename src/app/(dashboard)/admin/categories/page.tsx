@@ -20,14 +20,14 @@ export default async function CategoriesPage() {
   return (
     <>
       <PageHeader
-        title="Categories"
-        subtitle={`${parents.length} top-level · ${all.length - parents.length} sub`}
+        title="Kategoriler"
+        subtitle={`${parents.length} üst düzey · ${all.length - parents.length} alt`}
         action={
           <Link
             href="/admin/categories/new"
             className="bg-orange text-white px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase"
           >
-            + New Category
+            + Yeni Kategori
           </Link>
         }
       />

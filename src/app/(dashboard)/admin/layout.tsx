@@ -5,14 +5,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { profile } = await requireRole(["admin", "owner"]);
 
   const nav = [
-    { href: "/admin", label: "Dashboard" },
-    { href: "/admin/menu", label: "Menu" },
-    { href: "/admin/categories", label: "Categories" },
-    { href: "/admin/addons", label: "Add-Ons" },
-    { href: "/admin/settings", label: "Settings" },
-    { href: "/admin/qr", label: "Table QRs" },
+    { href: "/admin", label: "Ana Panel" },
+    { href: "/admin/menu", label: "Menü" },
+    { href: "/admin/categories", label: "Kategoriler" },
+    { href: "/admin/addons", label: "Ekstralar" },
+    { href: "/admin/suggested", label: "Önerilen" },
+    { href: "/admin/settings", label: "Ayarlar" },
+    { href: "/admin/qr", label: "Masa QR'ları" },
     ...(profile.role === "owner"
-      ? [{ href: "/admin/users", label: "Users", admin: true }]
+      ? [{ href: "/admin/users", label: "Kullanıcılar", admin: true }]
       : []),
   ];
 

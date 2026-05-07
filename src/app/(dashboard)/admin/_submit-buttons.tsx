@@ -13,7 +13,7 @@ export function SignOutButton() {
       {pending && (
         <span className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" />
       )}
-      Sign out
+      Çıkış Yap
     </button>
   );
 }
@@ -29,7 +29,7 @@ export function SetRoleButton() {
       {pending && (
         <span className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" />
       )}
-      Set
+      Ayarla
     </button>
   );
 }

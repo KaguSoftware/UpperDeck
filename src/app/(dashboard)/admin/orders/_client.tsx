@@ -16,19 +16,19 @@ function elapsedSecs(iso: string): number {
 }
 
 function elapsedLabel(secs: number): string {
-  if (secs < 30) return "just now";
+  if (secs < 30) return "şimdi";
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  return `${Math.floor(mins / 60)}h`;
+  if (mins < 60) return `${mins}d`;
+  return `${Math.floor(mins / 60)}s`;
 }
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
-  new: "New",
-  seen: "Seen",
-  preparing: "Preparing",
-  served: "Served",
-  cancelled: "Cancelled",
+  new: "Yeni",
+  seen: "Görüldü",
+  preparing: "Hazırlanıyor",
+  served: "Teslim Edildi",
+  cancelled: "İptal",
 };
 
 const STATUS_PILL: Record<OrderStatus, string> = {
@@ -40,10 +40,10 @@ const STATUS_PILL: Record<OrderStatus, string> = {
 };
 
 const ACTION_BUTTONS: { status: OrderStatus; label: string }[] = [
-  { status: "seen",      label: "Seen"      },
-  { status: "preparing", label: "Preparing" },
-  { status: "served",    label: "Served"    },
-  { status: "cancelled", label: "Cancel"    },
+  { status: "seen",      label: "Görüldü"      },
+  { status: "preparing", label: "Hazırlanıyor" },
+  { status: "served",    label: "Teslim Edildi" },
+  { status: "cancelled", label: "İptal"        },
 ];
 
 
@@ -123,7 +123,7 @@ function OrderCard({ order, onStatusChange }: { order: Order; onStatusChange: (i
       {/* total */}
       <div className="flex items-center justify-between border-t border-green/20 pt-2">
         <span className="font-extrabold text-[9px] tracking-[0.28em] text-green/60 uppercase">
-          Total
+          Toplam
         </span>
         <span className="font-bowlby text-[24px] text-green">
           {order.total.toLocaleString()} ₺
@@ -324,9 +324,9 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
   }[connectionState];
 
   const connLabel = {
-    connecting:   "Connecting…",
-    connected:    "Live",
-    disconnected: "Disconnected",
+    connecting:   "Bağlanıyor…",
+    connected:    "Canlı",
+    disconnected: "Bağlantı Kesildi",
   }[connectionState];
 
   return (
@@ -334,14 +334,14 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
       {/* stale-order banner */}
       {staleCount > 0 && (
         <div className="mb-4 bg-orange text-white font-ui font-extrabold text-[11px] tracking-[0.18em] uppercase px-4 py-3">
-          ⚠ {staleCount} order{staleCount !== 1 ? "s" : ""} need attention
+          ⚠ {staleCount} siparişe bakılması gerekiyor
         </div>
       )}
 
       {/* disconnected banner */}
       {connectionState === "disconnected" && (
         <div className="mb-4 bg-[#fff3cd] border-2 border-[#e0a800] text-[#7a5100] font-ui font-extrabold text-[11px] tracking-[0.15em] uppercase px-4 py-3">
-          ⚠ Live updates disconnected — retrying every 5s
+          ⚠ Canlı güncellemeler bağlantısı kesildi — her 5 saniyede tekrar deneniyor
         </div>
       )}
 
@@ -360,18 +360,18 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
             onClick={handleStartShift}
             className="bg-orange text-white border-0 px-4 py-2 font-ui font-extrabold text-[11px] tracking-[0.18em] uppercase cursor-pointer"
           >
-            Start shift
+            Vardiyayı Başlat
           </button>
         ) : (
           <span className="bg-green text-bg font-ui font-extrabold text-[11px] tracking-[0.18em] uppercase px-3 py-1.5">
-            ● Audio armed
+            ● Ses Etkin
           </span>
         )}
       </div>
 
       {/* order list */}
       {orders.length === 0 ? (
-        <p className="font-ui text-[13px] text-green/50">No orders yet.</p>
+        <p className="font-ui text-[13px] text-green/50">Henüz sipariş yok.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {orders.map((order) => (

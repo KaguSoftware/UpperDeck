@@ -45,7 +45,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Appearance &amp; branding" />
+      <PageHeader title="Ayarlar" subtitle="Görünüm ve marka" />
 
       <form
         action={saveHeroSettings}
@@ -67,7 +67,7 @@ export default async function SettingsPage() {
         />
 
         <div className="pt-2 border-t-2 border-green/20">
-          <PrimaryButton>Save</PrimaryButton>
+          <PrimaryButton>Kaydet</PrimaryButton>
         </div>
       </form>
     </>

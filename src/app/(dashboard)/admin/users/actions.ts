@@ -38,6 +38,32 @@ export async function setRole(formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+export async function removeUser(formData: FormData) {
+  const { user: actor } = await requireRole("owner");
+
+  const userId = z.string().uuid().parse(formData.get("user_id"));
+
+  if (userId === actor.id) {
+    throw new Error("You cannot remove yourself.");
+  }
+
+  const admin = getAdminClient();
+
+  const [{ data: target }, { count }] = await Promise.all([
+    admin.from("profiles").select("role").eq("id", userId).single(),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("role", "owner"),
+  ]);
+
+  if (target?.role === "owner" && (count ?? 0) <= 1) {
+    throw new Error("Cannot remove the last owner.");
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/users");
+}
+
 const InviteSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
   role: RoleSchema,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Field, Checkbox, Select, PrimaryButton, GhostButton } from "../../_components";
+import { Field, Select, PrimaryButton, GhostButton } from "../../_components";
 import { createGroup } from "../actions";
 
 type Props = {
@@ -11,7 +11,7 @@ type Props = {
   defaultSortOrder: number;
 };
 
-export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props) {
+export function NewSuggestedGroupForm({ categories, items, defaultSortOrder }: Props) {
   const searchParams = useSearchParams();
   const preItemId = searchParams.get("item_id") ?? "";
   const preCategoryId = searchParams.get("category_id") ?? "";
@@ -66,17 +66,13 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
         </div>
       )}
 
-      <Field label="Etiket (İNG)" name="label_en" required placeholder="örn. Yanlar" />
-      <Field label="Etiket (TR)" name="label_tr" required placeholder="örn. Yanlar" />
+      <Field label="Etiket (İNG)" name="label_en" required placeholder="örn. Bunu da dene" />
+      <Field label="Etiket (TR)" name="label_tr" required placeholder="örn. Bunu da dene" />
       <Field label="Sıralama" name="sort_order" type="number" defaultValue={defaultSortOrder} />
 
-      <div className="flex items-center">
-        <Checkbox label="Çoklu seçim (birden fazla seçime izin ver)" name="multi" defaultChecked={false} />
-      </div>
-
       <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">
-        <PrimaryButton>Kaydet ve Seçenek Ekle</PrimaryButton>
-        <GhostButton href="/admin/addons">İptal</GhostButton>
+        <PrimaryButton>Kaydet ve Ürün Ekle</PrimaryButton>
+        <GhostButton href="/admin/suggested">İptal</GhostButton>
       </div>
     </form>
   );

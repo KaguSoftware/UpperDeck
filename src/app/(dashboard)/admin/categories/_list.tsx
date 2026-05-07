@@ -105,13 +105,13 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
               href={`/admin/categories/new?parent=${c.id}`}
               className="border-2 border-green text-green bg-transparent px-2 py-1 font-ui font-extrabold text-[9px] tracking-[0.18em] uppercase whitespace-nowrap"
             >
-              + Sub
+              + Alt
             </Link>
           )}
-          <GhostButton href={`/admin/categories/${c.id}/edit`}>Edit</GhostButton>
+          <GhostButton href={`/admin/categories/${c.id}/edit`}>Düzenle</GhostButton>
           <form action={deleteCategory}>
             <input type="hidden" name="id" value={c.id} />
-            <DangerButton>Del</DangerButton>
+            <DangerButton>Sil</DangerButton>
           </form>
         </div>
       </div>
@@ -122,10 +122,10 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
     <div className="border-2 border-green bg-white overflow-x-auto">
       <div className="min-w-xl">
         <div className="grid grid-cols-[4rem_3rem_1fr_1fr_1fr_12rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[13px] font-extrabold uppercase tracking-[0.18em] text-green">
-          <div>Order</div>
+          <div>Sıra</div>
           <div></div>
           <div>Slug</div>
-          <div>EN</div>
+          <div>İNG</div>
           <div>TR</div>
           <div></div>
         </div>
@@ -145,7 +145,7 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
 
         {cats.length === 0 && (
           <div className="px-4 py-10 text-center text-[12px] text-green/60 font-semibold uppercase tracking-[0.18em]">
-            No categories yet
+            Henüz kategori yok
           </div>
         )}
       </div>

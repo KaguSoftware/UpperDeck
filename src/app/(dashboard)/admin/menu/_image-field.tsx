@@ -43,7 +43,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
     return (
         <div className="flex flex-col gap-2">
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
-                Image
+                Görsel
             </span>
 
             {/* Hidden input carries the URL into the server action */}
@@ -76,7 +76,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                         />
                     ) : (
                         <span className="text-[10px] text-green/40 font-bold uppercase tracking-wider text-center px-1">
-                            No image
+                            Görsel yok
                         </span>
                     )}
                 </div>
@@ -92,10 +92,10 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                             <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
                         )}
                         {uploading
-                            ? "Uploading…"
+                            ? "Yükleniyor…"
                             : url
-                            ? "Replace image"
-                            : "Upload image"}
+                            ? "Görseli değiştir"
+                            : "Görsel yükle"}
                     </button>
 
                     {url && (
@@ -104,7 +104,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                             onClick={() => setUrl(null)}
                             className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/50 hover:text-orange self-start"
                         >
-                            Remove
+                            Kaldır
                         </button>
                     )}
 
@@ -115,8 +115,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                     )}
 
                     <p className="text-[10px] text-green/40">
-                        JPEG, PNG, WEBP or GIF · compressed to WebP
-                        automatically
+                        JPEG, PNG, WEBP veya GIF · otomatik olarak WebP&apos;ye sıkıştırılır
                     </p>
                 </div>
             </div>

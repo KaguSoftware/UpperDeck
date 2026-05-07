@@ -13,7 +13,7 @@ import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem, CheckoutState } from "@/components/CartDrawer/types";
-import type { AddonOptionPublic } from "@/lib/menu/queries";
+import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
@@ -31,6 +31,7 @@ type PersistedCart = {
 
 type PhoneMenuProps = {
   messages: Messages;
+  locale: import("@/i18n/config").Locale;
   categories: PublicCategory[];
   items: PublicMenuItem[];
   initialTableNumber?: number;
@@ -44,12 +45,11 @@ type PhoneMenuProps = {
   featuredDiscount?: number | null;
 };
 
-export function PhoneMenu({ messages: t, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
   const [note, setNote] = useState("");
-  const [simulateFailure, setSimulateFailure] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>({ status: "idle" });
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
@@ -147,22 +147,40 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     });
   }, []);
 
-  const handleAdd = useCallback((extras: AddonOptionPublic[]) => {
+  const handleAdd = useCallback((extras: AddonOptionPublic[], itemNote: string) => {
     if (!activeItem) return;
     const { id: menu_item_id, name, price, discountPct } = activeItem;
     const basePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
     const extrasTotal = extras.reduce((s, e) => s + e.price, 0);
     const effectivePrice = basePrice + extrasTotal;
-    // Items with extras get a unique cart id so they don't merge with the plain version
-    const cartId = extras.length > 0 ? `${menu_item_id}__${extras.map((e) => e.id).join("_")}` : menu_item_id;
+    // Items with extras or a note get a unique cart id so they don't merge with the plain version
+    const noteKey = itemNote ? `__note${itemNote.slice(0, 8)}` : "";
+    const cartId = extras.length > 0 || itemNote
+      ? `${menu_item_id}__${extras.map((e) => e.id).join("_")}${noteKey}`
+      : menu_item_id;
     setCartItems((prev) => {
       const existing = prev.find((i) => i.id === cartId);
       if (existing) return prev.map((i) => i.id === cartId ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined }];
+      return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
     });
     setActiveItem(null);
     flashToast(`${t.toast.addedPrefix}${name}`);
   }, [activeItem, flashToast, t.toast]);
+
+  const handleSuggestedClick = useCallback((sug: SuggestedItemPublic) => {
+    const fullItem = items.find((i) => i.id === sug.id);
+    if (!fullItem) return;
+    setActiveItem({
+      ...fullItem,
+      sz: "size-m",
+      fill: fullItem.highlight === "orange-fill" ? "orange-fill" : fullItem.highlight === "green-fill" ? "green-fill" : "",
+      rot: 0,
+      w: 0,
+      h: 0,
+      x: 0,
+      y: 0,
+    });
+  }, [items]);
 
   const doSubmit = useCallback(async () => {
     if (cartItems.length === 0) return;
@@ -171,15 +189,16 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
     const clientTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
     const result = await submitOrder({
       table_number: tableNumber ?? 0,
-      _simulateFailure: simulateFailure,
+      _simulateFailure: false,
       items: cartItems.map((i) => {
         const extrasLabel = i.extras && i.extras.length > 0
           ? ` + ${i.extras.map((e) => e.label).join(", ")}`
           : "";
+        const noteLabel = i.itemNote ? ` (${i.itemNote})` : "";
         return {
           menu_item_id: i.menu_item_id,
-          name_en: i.name + extrasLabel,
-          name_tr: i.name + extrasLabel,
+          name_en: i.name + extrasLabel + noteLabel,
+          name_tr: i.name + extrasLabel + noteLabel,
           price: i.price,
           qty: i.qty,
         };
@@ -303,6 +322,7 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           brandAccent={t.brand.name.accent}
           brandSub={t.brand.sub}
           orderLabel={t.topbar.order}
+          locale={locale}
         />
       </div>
       <Hero
@@ -367,6 +387,8 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
           hidden={footerVisible || !!activeItem}
+          scrollRef={stageWrapRef}
+          heroCollapsed={heroCollapsed}
         />
       </div>
       <CartDrawer
@@ -392,19 +414,33 @@ export function PhoneMenu({ messages: t, categories, items, initialTableNumber, 
         sendLabel={t.cart.send}
         tryAgainLabel={t.cart.try_again}
         tableFromQr={tableLocked}
-        simulateFailure={simulateFailure}
-        onSimulateFailureChange={setSimulateFailure}
         topOffset={topbarRef.current?.offsetHeight ?? 0}
         orderCooldownSeconds={orderCooldownSeconds}
+        coupon={{
+          couponLabel: t.coupon.label,
+          couponPlaceholder: t.coupon.placeholder,
+          couponApply: t.coupon.apply,
+          noOfferTitle: t.coupon.noOfferTitle,
+          noOfferBody: t.coupon.noOfferBody,
+          emailPlaceholder: t.coupon.emailPlaceholder,
+          subscribeLabel: t.coupon.subscribe,
+          subscribedMessage: t.coupon.subscribed,
+          noCouponPrefix: t.coupon.noCouponPrefix,
+          noCouponLink: t.coupon.noCouponLink,
+        }}
       />
       <ItemModal
         item={activeItem}
         onClose={() => setActiveItem(null)}
         onAdd={handleAdd}
+        onSuggestedClick={handleSuggestedClick}
         spicyLabel={t.modal.spicy}
         priceLabel={t.modal.price}
         addToOrderLabel={t.modal.addToOrder}
+        specialInstructionsLabel={t.modal.specialInstructions}
+        specialInstructionsPlaceholder={t.modal.specialInstructionsPlaceholder}
         addonGroups={activeItem?.addonGroups ?? []}
+        suggestedItems={activeItem?.suggestedItems ?? []}
       />
       <Toast message={toastMsg} show={toastShow} />
       <Ticker tags={t.ticker} />

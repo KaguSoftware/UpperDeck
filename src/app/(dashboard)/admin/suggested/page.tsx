@@ -4,20 +4,20 @@ import { PageHeader } from "../_components";
 
 export const dynamic = "force-dynamic";
 
-export default async function AddonsPage() {
+export default async function SuggestedPage() {
   const supabase = await getServerClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("addon_groups")
-    .select("id, label_en, multi, sort_order, category_id, menu_item_id, addon_options(count), categories(name_en), menu_items(name_en)")
+    .from("suggested_groups")
+    .select("id, label_en, sort_order, category_id, menu_item_id, suggested_items(count), categories(name_en), menu_items(name_en)")
     .order("sort_order", { ascending: true });
 
   if (error) throw new Error((error as { message: string }).message);
 
   type RawGroup = {
-    id: string; label_en: string; multi: boolean; sort_order: number;
+    id: string; label_en: string; sort_order: number;
     category_id: string | null; menu_item_id: string | null;
-    addon_options: { count: number }[];
+    suggested_items: { count: number }[];
     categories: { name_en: string } | null;
     menu_items: { name_en: string } | null;
   };
@@ -25,13 +25,12 @@ export default async function AddonsPage() {
   const groups = ((data ?? []) as RawGroup[]).map((g) => ({
     id: g.id,
     label: g.label_en,
-    multi: g.multi,
     sort_order: g.sort_order,
     scope: g.category_id ? "category" : "item",
     scopeName: g.category_id
       ? ((g.categories as { name_en: string } | null)?.name_en ?? "—")
       : ((g.menu_items as { name_en: string } | null)?.name_en ?? "—"),
-    optionCount: (g.addon_options as { count: number }[])?.[0]?.count ?? 0,
+    itemCount: (g.suggested_items as { count: number }[])?.[0]?.count ?? 0,
   }));
 
   const categoryGroups = groups.filter((g) => g.scope === "category");
@@ -40,11 +39,11 @@ export default async function AddonsPage() {
   return (
     <>
       <PageHeader
-        title="Ekstralar"
+        title="Önerilen"
         subtitle={`${groups.length} grup`}
         action={
           <Link
-            href="/admin/addons/new"
+            href="/admin/suggested/new"
             className="bg-orange text-white px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase"
           >
             + Yeni Grup
@@ -54,18 +53,18 @@ export default async function AddonsPage() {
 
       {groups.length === 0 && (
         <p className="text-green/60 font-ui text-[13px]">
-          Henüz ekstra grubu yok.{" "}
-          <Link href="/admin/addons/new" className="underline text-orange">
+          Henüz öneri grubu yok.{" "}
+          <Link href="/admin/suggested/new" className="underline text-orange">
             Oluştur
           </Link>{" "}
-          ve ürün modalında ekstraları göster.
+          ve ürün modalında &ldquo;Bunu da dene&rdquo; öğelerini göster.
         </p>
       )}
 
       {categoryGroups.length > 0 && (
         <section className="mb-8">
           <h2 className="font-bowlby text-[18px] text-green uppercase tracking-[-0.3px] mb-3">
-            Kategori Ekstraları
+            Kategori Önerileri
           </h2>
           <GroupTable groups={categoryGroups} />
         </section>
@@ -74,7 +73,7 @@ export default async function AddonsPage() {
       {itemGroups.length > 0 && (
         <section>
           <h2 className="font-bowlby text-[18px] text-green uppercase tracking-[-0.3px] mb-3">
-            Ürün Ekstraları
+            Ürün Önerileri
           </h2>
           <GroupTable groups={itemGroups} />
         </section>
@@ -86,7 +85,7 @@ export default async function AddonsPage() {
 function GroupTable({
   groups,
 }: {
-  groups: { id: string; label: string; multi: boolean; scopeName: string; optionCount: number }[];
+  groups: { id: string; label: string; scopeName: string; itemCount: number }[];
 }) {
   return (
     <div className="border-2 border-green overflow-hidden">
@@ -95,8 +94,7 @@ function GroupTable({
           <tr className="border-b-2 border-green bg-green/5">
             <th className="px-4 py-2.5 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase text-green">Kapsam</th>
             <th className="px-4 py-2.5 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase text-green">Grup Etiketi</th>
-            <th className="px-4 py-2.5 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase text-green">Tür</th>
-            <th className="px-4 py-2.5 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase text-green">Seçenekler</th>
+            <th className="px-4 py-2.5 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase text-green">Ürünler</th>
             <th className="px-4 py-2.5"></th>
           </tr>
         </thead>
@@ -105,13 +103,10 @@ function GroupTable({
             <tr key={g.id} className="border-b border-green/20 hover:bg-green/5 transition-colors">
               <td className="px-4 py-3 font-ui text-[13px] text-green">{g.scopeName}</td>
               <td className="px-4 py-3 font-ui font-semibold text-[13px] text-green">{g.label}</td>
-              <td className="px-4 py-3 font-ui text-[12px] text-green/70">
-                {g.multi ? "Çoklu" : "Tekli"}
-              </td>
-              <td className="px-4 py-3 font-ui text-[12px] text-green/70">{g.optionCount}</td>
+              <td className="px-4 py-3 font-ui text-[12px] text-green/70">{g.itemCount}</td>
               <td className="px-4 py-3 text-right">
                 <Link
-                  href={`/admin/addons/${g.id}/edit`}
+                  href={`/admin/suggested/${g.id}/edit`}
                   className="font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase text-orange hover:underline"
                 >
                   Düzenle

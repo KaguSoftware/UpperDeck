@@ -57,10 +57,10 @@ export function MenuList({ initial }: { initial: Item[] }) {
       <div className="min-w-xl">
         <div className="grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)_6rem_5rem_8rem] gap-3 px-4 py-3 border-b-2 border-green bg-bg-deep text-[13px] font-extrabold uppercase tracking-[0.18em] text-green">
           <div></div>
-          <div>Name</div>
-          <div>Category</div>
-          <div className="text-right">Price</div>
-          <div className="text-center">Sold Out</div>
+          <div>Ad</div>
+          <div>Kategori</div>
+          <div className="text-right">Fiyat</div>
+          <div className="text-center">Tükendi</div>
           <div></div>
         </div>
         {items.map((item) => (
@@ -84,7 +84,7 @@ export function MenuList({ initial }: { initial: Item[] }) {
               {item.spicy && (
                 <div className="mt-1">
                   <span className="inline-block bg-orange text-white text-[8px] font-extrabold px-1.5 py-0.5 uppercase tracking-[0.15em]">
-                    Spicy
+                    Acılı
                   </span>
                 </div>
               )}
@@ -128,21 +128,21 @@ export function MenuList({ initial }: { initial: Item[] }) {
                 href={`/admin/menu/${item.id}/edit`}
                 className="border-2 border-green text-green bg-transparent px-4 py-2 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase"
               >
-                Edit
+                Düzenle
               </Link>
               <button
                 type="button"
                 onClick={() => handleDelete(item.id)}
                 className="bg-green-dark text-bg border-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase cursor-pointer"
               >
-                Del
+                Sil
               </button>
             </div>
           </div>
         ))}
         {items.length === 0 && (
           <div className="px-4 py-10 text-center text-[12px] text-green/60 font-semibold uppercase tracking-[0.18em]">
-            No menu items yet
+            Henüz menü ürünü yok
           </div>
         )}
       </div>

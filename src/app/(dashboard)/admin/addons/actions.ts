@@ -25,6 +25,7 @@ const OptionSchema = z.object({
   label_tr: z.string().min(1).max(60).trim(),
   price: z.coerce.number().nonnegative().max(100000).default(0),
   sort_order: z.coerce.number().int().default(0),
+  menu_item_id: z.string().uuid().nullable().optional(),
 });
 
 function parseGroup(formData: FormData) {
@@ -42,20 +43,22 @@ function parseGroup(formData: FormData) {
 }
 
 function parseOption(formData: FormData) {
+  const rawItemId = formData.get("menu_item_id");
   return OptionSchema.parse({
     label_en: formData.get("label_en"),
     label_tr: formData.get("label_tr"),
     price: formData.get("price") ?? 0,
     sort_order: formData.get("sort_order") ?? 0,
+    menu_item_id: rawItemId && rawItemId !== "" ? rawItemId : null,
   });
 }
 
 export async function createGroup(formData: FormData) {
-  const { user, supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner"]);
   const data = parseGroup(formData);
   const { data: group, error } = await db(supabase)
     .from("addon_groups")
-    .insert({ ...data, created_by: user.id })
+    .insert(data)
     .select("id")
     .single();
   if (error) throw new Error(error.message);
@@ -98,6 +101,33 @@ export async function updateOption(id: string, groupId: string, formData: FormDa
   const { error } = await db(supabase).from("addon_options").update(data).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/addons");
+  revalidatePath(`/admin/addons/${groupId}/edit`);
+}
+
+export async function reorderOption(formData: FormData) {
+  const id = z.string().uuid().parse(formData.get("id"));
+  const groupId = z.string().uuid().parse(formData.get("group_id"));
+  const direction = z.enum(["up", "down"]).parse(formData.get("direction"));
+  const { supabase } = await requireRole(["admin", "owner"]);
+
+  const { data: opts } = await db(supabase)
+    .from("addon_options")
+    .select("id, sort_order")
+    .eq("addon_group_id", groupId)
+    .order("sort_order", { ascending: true });
+
+  const list = (opts ?? []) as { id: string; sort_order: number }[];
+  const idx = list.findIndex((o) => o.id === id);
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
+
+  const a = list[idx];
+  const b = list[swapIdx];
+  await Promise.all([
+    db(supabase).from("addon_options").update({ sort_order: b.sort_order }).eq("id", a.id),
+    db(supabase).from("addon_options").update({ sort_order: a.sort_order }).eq("id", b.id),
+  ]);
+
   revalidatePath(`/admin/addons/${groupId}/edit`);
 }
 

@@ -19,18 +19,18 @@ export default async function AdminDashboard({
   ]);
 
   const stats = [
-    { label: "Menu Items", value: items.count ?? 0, href: "/admin/menu" },
-    { label: "Available", value: available.count ?? 0, href: "/admin/menu" },
-    { label: "Categories", value: categories.count ?? 0, href: "/admin/categories" },
+    { label: "Menü Ürünleri", value: items.count ?? 0, href: "/admin/menu" },
+    { label: "Mevcut", value: available.count ?? 0, href: "/admin/menu" },
+    { label: "Kategoriler", value: categories.count ?? 0, href: "/admin/categories" },
   ];
 
   return (
     <>
-      <PageHeader title="Dashboard" subtitle="Upperdeck American Diner" />
+      <PageHeader title="Ana Panel" subtitle="Upperdeck American Diner" />
 
       {error === "forbidden" && (
         <div className="bg-orange text-white text-[11px] font-extrabold uppercase tracking-[0.12em] px-3 py-2 mb-6">
-          You don&apos;t have access to that page.
+          Bu sayfaya erişim yetkiniz yok.
         </div>
       )}
 
