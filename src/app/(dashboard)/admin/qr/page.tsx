@@ -14,7 +14,8 @@ export default async function QRPage() {
   const baseUrl = env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const supabase = await getServerClient();
 
-  const { data: disabledData } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: disabledData } = await (supabase as any)
     .from("settings")
     .select("value")
     .eq("key", "waiter_disabled_tables")
@@ -60,7 +61,7 @@ export default async function QRPage() {
               Masa {n}
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={dataUrl} alt={`QR code for table ${n}`} className="w-[120px] h-[120px]" />
+            <img src={dataUrl} alt={`QR code for table ${n}`} className="w-30 h-30" />
             <span className="font-ui text-[7px] text-warm-gray break-all text-center leading-tight opacity-60">
               {url}
             </span>

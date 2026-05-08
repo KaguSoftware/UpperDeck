@@ -387,7 +387,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
-          hidden={footerVisible || !!activeItem || disabledTables.includes(tableNumber ?? 0)}
+          hidden={footerVisible || !!activeItem || (tableNumber != null && tableNumber > 0 && disabledTables.includes(tableNumber))}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}
         />

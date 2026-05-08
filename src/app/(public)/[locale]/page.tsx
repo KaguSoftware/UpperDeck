@@ -28,7 +28,8 @@ export default async function Home({
     Promise.resolve(getMessages(lang)),
     getPublicMenu(lang),
     getHeroSettings(),
-    supabase.from("settings").select("value").eq("key", "waiter_disabled_tables").maybeSingle(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("settings").select("value").eq("key", "waiter_disabled_tables").maybeSingle(),
   ]);
 
   const disabledTables: number[] = disabledRes.data?.value

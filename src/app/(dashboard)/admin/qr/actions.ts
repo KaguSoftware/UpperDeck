@@ -8,7 +8,9 @@ export async function setTableWaiterDisabled(tableNumber: number, disabled: bool
   await requireRole("admin");
   const supabase = await getServerClient();
 
-  const { data } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const { data } = await s
     .from("settings")
     .select("value")
     .eq("key", "waiter_disabled_tables")
@@ -19,7 +21,7 @@ export async function setTableWaiterDisabled(tableNumber: number, disabled: bool
     ? [...new Set([...current, tableNumber])]
     : current.filter((n) => n !== tableNumber);
 
-  await supabase
+  await s
     .from("settings")
     .upsert({ key: "waiter_disabled_tables", value: JSON.stringify(updated) });
 
