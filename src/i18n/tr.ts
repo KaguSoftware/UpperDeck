@@ -9,7 +9,7 @@ const tr: Messages = {
     headline1: "Burgerler,",
     headline2: "waffle",
     headline3: "ve her neyse",
-    headline4: "öyle.",
+    headline4: "işte.",
     openHours: "Açık · 09:00 — 23:30",
     items: "ürün",
   },

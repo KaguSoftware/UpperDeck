@@ -1,18 +1,25 @@
 import Link from "next/link";
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 import { PageHeader } from "../_components";
 
-export const dynamic = "force-dynamic";
+const getAdminSuggested = unstable_cache(
+  async () => {
+    const supabase = getCacheClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("suggested_groups")
+      .select("id, label_en, sort_order, category_id, menu_item_id, suggested_items(count), categories(name_en), menu_items(name_en)")
+      .order("sort_order", { ascending: true });
+    if (error) throw new Error((error as { message: string }).message);
+    return data ?? [];
+  },
+  ["admin-suggested-list"],
+  { tags: ["menu"] }
+);
 
 export default async function SuggestedPage() {
-  const supabase = await getServerClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("suggested_groups")
-    .select("id, label_en, sort_order, category_id, menu_item_id, suggested_items(count), categories(name_en), menu_items(name_en)")
-    .order("sort_order", { ascending: true });
-
-  if (error) throw new Error((error as { message: string }).message);
+  const data = await getAdminSuggested();
 
   type RawGroup = {
     id: string; label_en: string; sort_order: number;

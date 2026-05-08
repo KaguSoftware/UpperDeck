@@ -1,11 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { requireRole } from "@/lib/auth/require-session";
 import { getServerClient } from "@/lib/supabase/server";
 
 export async function setTableWaiterDisabled(tableNumber: number, disabled: boolean) {
-  await requireRole("admin");
+  await requireRole(["admin", "owner"]);
   const supabase = await getServerClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,5 +25,5 @@ export async function setTableWaiterDisabled(tableNumber: number, disabled: bool
     .from("settings")
     .upsert({ key: "waiter_disabled_tables", value: JSON.stringify(updated) });
 
-  revalidatePath("/admin/qr");
+  updateTag("settings");
 }

@@ -5,7 +5,6 @@ import imageCompression from "browser-image-compression";
 import { getBrowserClient } from "@/lib/supabase/client";
 
 type HeroMode = "none" | "media" | "featured";
-type MediaType = "image" | "video";
 type Item = { id: string; name: string; image_url: string | null; emoji: string };
 
 function ModeButton({
@@ -36,7 +35,6 @@ function ModeButton({
 export function HeroConstructor({
   defaultMode,
   defaultMediaUrl,
-  defaultMediaType,
   items,
   defaultItemId,
   defaultLabel,
@@ -45,7 +43,6 @@ export function HeroConstructor({
 }: {
   defaultMode: HeroMode;
   defaultMediaUrl?: string | null;
-  defaultMediaType?: MediaType | null;
   items: Item[];
   defaultItemId?: string | null;
   defaultLabel?: string | null;
@@ -54,46 +51,32 @@ export function HeroConstructor({
 }) {
   const [mode, setMode] = useState<HeroMode>(defaultMode);
 
-  // media state
   const [mediaUrl, setMediaUrl] = useState<string | null>(defaultMediaUrl ?? null);
-  const [mediaType, setMediaType] = useState<MediaType | null>(defaultMediaType ?? null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // featured state
   const [selectedId, setSelectedId] = useState<string>(defaultItemId ?? "");
   const selected = items.find((i) => i.id === selectedId) ?? null;
 
   async function handleFile(file: File) {
     setUploadError(null);
     setUploading(true);
-    const isVideo = file.type.startsWith("video/");
     try {
       const supabase = getBrowserClient();
-      let uploadFile: File | Blob = file;
-      let ext = file.name.split(".").pop() ?? (isVideo ? "mp4" : "jpg");
-      let contentType = file.type;
-
-      if (!isVideo) {
-        uploadFile = await imageCompression(file, {
-          maxSizeMB: 0.8,
-          maxWidthOrHeight: 1600,
-          useWebWorker: true,
-          fileType: "image/webp",
-        });
-        ext = "webp";
-        contentType = "image/webp";
-      }
-
-      const path = `hero/${crypto.randomUUID()}.${ext}`;
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1600,
+        useWebWorker: true,
+        fileType: "image/webp",
+      });
+      const path = `hero/${crypto.randomUUID()}.webp`;
       const { error: upErr } = await supabase.storage
         .from("menu-images")
-        .upload(path, uploadFile, { upsert: false, contentType });
+        .upload(path, compressed, { upsert: false, contentType: "image/webp" });
       if (upErr) throw new Error(upErr.message);
       const { data } = supabase.storage.from("menu-images").getPublicUrl(path);
       setMediaUrl(data.publicUrl);
-      setMediaType(isVideo ? "video" : "image");
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -106,7 +89,6 @@ export function HeroConstructor({
       {/* hidden inputs always submitted */}
       <input type="hidden" name="hero_mode" value={mode} />
       <input type="hidden" name="hero_media_url" value={mediaUrl ?? ""} />
-      <input type="hidden" name="hero_media_type" value={mediaType ?? ""} />
 
       {/* mode toggle */}
       <div className="flex flex-col gap-2">
@@ -118,7 +100,7 @@ export function HeroConstructor({
             Yok
           </ModeButton>
           <ModeButton active={mode === "media"} onClick={() => setMode("media")}>
-            Medya
+            Görsel
           </ModeButton>
           <ModeButton active={mode === "featured"} onClick={() => setMode("featured")}>
             Öne Çıkan Ürün
@@ -126,7 +108,7 @@ export function HeroConstructor({
         </div>
         <p className="text-[10px] text-green/40">
           {mode === "none" && "Varsayılan metin banner'ını gösterir."}
-          {mode === "media" && "Menünün üzerinde özel bir görsel veya video gösterir."}
+          {mode === "media" && "Menünün üzerinde özel bir görsel gösterir."}
           {mode === "featured" && "Bir menü ürününü görseli, kayan yazısı ve isteğe bağlı rozeti ile öne çıkarır."}
         </p>
       </div>
@@ -136,7 +118,7 @@ export function HeroConstructor({
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -148,14 +130,12 @@ export function HeroConstructor({
               className="w-32 h-20 shrink-0 border-2 border-green bg-bg-deep flex items-center justify-center overflow-hidden cursor-pointer"
               onClick={() => inputRef.current?.click()}
             >
-              {mediaUrl && mediaType === "video" ? (
-                <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline />
-              ) : mediaUrl ? (
+              {mediaUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-[10px] text-green/40 font-bold uppercase tracking-wider text-center px-1">
-                  Medya yok
+                  Görsel yok
                 </span>
               )}
             </div>
@@ -169,24 +149,19 @@ export function HeroConstructor({
                 {uploading && (
                   <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
                 )}
-                {uploading ? "Yükleniyor…" : mediaUrl ? "Değiştir" : "Görsel veya video yükle"}
+                {uploading ? "Yükleniyor…" : mediaUrl ? "Değiştir" : "Görsel yükle"}
               </button>
               {mediaUrl && (
                 <button
                   type="button"
-                  onClick={() => { setMediaUrl(null); setMediaType(null); }}
+                  onClick={() => setMediaUrl(null)}
                   className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/50 hover:text-orange self-start"
                 >
                   Kaldır
                 </button>
               )}
-              {mediaType && (
-                <span className="text-[10px] font-bold text-green/50 uppercase tracking-[0.14em]">
-                  Tür: {mediaType}
-                </span>
-              )}
               {uploadError && <p className="text-[10px] font-bold text-orange">{uploadError}</p>}
-              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF, MP4, WEBM · maks 50 MB</p>
+              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF · maks 5 MB</p>
             </div>
           </div>
       </div>

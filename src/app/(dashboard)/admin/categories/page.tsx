@@ -1,20 +1,25 @@
 import Link from "next/link";
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 import { PageHeader } from "../_components";
 import { CategoriesList } from "./_list";
 
-export const dynamic = "force-dynamic";
+const getAdminCategories = unstable_cache(
+  async () => {
+    const supabase = getCacheClient();
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, slug, name_en, name_tr, sort_order, image_url, emoji, parent_id")
+      .order("sort_order");
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ["admin-categories-list"],
+  { tags: ["menu"] }
+);
 
 export default async function CategoriesPage() {
-  const supabase = await getServerClient();
-  const { data, error } = await supabase
-    .from("categories")
-    .select("id, slug, name_en, name_tr, sort_order, image_url, emoji, parent_id")
-    .order("sort_order");
-
-  if (error) throw new Error(error.message);
-
-  const all = data ?? [];
+  const all = await getAdminCategories();
   const parents = all.filter((c) => !c.parent_id);
 
   return (

@@ -1,9 +1,23 @@
 import Link from "next/link";
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 import { PageHeader } from "../_components";
 import { MenuList } from "./_list";
 
-export const dynamic = "force-dynamic";
+const getMenuListItems = unstable_cache(
+  async () => {
+    const supabase = getCacheClient();
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("id, name_en, price, image_url, spicy, is_available, sold_out, sort_order, category_id, categories(name_en)")
+      .order("sort_order", { ascending: true })
+      .order("name_en", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ["admin-menu-list"],
+  { tags: ["menu"] }
+);
 
 type SortKey = "name" | "category";
 
@@ -11,16 +25,7 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
   const { sort } = await searchParams;
   const sortKey: SortKey = sort === "name" ? "name" : "category";
 
-  const supabase = await getServerClient();
-  const { data, error } = await supabase
-    .from("menu_items")
-    .select("id, name_en, price, image_url, spicy, is_available, sold_out, sort_order, category_id, categories(name_en)")
-    .order("sort_order", { ascending: true })
-    .order("name_en", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  const raw = data ?? [];
+  const raw = await getMenuListItems();
   const items = [...raw]
     .sort((a, b) => {
       if (sortKey === "name") return a.name_en.localeCompare(b.name_en);

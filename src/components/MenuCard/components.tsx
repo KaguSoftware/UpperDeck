@@ -1,4 +1,13 @@
+import { imgUrl } from "@/lib/img";
 import type { MenuCardProps } from "./types";
+
+function preloadModalImage(url: string | null) {
+  if (!url) return;
+  const src = imgUrl(url, 390);
+  if (!src) return;
+  const img = new Image();
+  img.src = src;
+}
 
 export function MenuCard({ card, onOpen }: MenuCardProps) {
     const isGreen = card.fill === "green-fill";
@@ -15,6 +24,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
     const descColor = "text-green opacity-[0.72]";
 
     return (
+        <>
         <button
             type="button"
             data-item={card.id}
@@ -23,6 +33,8 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                 cardFill,
             ].join(" ")}
             style={insetShadow ? { boxShadow: insetShadow } : undefined}
+            onTouchStart={() => preloadModalImage(card.image_url)}
+            onMouseEnter={() => preloadModalImage(card.image_url)}
             onClick={() => onOpen(card)}
         >
             {/* square image/emoji thumbnail */}
@@ -30,8 +42,11 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                 {card.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                        src={card.image_url}
+                        src={imgUrl(card.image_url, 128) ?? ""}
                         alt=""
+                        width={128}
+                        height={128}
+                        loading="lazy"
                         className="w-full h-full object-cover"
                     />
                 ) : (
@@ -137,5 +152,6 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                 )}
             </div>
         </button>
+        </>
     );
 }

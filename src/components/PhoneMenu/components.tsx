@@ -38,7 +38,6 @@ type PhoneMenuProps = {
   disabledTables?: number[];
   heroMode?: "none" | "media" | "featured";
   heroMediaUrl?: string | null;
-  heroMediaType?: "image" | "video" | null;
   featuredItem?: { id: string; name: string; image_url: string | null; emoji: string } | null;
   featuredItemId?: string | null;
   featuredLabel?: string | null;
@@ -46,7 +45,7 @@ type PhoneMenuProps = {
   featuredDiscount?: number | null;
 };
 
-export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, heroMediaType, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
@@ -337,7 +336,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         itemsLabel={t.hero.items}
         heroMode={heroMode}
         heroMediaUrl={heroMediaUrl}
-        heroMediaType={heroMediaType}
         featuredItem={featuredItem}
         featuredLabel={featuredLabel}
         featuredBadge={featuredBadge}

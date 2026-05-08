@@ -1,18 +1,25 @@
 import Link from "next/link";
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 import { PageHeader } from "../_components";
 
-export const dynamic = "force-dynamic";
+const getAdminAddons = unstable_cache(
+  async () => {
+    const supabase = getCacheClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("addon_groups")
+      .select("id, label_en, multi, sort_order, category_id, menu_item_id, addon_options(count), categories(name_en), menu_items(name_en)")
+      .order("sort_order", { ascending: true });
+    if (error) throw new Error((error as { message: string }).message);
+    return data ?? [];
+  },
+  ["admin-addons-list"],
+  { tags: ["menu"] }
+);
 
 export default async function AddonsPage() {
-  const supabase = await getServerClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("addon_groups")
-    .select("id, label_en, multi, sort_order, category_id, menu_item_id, addon_options(count), categories(name_en), menu_items(name_en)")
-    .order("sort_order", { ascending: true });
-
-  if (error) throw new Error((error as { message: string }).message);
+  const data = await getAdminAddons();
 
   type RawGroup = {
     id: string; label_en: string; multi: boolean; sort_order: number;

@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
-import { Teko, Inter } from "next/font/google";
+import { Alfa_Slab_One, Teko, Inter } from "next/font/google";
 import "../../globals.css";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
+
+const alfaSlabOne = Alfa_Slab_One({
+  variable: "--font-alfa-slab",
+  subsets: ["latin"],
+  weight: "400",
+});
 
 const teko = Teko({
   variable: "--font-bowlby-one",
@@ -37,7 +43,7 @@ export default async function LocaleLayout({
   const lang = locales.includes(locale as Locale) ? locale : defaultLocale;
 
   return (
-    <html lang={lang} className={`${teko.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang={lang} className={`${alfaSlabOne.variable} ${teko.variable} ${inter.variable}`} suppressHydrationWarning>
       <body className="no-scroll">{children}</body>
     </html>
   );

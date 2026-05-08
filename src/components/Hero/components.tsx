@@ -1,3 +1,4 @@
+import { imgUrl } from "@/lib/img";
 import type { HeroProps } from "./types";
 
 export function Hero({
@@ -11,7 +12,6 @@ export function Hero({
   itemsLabel,
   heroMode = "none",
   heroMediaUrl,
-  heroMediaType,
   featuredItem,
   featuredLabel,
   featuredBadge,
@@ -28,12 +28,8 @@ export function Hero({
         ].join(" ")}
       >
         <div className="relative w-full h-44 overflow-hidden">
-          {heroMediaType === "video" ? (
-            <video src={heroMediaUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroMediaUrl} alt="" className="w-full h-full object-cover" />
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imgUrl(heroMediaUrl, 390) ?? ""} alt="" width={390} height={176} className="w-full h-full object-cover" />
         </div>
       </div>
     );
@@ -61,7 +57,7 @@ export function Hero({
         >
           {featuredItem.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={featuredItem.image_url} alt={featuredItem.name} className="w-full h-full object-cover" />
+            <img src={imgUrl(featuredItem.image_url, 390) ?? ""} alt={featuredItem.name} width={390} height={176} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-bg-deep flex items-center justify-center">
               <span className="text-[72px] leading-none">{featuredItem.emoji}</span>
@@ -98,12 +94,12 @@ export function Hero({
         collapsed ? "max-h-0 pt-0 pb-0" : "max-h-50 pt-3.5 pb-2",
       ].join(" ")}
     >
-      <h1 className="font-bowlby text-[46px] leading-[0.86] text-green tracking-[-1.5px] uppercase">
+      <h1 className="font-hero text-[38px] leading-[1.05] text-green tracking-[-1px] uppercase">
         {headline1}
         <br />
-        <span className="text-orange">{headline2}</span> &amp;
+        <span className="text-orange">{headline2}</span>
         <br />
-        <span className="[-webkit-text-stroke:2px_#395748] text-transparent">{headline3}</span>
+        &amp; <span className="[-webkit-text-stroke:2px_#395748] text-transparent">{headline3}</span>
         <br />
         {headline4}
       </h1>

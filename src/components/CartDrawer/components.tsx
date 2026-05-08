@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { OfflineFallback } from "./_offline-fallback";
 import { CouponSection } from "./CouponSection";
 import type { CartDrawerProps } from "./types";
@@ -39,28 +39,41 @@ export function CartDrawer({
     const canSend = items.length > 0 && !isPending && orderCooldownSeconds === 0;
 
     const dragY = useRef(0);
-    const startY = useRef(0);
-    const [translateY, setTranslateY] = useState(0);
+    const startY = useRef<number | null>(null);
+    const sheetRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
-    function onPointerDown(e: React.PointerEvent) {
-        startY.current = e.clientY;
+    function onTouchStart(e: React.TouchEvent) {
+        const scrolledDown = (scrollRef.current?.scrollTop ?? 0) > 0;
+        const touchInHeader = headerRef.current?.contains(e.target as Node) ?? false;
+        if (scrolledDown && !touchInHeader) {
+            startY.current = null;
+            return;
+        }
+        startY.current = e.touches[0].clientY;
         dragY.current = 0;
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        if (sheetRef.current) sheetRef.current.style.transition = "none";
     }
-    function onPointerMove(e: React.PointerEvent) {
-        if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
-        const delta = Math.max(0, e.clientY - startY.current);
+    function onTouchMove(e: React.TouchEvent) {
+        if (startY.current === null) return;
+        const delta = Math.max(0, e.touches[0].clientY - startY.current);
         dragY.current = delta;
-        setTranslateY(delta);
+        if (sheetRef.current) sheetRef.current.style.transform = `translateY(${delta}px)`;
     }
-    function onPointerUp(e: React.PointerEvent) {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    function onTouchEnd() {
+        if (startY.current === null) return;
+        startY.current = null;
         if (dragY.current > 80) {
-            setTranslateY(0);
+            if (sheetRef.current) sheetRef.current.style.transform = "";
             onClose();
         } else {
-            setTranslateY(0);
+            if (sheetRef.current) {
+                sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+                sheetRef.current.style.transform = "translateY(0)";
+            }
         }
+        dragY.current = 0;
     }
 
     return (
@@ -75,23 +88,19 @@ export function CartDrawer({
             }}
         >
             <div
+                ref={sheetRef}
                 className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col"
-                style={{
-                    transform: `translateY(${translateY}px)`,
-                    transition: translateY === 0 ? "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)" : "none",
-                }}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
             >
-                {/* drag handle */}
-                <div
-                    className="flex justify-center items-center w-full bg-green py-2.5 shrink-0 touch-none cursor-grab active:cursor-grabbing"
-                    onPointerDown={onPointerDown}
-                    onPointerMove={onPointerMove}
-                    onPointerUp={onPointerUp}
-                >
-                    <div className="w-10 h-0.75 rounded-full bg-orange" />
-                </div>
-                {/* header */}
-                <div className="flex items-center justify-between px-4.5 py-3 border-b-2 border-green shrink-0">
+                {/* drag handle + header — always draggable */}
+                <div ref={headerRef}>
+                    <div className="flex justify-center items-center w-full bg-green py-2.5 shrink-0 cursor-grab active:cursor-grabbing">
+                        <div className="w-10 h-0.75 rounded-full bg-orange" />
+                    </div>
+                    {/* header */}
+                    <div className="flex items-center justify-between px-4.5 py-3 border-b-2 border-green shrink-0">
                     <span className="font-bowlby text-[20px] text-green uppercase tracking-[-0.5px]">
                         {totalLabel}
                     </span>
@@ -103,6 +112,7 @@ export function CartDrawer({
                         ×
                     </button>
                 </div>
+                </div>{/* /headerRef */}
 
                 {/* table number — only shown when set via QR */}
                 {tableNumber !== null && tableNumber > 0 && (
@@ -142,7 +152,7 @@ export function CartDrawer({
                 )}
 
                 {/* list */}
-                <div className="flex-1 overflow-y-auto">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto">
                     {items.length === 0 ? (
                         <p className="px-4.5 py-6 text-green/60 font-ui text-[13px]">
                             {emptyLabel}

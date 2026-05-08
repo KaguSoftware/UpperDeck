@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -52,8 +52,8 @@ export async function createCategory(formData: FormData) {
     .from("categories")
     .insert({ ...data, sort_order, created_by: user.id });
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/categories");
-  revalidatePath("/admin");
+  updateTag("menu");
+
   redirect("/admin/categories");
 }
 
@@ -62,7 +62,7 @@ export async function updateCategory(id: string, formData: FormData) {
   const data = parse(formData);
   const { error } = await supabase.from("categories").update(data).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/categories");
+  updateTag("menu");
   redirect("/admin/categories");
 }
 
@@ -71,8 +71,8 @@ export async function deleteCategory(formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/categories");
-  revalidatePath("/admin");
+  updateTag("menu");
+
 }
 
 async function reorderCategory(id: string, direction: "up" | "down") {
@@ -111,7 +111,7 @@ async function reorderCategory(id: string, direction: "up" | "down") {
     supabase.from("categories").update({ sort_order: curr.sort_order }).eq("id", neighbour.id),
   ]);
 
-  revalidatePath("/admin/categories");
+  updateTag("menu");
 }
 
 export async function moveCategoryUp(id: string) {

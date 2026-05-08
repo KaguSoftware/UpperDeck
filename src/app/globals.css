@@ -9,6 +9,7 @@
   --color-ink: #1f2e26;
 
   --font-bowlby: var(--font-bowlby-one, 'Teko', sans-serif);
+  --font-hero: var(--font-alfa-slab, 'Alfa Slab One', serif);
   --font-ui: var(--font-inter-next, 'Inter', sans-serif);
 }
 
@@ -31,6 +32,11 @@ a {
 
 .font-bowlby {
   font-weight: 700;
+}
+
+.font-hero {
+  font-family: var(--font-hero);
+  font-weight: 400;
 }
 
 @keyframes tick {

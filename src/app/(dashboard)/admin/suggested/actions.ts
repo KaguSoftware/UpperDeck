@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -39,7 +39,7 @@ export async function createGroup(formData: FormData) {
     .select("id")
     .single();
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/suggested");
+  updateTag("menu");
   redirect(`/admin/suggested/${(group as { id: string }).id}/edit`);
 }
 
@@ -48,8 +48,7 @@ export async function updateGroup(id: string, formData: FormData) {
   const data = parseGroup(formData);
   const { error } = await db(supabase).from("suggested_groups").update(data).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/suggested");
-  revalidatePath(`/admin/suggested/${id}/edit`);
+  updateTag("menu");
 }
 
 export async function deleteGroup(formData: FormData) {
@@ -57,7 +56,7 @@ export async function deleteGroup(formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await db(supabase).from("suggested_groups").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/suggested");
+  updateTag("menu");
   redirect("/admin/suggested");
 }
 
@@ -69,18 +68,15 @@ export async function createItem(groupId: string, formData: FormData) {
     .from("suggested_items")
     .insert({ suggested_group_id: groupId, menu_item_id, sort_order });
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/suggested");
-  revalidatePath(`/admin/suggested/${groupId}/edit`);
+  updateTag("menu");
 }
 
 export async function deleteItem(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const groupId = z.string().uuid().parse(formData.get("group_id"));
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await db(supabase).from("suggested_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/suggested");
-  revalidatePath(`/admin/suggested/${groupId}/edit`);
+  updateTag("menu");
 }
 
 export async function reorderItem(formData: FormData) {
@@ -107,5 +103,5 @@ export async function reorderItem(formData: FormData) {
     db(supabase).from("suggested_items").update({ sort_order: a.sort_order }).eq("id", b.id),
   ]);
 
-  revalidatePath(`/admin/suggested/${groupId}/edit`);
+  updateTag("menu");
 }

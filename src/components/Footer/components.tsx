@@ -21,6 +21,8 @@ export function Footer() {
                     style={{
                         filter: "brightness(0) invert(1)",
                         opacity: 0.85,
+                        width: 100,
+                        height: "auto",
                     }}
                 />
                 <span

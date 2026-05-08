@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 import { generateToken } from "@/lib/table-auth";
 import { env } from "@/lib/env";
-import { getServerClient } from "@/lib/supabase/server";
+import { getWaiterDisabledTables } from "@/lib/settings/queries";
 import { PageHeader } from "../_components";
 import { PrintButton } from "./_print-button";
 import { TableWaiterToggle } from "./_table-toggles";
@@ -12,18 +12,8 @@ const TABLE_COUNT = parseInt(process.env.TABLE_COUNT ?? "20", 10);
 
 export default async function QRPage() {
   const baseUrl = env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const supabase = await getServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: disabledData } = await (supabase as any)
-    .from("settings")
-    .select("value")
-    .eq("key", "waiter_disabled_tables")
-    .maybeSingle();
-
-  const disabledTables: number[] = disabledData?.value
-    ? (JSON.parse(disabledData.value) as number[])
-    : [];
+  const disabledTables = await getWaiterDisabledTables();
 
   const tables = await Promise.all(
     Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {

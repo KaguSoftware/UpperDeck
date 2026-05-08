@@ -9,7 +9,8 @@ type ConnectionState = "connecting" | "connected" | "disconnected";
 
 const STALE_SECS = 90;
 const STALE_REPEAT_MS = 30_000;
-const RECONNECT_INTERVAL_MS = 5_000;
+const RECONNECT_MIN_MS = 4_000;
+const RECONNECT_MAX_MS = 7_000;
 
 function elapsedSecs(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -273,14 +274,15 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
           ) {
             setConnectionState("disconnected");
 
-            // Reconnect every 5s
+            // Reconnect with jitter (4–7s) to avoid thundering herd
             if (!reconnectTimer.current) {
+              const delay = RECONNECT_MIN_MS + Math.random() * (RECONNECT_MAX_MS - RECONNECT_MIN_MS);
               reconnectTimer.current = setInterval(() => {
                 if (connStateRef.current === "disconnected") {
                   supabase.removeChannel(channel);
                   subscribe();
                 }
-              }, RECONNECT_INTERVAL_MS);
+              }, delay);
             }
 
           } else {

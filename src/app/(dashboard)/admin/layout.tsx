@@ -10,7 +10,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/categories", label: "Kategoriler" },
     { href: "/admin/addons", label: "Ekstralar" },
     { href: "/admin/suggested", label: "Önerilen" },
-    { href: "/admin/settings", label: "Ayarlar" },
+    { href: "/admin/settings", label: "Başlangıç Bölümü" },
     { href: "/admin/qr", label: "Masa QR'ları" },
     ...(profile.role === "owner"
       ? [{ href: "/admin/users", label: "Kullanıcılar", admin: true }]

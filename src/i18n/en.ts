@@ -43,7 +43,7 @@ const en: EnShape = {
   hero: {
     headline1: "Burgers,",
     headline2: "waffles",
-    headline3: "& whatever",
+    headline3: "whatever",
     headline4: "else.",
     openHours: "Open · 09:00 — 23:30",
     items: "items",

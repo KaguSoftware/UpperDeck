@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
+import { imgUrl } from "@/lib/img";
 import type { ItemModalProps, AddonOption } from "./types";
 
 export function ItemModal({
@@ -76,11 +77,14 @@ export function ItemModal({
   };
 
   const sheetRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const dragCurrentY = useRef(0);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    if ((scrollRef.current?.scrollTop ?? 0) > 0) {
+    const scrolledDown = (scrollRef.current?.scrollTop ?? 0) > 0;
+    const touchInHeader = headerRef.current?.contains(e.target as Node) ?? false;
+    if (scrolledDown && !touchInHeader) {
       dragStartY.current = null;
       return;
     }
@@ -130,14 +134,14 @@ export function ItemModal({
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
-          <div className="relative flex flex-col shrink-0 overflow-hidden" style={{ background: topBg }}>
+          <div ref={headerRef} className="relative flex flex-col shrink-0 overflow-hidden" style={{ background: topBg }}>
             {/* drag handle */}
             <div className="flex justify-center items-center h-4">
               <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
             </div>
             {item.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image_url} alt="" className="w-full h-52 object-cover" />
+              <img src={imgUrl(item.image_url, 390) ?? ""} alt="" width={390} height={208} loading="eager" className="w-full h-52 object-cover" />
             ) : (
               <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
             )}
@@ -217,7 +221,7 @@ export function ItemModal({
                             <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                               {opt.image_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={opt.image_url} alt="" className="w-full h-full object-cover" />
+                                <img src={imgUrl(opt.image_url, 80) ?? ""} alt="" width={80} height={64} loading="lazy" className="w-full h-full object-cover" />
                               ) : (
                                 <span className="text-[28px] leading-none">{opt.emoji}</span>
                               )}
@@ -292,7 +296,7 @@ export function ItemModal({
                       <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                         {sug.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={sug.image_url} alt="" className="w-full h-full object-cover" />
+                          <img src={imgUrl(sug.image_url, 80) ?? ""} alt="" width={80} height={64} loading="lazy" className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-[28px] leading-none">{sug.emoji}</span>
                         )}

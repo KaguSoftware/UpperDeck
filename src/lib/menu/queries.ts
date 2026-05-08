@@ -1,5 +1,6 @@
 import "server-only";
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 
 export type FeaturedItem = {
   id: string;
@@ -12,7 +13,6 @@ export type FeaturedItem = {
 export type HeroSettings = {
   heroMode: "none" | "media" | "featured";
   heroMediaUrl: string | null;
-  heroMediaType: "image" | "video" | null;
   featuredItemId: string | null;
   featuredLabel: string | null;
   featuredBadge: string | null;
@@ -20,19 +20,18 @@ export type HeroSettings = {
   featuredItem: FeaturedItem | null;
 };
 
-export async function getHeroSettings(): Promise<HeroSettings> {
-  const supabase = await getServerClient();
+async function _getHeroSettings(): Promise<HeroSettings> {
+  const supabase = getCacheClient();
   const { data } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", ["hero_mode", "hero_media_url", "hero_media_type", "featured_item_id", "featured_label", "featured_badge", "featured_discount"]);
+    .in("key", ["hero_mode", "hero_media_url", "featured_item_id", "featured_label", "featured_badge", "featured_discount"]);
 
   const rows = (data ?? []) as { key: string; value: string | null }[];
   const get = (key: string) => rows.find((r) => r.key === key)?.value ?? null;
 
   const heroMode = (get("hero_mode") || "none") as "none" | "media" | "featured";
   const url = get("hero_media_url") || null;
-  const type = get("hero_media_type") as "image" | "video" | null;
   const featuredItemId = get("featured_item_id") || null;
   const featuredLabel = get("featured_label") || null;
   const featuredBadge = get("featured_badge") || null;
@@ -43,7 +42,7 @@ export async function getHeroSettings(): Promise<HeroSettings> {
   if (heroMode === "featured" && featuredItemId) {
     const { data: item } = await supabase
       .from("menu_items")
-      .select("id, name_en, image_url, emoji, price")
+      .select("id, name_en, name_tr, image_url, emoji, price")
       .eq("id", featuredItemId)
       .single();
     if (item) {
@@ -51,8 +50,14 @@ export async function getHeroSettings(): Promise<HeroSettings> {
     }
   }
 
-  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, heroMediaType: type || null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
+  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
 }
+
+export const getHeroSettings = unstable_cache(
+  _getHeroSettings,
+  ["hero-settings"],
+  { tags: ["hero"] }
+);
 
 export type AddonOptionPublic = { id: string; label: string; price: number; image_url: string | null; emoji: string | null };
 export type AddonGroupPublic  = { id: string; label: string; multi: boolean; options: AddonOptionPublic[] };
@@ -83,15 +88,16 @@ export type PublicMenuItem = {
   suggestedItems: SuggestedItemPublic[];
 };
 
-export async function getPublicMenu(locale: "en" | "tr"): Promise<{
+async function _getPublicMenu(locale: "en" | "tr"): Promise<{
   categories: PublicCategory[];
   items: PublicMenuItem[];
 }> {
-  const supabase = await getServerClient();
+  const supabase = getCacheClient();
+  const n = locale === "tr" ? "tr" : "en";
 
   const { data: cats, error: catsError } = await supabase
     .from("categories")
-    .select("id, slug, name_en, name_tr, sort_order, emoji, image_url, parent_id")
+    .select(`id, slug, name_${n}, sort_order, emoji, image_url, parent_id`)
     .order("sort_order", { ascending: true });
 
   if (catsError) {
@@ -101,7 +107,7 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   const { data: rows, error: itemsError } = await supabase
     .from("menu_items")
     .select(
-      "id, category_id, name_en, name_tr, hook_en, hook_tr, desc_en, desc_tr, emoji, highlight, image_url, price, spicy, sold_out, sort_order"
+      `id, category_id, name_${n}, hook_${n}, desc_${n}, emoji, highlight, image_url, price, spicy, sold_out, sort_order`
     )
     .eq("is_available", true)
     .order("sort_order", { ascending: true });
@@ -114,80 +120,79 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select("id, category_id, menu_item_id, label_en, label_tr, multi, sort_order, addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(image_url, emoji))")
+    .select(`id, category_id, menu_item_id, label_${n}, multi, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji))`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
-  type RawAddonOption = { id: string; label_en: string; label_tr: string; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
-  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; label_en: string; label_tr: string; multi: boolean; sort_order: number; addon_options: RawAddonOption[] };
+  type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
+  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; [label: string]: unknown; multi: boolean; sort_order: number; addon_options: RawAddonOption[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
 
   // Fetch all suggested groups with their items
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: suggestedRaw, error: suggestedError } = await (supabase as any)
     .from("suggested_groups")
-    .select("id, category_id, menu_item_id, sort_order, suggested_items(id, sort_order, menu_item_id, menu_items(id, name_en, name_tr, image_url, emoji, price))")
+    .select(`id, category_id, menu_item_id, sort_order, suggested_items(id, sort_order, menu_item_id, menu_items(id, name_${n}, image_url, emoji, price))`)
     .order("sort_order", { ascending: true });
   if (suggestedError) console.warn("[getPublicMenu] suggested_groups query failed:", suggestedError.message);
 
-  type RawSuggestedItem = { id: string; sort_order: number; menu_item_id: string; menu_items: { id: string; name_en: string; name_tr: string; image_url: string | null; emoji: string; price: number } | null };
+  type RawSuggestedItem = { id: string; sort_order: number; menu_item_id: string; menu_items: { id: string; [name: string]: unknown; image_url: string | null; emoji: string; price: number } | null };
   type RawSuggestedGroup = { id: string; category_id: string | null; menu_item_id: string | null; sort_order: number; suggested_items: RawSuggestedItem[] };
   const suggestedGroups: RawSuggestedGroup[] = (suggestedRaw ?? []) as RawSuggestedGroup[];
 
-  // Build lookup: id → cat row
-  const catById = new Map(cats.map((c) => [c.id, c]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const catById = new Map((cats as any[]).map((c) => [c.id, c]));
 
-  // Resolve the "effective slug" for an item: use its category's parent slug if it has one,
-  // otherwise its own category slug. This is what goes into item.cat.
-  // We also need the sub-slug for grouping within the section.
   function resolveItemCat(categoryId: string): { topSlug: string; subSlug: string | null } {
-    const cat = catById.get(categoryId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cat = catById.get(categoryId) as any;
     if (!cat) return { topSlug: "", subSlug: null };
     if (cat.parent_id) {
-      const parent = catById.get(cat.parent_id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parent = catById.get(cat.parent_id) as any;
       return { topSlug: parent?.slug ?? cat.slug, subSlug: cat.slug };
     }
     return { topSlug: cat.slug, subSlug: null };
   }
 
-  // Top-level categories only (for the sections list)
-  const topCats = cats.filter((c) => !c.parent_id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topCats = (cats as any[]).filter((c) => !c.parent_id);
 
   const categories: PublicCategory[] = topCats.map((c) => {
-    const subs = cats.filter((s) => s.parent_id === c.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subs = (cats as any[]).filter((s) => s.parent_id === c.id);
     return {
       slug: c.slug,
-      name: locale === "tr" ? c.name_tr : c.name_en,
+      name: c[`name_${n}`] as string,
       emoji: c.emoji ?? null,
       image_url: c.image_url ?? null,
       subcategories: subs.map((s) => ({
         slug: s.slug,
-        name: locale === "tr" ? s.name_tr : s.name_en,
+        name: s[`name_${n}`] as string,
       })),
     };
   });
 
-  const items: PublicMenuItem[] = rows
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: PublicMenuItem[] = (rows as any[])
     .filter((r) => catById.has(r.category_id))
     .sort((a, b) => {
-      const ra = resolveItemCat(a.category_id);
-      const rb = resolveItemCat(b.category_id);
-      const catA = catById.get(a.category_id)!;
-      const catB = catById.get(b.category_id)!;
-      // Sort by top-level sort_order first
-      const topA = catA.parent_id ? catById.get(catA.parent_id)?.sort_order ?? catA.sort_order : catA.sort_order;
-      const topB = catB.parent_id ? catById.get(catB.parent_id)?.sort_order ?? catB.sort_order : catB.sort_order;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const catA = catById.get(a.category_id) as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const catB = catById.get(b.category_id) as any;
+      const topA = catA.parent_id ? (catById.get(catA.parent_id) as any)?.sort_order ?? catA.sort_order : catA.sort_order;
+      const topB = catB.parent_id ? (catById.get(catB.parent_id) as any)?.sort_order ?? catB.sort_order : catB.sort_order;
       if (topA !== topB) return topA - topB;
-      // Then by sub sort_order
       if (catA.sort_order !== catB.sort_order) return catA.sort_order - catB.sort_order;
       if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
-      return a.name_en.localeCompare(b.name_en);
+      return (a[`name_${n}`] as string).localeCompare(b[`name_${n}`] as string);
     })
     .map((r) => {
       const { topSlug, subSlug } = resolveItemCat(r.category_id);
 
-      // Resolve addon groups: item-level overrides category-level
-      const cat = catById.get(r.category_id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cat = catById.get(r.category_id) as any;
       const parentCatId = cat?.parent_id ?? null;
       const itemGroups = addonGroups.filter((g) => g.menu_item_id === r.id);
       const catGroups  = addonGroups.filter(
@@ -195,20 +200,19 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
       );
       const resolved = (itemGroups.length > 0 ? itemGroups : catGroups).map((g) => ({
         id: g.id,
-        label: locale === "tr" ? g.label_tr : g.label_en,
+        label: g[`label_${n}`] as string,
         multi: g.multi,
-        options: (g.addon_options ?? [])
+        options: ((g.addon_options ?? []) as RawAddonOption[])
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((o) => ({
             id: o.id,
-            label: locale === "tr" ? o.label_tr : o.label_en,
+            label: o[`label_${n}`] as string,
             price: o.price,
-            image_url: o.menu_items?.image_url ?? null,
-            emoji: o.menu_items?.emoji ?? null,
+            image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
+            emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
           })),
       }));
 
-      // Resolve suggested items: item-level overrides category-level
       const sugItemGroups = suggestedGroups.filter((g) => g.menu_item_id === r.id);
       const sugCatGroups  = suggestedGroups.filter(
         (g) => g.category_id === r.category_id || (parentCatId && g.category_id === parentCatId)
@@ -219,11 +223,16 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
             .sort((a, b) => a.sort_order - b.sort_order)
             .filter((s) => s.menu_items && s.menu_item_id !== r.id)
             .map((s) => ({
-              id: s.menu_items!.id,
-              name: locale === "tr" ? s.menu_items!.name_tr : s.menu_items!.name_en,
-              price: s.menu_items!.price,
-              image_url: s.menu_items!.image_url,
-              emoji: s.menu_items!.emoji,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              id: (s.menu_items as any).id as string,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              name: (s.menu_items as any)[`name_${n}`] as string,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              price: (s.menu_items as any).price as number,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              image_url: (s.menu_items as any).image_url as string | null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              emoji: (s.menu_items as any).emoji as string,
             }))
         )
         .filter((item, idx, arr) => arr.findIndex((x) => x.id === item.id) === idx);
@@ -232,9 +241,9 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
         id: r.id,
         cat: topSlug,
         subcat: subSlug,
-        name: locale === "tr" ? r.name_tr : r.name_en,
-        hook: locale === "tr" ? r.hook_tr : r.hook_en,
-        desc: locale === "tr" ? r.desc_tr : r.desc_en,
+        name: r[`name_${n}`] as string,
+        hook: r[`hook_${n}`] as string,
+        desc: r[`desc_${n}`] as string,
         image_url: r.image_url,
         emoji: r.emoji,
         highlight: r.highlight as "green-fill" | "orange-fill" | null,
@@ -248,3 +257,9 @@ export async function getPublicMenu(locale: "en" | "tr"): Promise<{
 
   return { categories, items };
 }
+
+export const getPublicMenu = unstable_cache(
+  _getPublicMenu,
+  ["public-menu"],
+  { tags: ["menu"] }
+);

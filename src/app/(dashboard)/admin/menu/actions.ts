@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -49,8 +49,7 @@ export async function createItem(formData: FormData) {
     .from("menu_items")
     .insert({ ...data, created_by: user.id });
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/menu");
-  revalidatePath("/admin");
+  updateTag("menu");
   redirect("/admin/menu");
 }
 
@@ -59,8 +58,7 @@ export async function updateItem(id: string, formData: FormData) {
   const data = parse(formData);
   const { error } = await supabase.from("menu_items").update(data).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/menu");
-  revalidatePath(`/admin/menu/${id}/edit`);
+  updateTag("menu");
   redirect("/admin/menu");
 }
 
@@ -68,14 +66,14 @@ export async function toggleSoldOut(id: string, sold_out: boolean) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await supabase.from("menu_items").update({ sold_out }).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/menu");
+  updateTag("menu");
 }
 
 export async function toggleAvailability(id: string, is_available: boolean) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await supabase.from("menu_items").update({ is_available }).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/menu");
+  updateTag("menu");
 }
 
 export async function deleteItem(formData: FormData) {
@@ -83,6 +81,5 @@ export async function deleteItem(formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const { error } = await supabase.from("menu_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/menu");
-  revalidatePath("/admin");
+  updateTag("menu");
 }

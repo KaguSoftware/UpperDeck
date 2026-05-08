@@ -1,42 +1,48 @@
-import { getServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getCacheClient } from "@/lib/supabase/server";
 import { PageHeader, PrimaryButton } from "../_components";
 import { HeroConstructor } from "./_hero-constructor";
 import { saveHeroSettings } from "./actions";
 
-export const dynamic = "force-dynamic";
+const getSettingsPageData = unstable_cache(
+  async () => {
+    const supabase = getCacheClient();
+    const [{ data: settingsData }, { data: menuItems }] = await Promise.all([
+      supabase.from("settings").select("key, value").in("key", [
+        "hero_mode",
+        "hero_media_url",
+        "featured_item_id",
+        "featured_label",
+        "featured_badge",
+        "featured_discount",
+      ]),
+      supabase
+        .from("menu_items")
+        .select("id, name_en, image_url, emoji")
+        .eq("is_available", true)
+        .order("name_en", { ascending: true }),
+    ]);
+    return { settingsData: settingsData ?? [], menuItems: menuItems ?? [] };
+  },
+  ["admin-settings-page"],
+  { tags: ["hero", "menu"] }
+);
 
 export default async function SettingsPage() {
-  const supabase = await getServerClient();
-  const [{ data: settingsData }, { data: menuItems }] = await Promise.all([
-    supabase.from("settings").select("key, value").in("key", [
-      "hero_mode",
-      "hero_media_url",
-      "hero_media_type",
-      "featured_item_id",
-      "featured_label",
-      "featured_badge",
-      "featured_discount",
-    ]),
-    supabase
-      .from("menu_items")
-      .select("id, name_en, image_url, emoji")
-      .eq("is_available", true)
-      .order("name_en", { ascending: true }),
-  ]);
+  const { settingsData, menuItems } = await getSettingsPageData();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const get = (key: string) => (settingsData as any[])?.find((r: any) => r.key === key)?.value ?? null;
 
   const heroMode = (get("hero_mode") || "none") as "none" | "media" | "featured";
   const heroUrl = get("hero_media_url") || null;
-  const heroType = (get("hero_media_type") || null) as "image" | "video" | null;
   const featuredItemId = get("featured_item_id") || null;
   const featuredLabel = get("featured_label") || null;
   const featuredBadge = get("featured_badge") || null;
   const rawDiscount = get("featured_discount");
   const featuredDiscount = rawDiscount ? parseInt(rawDiscount, 10) || null : null;
 
-  const items = (menuItems ?? []).map((i) => ({
+  const items = menuItems.map((i) => ({
     id: i.id,
     name: i.name_en,
     image_url: i.image_url,
@@ -45,7 +51,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Ayarlar" subtitle="Görünüm ve marka" />
+      <PageHeader title="Başlangıç Bölümü" subtitle="Görünüm ve marka" />
 
       <form
         action={saveHeroSettings}
@@ -58,7 +64,6 @@ export default async function SettingsPage() {
         <HeroConstructor
           defaultMode={heroMode}
           defaultMediaUrl={heroUrl}
-          defaultMediaType={heroType}
           items={items}
           defaultItemId={featuredItemId}
           defaultLabel={featuredLabel}

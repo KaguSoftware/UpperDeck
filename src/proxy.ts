@@ -4,9 +4,14 @@ import { refreshSession } from "@/lib/supabase/proxy";
 
 const SKIP_LOCALE_PREFIXES = ["/admin", "/login", "/logout", "/auth", "/api"];
 const ADMIN_PATHS = ["/admin"];
+const SKIP_SESSION_PREFIXES = ["/api/telegram", "/api/health"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (SKIP_SESSION_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.next();
+  }
 
   const { response, user } = await refreshSession(request);
 

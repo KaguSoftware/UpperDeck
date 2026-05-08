@@ -1,8 +1,21 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 import type { Database } from "@/types/database";
+
+/**
+ * Cookie-free read-only client for use inside unstable_cache().
+ * Uses the anon key without session cookies — safe for shared/public data.
+ */
+export function getCacheClient() {
+  return createClient<Database>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
 
 export async function getServerClient() {
   const cookieStore = await cookies();
