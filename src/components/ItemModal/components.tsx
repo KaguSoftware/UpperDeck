@@ -1,8 +1,164 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import Image from "next/image";
 import type { ItemModalProps, AddonOption } from "./types";
+
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLDivElement>(null);
+  const scale = useRef(1);
+  const lastScale = useRef(1);
+  const origin = useRef({ x: 0, y: 0 });
+  const translate = useRef({ x: 0, y: 0 });
+  const lastTranslate = useRef({ x: 0, y: 0 });
+  const lastPinchDist = useRef<number | null>(null);
+  const lastTap = useRef(0);
+  const dragStartY = useRef<number | null>(null);
+  const dragY = useRef(0);
+
+  const applyTransform = useCallback(() => {
+    if (!imgRef.current) return;
+    imgRef.current.style.transform = `translate(${translate.current.x}px, ${translate.current.y}px) scale(${scale.current})`;
+  }, []);
+
+  const resetTransform = useCallback(() => {
+    scale.current = 1;
+    translate.current = { x: 0, y: 0 };
+    lastScale.current = 1;
+    lastTranslate.current = { x: 0, y: 0 };
+    applyTransform();
+  }, [applyTransform]);
+
+  function pinchDist(touches: React.TouchList) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function pinchMid(touches: React.TouchList) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      dragStartY.current = null;
+      lastPinchDist.current = pinchDist(e.touches);
+      origin.current = pinchMid(e.touches);
+    } else if (e.touches.length === 1) {
+      lastPinchDist.current = null;
+      origin.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastTranslate.current = { ...translate.current };
+
+      // double-tap to toggle zoom
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        if (scale.current > 1) {
+          resetTransform();
+        } else {
+          scale.current = 2.5;
+          translate.current = { x: 0, y: 0 };
+          applyTransform();
+        }
+        lastTap.current = 0;
+        return;
+      }
+      lastTap.current = now;
+
+      // only start drag-to-close when not zoomed
+      if (scale.current <= 1) {
+        dragStartY.current = e.touches[0].clientY;
+        dragY.current = 0;
+        if (wrapperRef.current) wrapperRef.current.style.transition = "none";
+      }
+    }
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 2 && lastPinchDist.current !== null) {
+      const dist = pinchDist(e.touches);
+      const delta = dist / lastPinchDist.current;
+      scale.current = Math.min(Math.max(lastScale.current * delta, 1), 5);
+      applyTransform();
+    } else if (e.touches.length === 1) {
+      if (scale.current > 1) {
+        const dx = e.touches[0].clientX - origin.current.x;
+        const dy = e.touches[0].clientY - origin.current.y;
+        translate.current = { x: lastTranslate.current.x + dx, y: lastTranslate.current.y + dy };
+        applyTransform();
+      } else if (dragStartY.current !== null) {
+        const dy = e.touches[0].clientY - dragStartY.current;
+        dragY.current = dy;
+        if (wrapperRef.current) wrapperRef.current.style.transform = `translateY(${dy}px)`;
+        if (backdropRef.current) backdropRef.current.style.opacity = String(Math.max(0, 1 - Math.abs(dy) / 300));
+      }
+    }
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      lastScale.current = scale.current;
+      lastTranslate.current = { ...translate.current };
+      if (scale.current <= 1) resetTransform();
+
+      if (dragStartY.current !== null) {
+        if (Math.abs(dragY.current) > 100) {
+          // slide out in the direction of the drag and close
+          const dir = dragY.current > 0 ? "100%" : "-100%";
+          if (wrapperRef.current) {
+            wrapperRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+            wrapperRef.current.style.transform = `translateY(${dir})`;
+          }
+          setTimeout(onClose, 220);
+        } else {
+          // snap back
+          if (wrapperRef.current) {
+            wrapperRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+            wrapperRef.current.style.transform = "translateY(0)";
+          }
+          if (backdropRef.current) backdropRef.current.style.opacity = "1";
+        }
+        dragStartY.current = null;
+        dragY.current = 0;
+      }
+    }
+    lastPinchDist.current = null;
+  };
+
+  return (
+    <div ref={backdropRef} className="fixed inset-0 z-2000 bg-green/95 flex items-center justify-center">
+      <div
+        ref={wrapperRef}
+        className="w-full h-full flex items-center justify-center"
+        style={{ touchAction: "none" }}
+      >
+        <div
+          ref={imgRef}
+          className="w-full h-full flex items-center justify-center"
+          style={{ transform: "translate(0,0) scale(1)", transformOrigin: "center" }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="max-w-full max-h-full object-contain select-none" draggable={false} />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 bg-white/10 text-white font-bowlby text-[20px] grid place-items-center border-0 cursor-pointer"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
 
 export function ItemModal({
   item,
@@ -22,16 +178,18 @@ export function ItemModal({
   const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
 
   const [showStamp, setShowStamp] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [itemNote, setItemNote] = useState("");
   const [atBottom, setAtBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Reset selections, note, and scroll state whenever a new item opens
+  // Reset selections, note, scroll state, and lightbox whenever a new item opens
   useEffect(() => {
     setSelected({});
     setItemNote("");
     setAtBottom(false);
+    setLightbox(false);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [item?.id]);
 
@@ -127,6 +285,8 @@ export function ItemModal({
   };
 
   return (
+    <>
+    {lightbox && item?.image_url && <ImageLightbox src={item.image_url} onClose={() => setLightbox(false)} />}
     <div
       className={[
         "absolute inset-x-0 top-0 bottom-8 bg-[rgba(31,46,38,0.78)] items-end justify-center z-1000",
@@ -155,7 +315,7 @@ export function ItemModal({
               <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
             </div>
             {item.image_url ? (
-              <div className="relative w-full h-52 overflow-hidden">
+              <div className="relative w-full h-52 overflow-hidden cursor-zoom-in" onClick={() => setLightbox(true)}>
                 {/* blurred thumbnail placeholder — already cached from the menu card */}
                 <Image src={item.image_url} alt="" aria-hidden fill quality={90} className="object-cover scale-110 blur-sm" />
                 {/* full-res image fades in on load */}
@@ -170,6 +330,11 @@ export function ItemModal({
                   style={{ opacity: 0 }}
                   onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "1"; }}
                 />
+                <div className="absolute bottom-2 right-2 bg-black/30 rounded-full w-7 h-7 grid place-items-center pointer-events-none">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M9 1h4v4M9 5l4-4M5 13H1V9M5 9l-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
               </div>
             ) : (
               <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
@@ -399,5 +564,6 @@ export function ItemModal({
         </div>
       )}
     </div>
+    </>
   );
 }
