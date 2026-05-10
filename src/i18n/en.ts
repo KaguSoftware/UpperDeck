@@ -34,6 +34,7 @@ type EnShape = {
   ticker: string[];
   categories: Record<string, string>;
   waiter: { title: string; bill: string; call: string; cancel: string; notified: string };
+  qrRequired: { title: string; body: string };
 };
 
 const en: EnShape = {
@@ -113,6 +114,10 @@ const en: EnShape = {
     call: "Call Waiter",
     cancel: "Cancel",
     notified: "Waiter notified",
+  },
+  qrRequired: {
+    title: "Please scan QR code",
+    body: "Scan the QR code on your table to place an order or call a waiter.",
   },
   categories: {
     Breakfast: "Breakfast",

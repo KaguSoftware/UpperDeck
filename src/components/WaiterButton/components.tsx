@@ -138,11 +138,12 @@ type WaiterButtonProps = {
   hidden?: boolean;
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
+  onBeforeOpen?: () => boolean;
 };
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen }: WaiterButtonProps) {
   const storageKey = `waiter_t${tableNumber}`;
 
   const [phase, setPhase] = useState<Phase>("idle");
@@ -181,7 +182,11 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
   }, [secondsLeft]);
 
   const handleDismiss = useCallback(() => setArrowsDismissed(true), []);
-  const open = () => { setPhase("open"); setArrowsDismissed(true); };
+  const open = () => {
+    if (onBeforeOpen && !onBeforeOpen()) return;
+    setPhase("open");
+    setArrowsDismissed(true);
+  };
   const close = () => { if (!isPending) setPhase("idle"); };
 
   const handle = (reason: "bill" | "waiter") => {

@@ -8,6 +8,7 @@ import { MenuStage } from "@/components/MenuStage/components";
 import { ItemModal } from "@/components/ItemModal/components";
 import { CartDrawer } from "@/components/CartDrawer/components";
 import { WaiterButton } from "@/components/WaiterButton/components";
+import { QrRequiredModal } from "@/components/QrRequiredModal/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
@@ -59,6 +60,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
   const [orderCooldownSeconds, setOrderCooldownSeconds] = useState(0);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const orderCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -126,9 +128,13 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
 
   const handleCartClick = useCallback(() => {
+    if (!tableNumber || tableNumber <= 0) {
+      setQrModalOpen(true);
+      return;
+    }
     setHeroCollapsed(true);
     setCartOpen(true);
-  }, []);
+  }, [tableNumber]);
 
   const handleRemove = useCallback((id: string) => {
     setCartItems((prev) => prev.filter((i) => i.id !== id));
@@ -400,6 +406,13 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           hidden={footerVisible || !!activeItem || (tableNumber != null && tableNumber > 0 && disabledTables.includes(tableNumber))}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}
+          onBeforeOpen={() => {
+            if (!tableNumber || tableNumber <= 0) {
+              setQrModalOpen(true);
+              return false;
+            }
+            return true;
+          }}
         />
       </div>
       <CartDrawer
@@ -452,6 +465,12 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         specialInstructionsPlaceholder={t.modal.specialInstructionsPlaceholder}
         addonGroups={activeItem?.addonGroups ?? []}
         suggestedItems={activeItem?.suggestedItems ?? []}
+      />
+      <QrRequiredModal
+        show={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        title={t.qrRequired.title}
+        body={t.qrRequired.body}
       />
       <Toast message={toastMsg} show={toastShow} />
       <Ticker tags={t.ticker} />

@@ -78,6 +78,10 @@ const tr: Messages = {
     cancel: "İptal",
     notified: "Garson çağrıldı",
   },
+  qrRequired: {
+    title: "Lütfen QR kodu okutun",
+    body: "Sipariş vermek veya garson çağırmak için masanızdaki QR kodu okutun.",
+  },
   categories: {
     Breakfast: "Kahvaltı",
     Chicken: "Tavuk",
