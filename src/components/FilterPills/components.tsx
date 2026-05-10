@@ -26,7 +26,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
               style={{ height: compact ? 0 : 56 }}
             >
               {image_url ? (
-                <Image src={image_url} alt="" width={96} height={56} className="w-full h-full object-cover" />
+                <Image src={image_url} alt="" width={96} height={56} quality={90} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>
               )}

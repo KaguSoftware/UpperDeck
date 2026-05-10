@@ -157,13 +157,14 @@ export function ItemModal({
             {item.image_url ? (
               <div className="relative w-full h-52 overflow-hidden">
                 {/* blurred thumbnail placeholder — already cached from the menu card */}
-                <Image src={item.image_url} alt="" aria-hidden fill className="object-cover scale-110 blur-sm" />
+                <Image src={item.image_url} alt="" aria-hidden fill quality={90} className="object-cover scale-110 blur-sm" />
                 {/* full-res image fades in on load */}
                 <Image
                   src={item.image_url}
                   alt=""
                   width={390}
                   height={208}
+                  quality={90}
                   priority
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
                   style={{ opacity: 0 }}
@@ -260,7 +261,7 @@ export function ItemModal({
                           >
                             <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                               {opt.image_url ? (
-                                <Image src={opt.image_url} alt="" width={80} height={64} className="w-full h-full object-cover" />
+                                <Image src={opt.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" />
                               ) : (
                                 <span className="text-[28px] leading-none">{opt.emoji}</span>
                               )}
@@ -335,7 +336,7 @@ export function ItemModal({
                     >
                       <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                         {sug.image_url ? (
-                          <Image src={sug.image_url} alt="" width={80} height={64} className="w-full h-full object-cover" />
+                          <Image src={sug.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-[28px] leading-none">{sug.emoji}</span>
                         )}

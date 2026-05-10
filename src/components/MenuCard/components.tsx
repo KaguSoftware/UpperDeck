@@ -3,7 +3,7 @@ import type { MenuCardProps } from "./types";
 
 function preloadModalImage(url: string | null) {
   if (!url) return;
-  const src = `/_next/image?url=${encodeURIComponent(url)}&w=390&q=80`;
+  const src = `/_next/image?url=${encodeURIComponent(url)}&w=384&q=80`;
   const img = new window.Image();
   img.src = src;
 }
@@ -44,6 +44,7 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
                         alt=""
                         width={128}
                         height={128}
+                        quality={90}
                         className="w-full h-full object-cover"
                     />
                 ) : (

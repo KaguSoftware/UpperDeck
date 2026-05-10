@@ -28,7 +28,7 @@ export function Hero({
         ].join(" ")}
       >
         <div className="relative w-full h-44 overflow-hidden">
-          <Image src={heroMediaUrl} alt="" fill className="object-cover" priority />
+          <Image src={heroMediaUrl} alt="" fill quality={90} className="object-cover" priority />
         </div>
       </div>
     );
@@ -55,7 +55,7 @@ export function Hero({
           className="relative w-full h-44 shrink-0 overflow-hidden block cursor-pointer"
         >
           {featuredItem.image_url ? (
-            <Image src={featuredItem.image_url} alt={featuredItem.name} fill className="object-cover" priority />
+            <Image src={featuredItem.image_url} alt={featuredItem.name} fill quality={90} className="object-cover" priority />
           ) : (
             <div className="w-full h-full bg-bg-deep flex items-center justify-center">
               <span className="text-[72px] leading-none">{featuredItem.emoji}</span>

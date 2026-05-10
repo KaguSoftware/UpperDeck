@@ -75,7 +75,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
                 {/* category image — full width, 2-card height (160px) */}
                 <div className="relative w-full h-28 overflow-hidden bg-bg-deep flex items-center justify-center">
                   {image_url ? (
-                    <Image src={image_url} alt="" fill className="object-cover" />
+                    <Image src={image_url} alt="" fill quality={90} className="object-cover" />
                   ) : (
                     <span className="text-[40px] leading-none">{emoji ?? "🍽"}</span>
                   )}
