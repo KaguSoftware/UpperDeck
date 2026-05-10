@@ -78,27 +78,36 @@ function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: Reac
   const visible = !dismissed;
 
   return (
-    <div
-      className="absolute bottom-20 flex flex-col items-center gap-1 pointer-events-none transition-opacity duration-500"
-      style={{ left: "22px", opacity: visible ? 1 : 0 }}
-      aria-hidden="true"
-    >
-      {[0, 160, 320].map((delay) => (
-        <svg
-          key={delay}
-          width="36"
-          height="24"
-          viewBox="0 0 36 24"
-          fill="none"
-          className="text-orange"
-          style={{
-            animation: `arrowBounce 0.8s ease-in-out ${delay}ms infinite`,
-          }}
-        >
-          <path d="M2 2L18 20L34 2" stroke="currentColor" strokeWidth="4" strokeLinecap="square" strokeLinejoin="miter" />
-        </svg>
-      ))}
-    </div>
+    <>
+      {/* full-page green overlay */}
+      <div
+        className="fixed inset-0 pointer-events-none transition-opacity duration-500 z-99998"
+        style={{ backgroundColor: "rgba(57,87,72,0.6)", opacity: visible ? 1 : 0 }}
+        aria-hidden="true"
+      />
+      {/* bouncing arrows */}
+      <div
+        className="absolute bottom-20 flex flex-col items-center gap-1 pointer-events-none transition-opacity duration-500 z-99999"
+        style={{ left: "8px", opacity: visible ? 1 : 0 }}
+        aria-hidden="true"
+      >
+        {[0, 160, 320].map((delay) => (
+          <svg
+            key={delay}
+            width="64"
+            height="42"
+            viewBox="0 0 36 24"
+            fill="none"
+            className="text-orange"
+            style={{
+              animation: `arrowBounce 0.8s ease-in-out ${delay}ms infinite`,
+            }}
+          >
+            <path d="M2 2L18 20L34 2" stroke="currentColor" strokeWidth="4" strokeLinecap="square" strokeLinejoin="miter" />
+          </svg>
+        ))}
+      </div>
+    </>
   );
 }
 

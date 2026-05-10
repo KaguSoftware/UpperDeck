@@ -140,8 +140,25 @@ export function ItemModal({
               <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
             </div>
             {item.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imgUrl(item.image_url, 390) ?? ""} alt="" width={390} height={208} loading="eager" className="w-full h-52 object-cover" />
+              <div className="relative w-full h-52 overflow-hidden">
+                {/* blurred thumbnail placeholder — already cached from the menu card */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgUrl(item.image_url, 128) ?? ""} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-sm" />
+                {/* full-res image fades in on load */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imgUrl(item.image_url, 390) ?? ""}
+                  alt=""
+                  width={390}
+                  height={208}
+                  loading="eager"
+                  // @ts-expect-error fetchpriority is valid but not yet in React types
+                  fetchpriority="high"
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                  style={{ opacity: 0 }}
+                  onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "1"; }}
+                />
+              </div>
             ) : (
               <span className="text-[96px] leading-none p-4.5 text-center">{item.emoji}</span>
             )}
