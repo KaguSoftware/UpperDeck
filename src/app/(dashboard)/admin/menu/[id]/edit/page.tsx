@@ -6,7 +6,6 @@ import { MenuItemForm } from "../../_form";
 import { updateItem } from "../../actions";
 import { buildCategoryOptions } from "../../_category-options";
 
-export const dynamic = "force-dynamic";
 
 export default async function EditItemPage({
   params,

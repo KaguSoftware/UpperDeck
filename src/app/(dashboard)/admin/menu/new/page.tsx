@@ -4,7 +4,6 @@ import { MenuItemForm } from "../_form";
 import { createItem } from "../actions";
 import { buildCategoryOptions } from "../_category-options";
 
-export const dynamic = "force-dynamic";
 
 export default async function NewItemPage() {
   const supabase = await getServerClient();

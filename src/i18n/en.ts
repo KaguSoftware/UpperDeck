@@ -22,6 +22,7 @@ type EnShape = {
     subtotal: string;
     try_again: string;
     error_validation: string;
+    error_no_table: string;
   };
   toast: {
     empty: string;
@@ -32,7 +33,7 @@ type EnShape = {
   };
   ticker: string[];
   categories: Record<string, string>;
-  waiter: { title: string; bill: string; call: string; cancel: string };
+  waiter: { title: string; bill: string; call: string; cancel: string; notified: string };
 };
 
 const en: EnShape = {
@@ -74,6 +75,7 @@ const en: EnShape = {
     subtotal: "Subtotal",
     try_again: "Try again",
     error_validation: "Something looks wrong with your order. Please check and try again.",
+    error_no_table: "Scan your table QR code or enter a table number to place your order.",
   },
   toast: {
     empty: "Your order is empty",
@@ -110,6 +112,7 @@ const en: EnShape = {
     bill: "Hesap (Bill)",
     call: "Call Waiter",
     cancel: "Cancel",
+    notified: "Waiter notified",
   },
   categories: {
     Breakfast: "Breakfast",

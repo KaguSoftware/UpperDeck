@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin", label: "Ana Panel" },
     { href: "/admin/menu", label: "Menü" },
     { href: "/admin/categories", label: "Kategoriler" },
-    { href: "/admin/addons", label: "Ekstralar" },
+    { href: "/admin/addons", label: "Ekstra / Seçenek" },
     { href: "/admin/suggested", label: "Önerilen" },
     { href: "/admin/settings", label: "Başlangıç Bölümü" },
     { href: "/admin/qr", label: "Masa QR'ları" },

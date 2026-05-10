@@ -3,7 +3,8 @@ import type { FilterPillsProps } from "./types";
 
 export function FilterPills({ items, activeId, onSelect, navRef, compact }: FilterPillsProps) {
   return (
-    <nav ref={navRef} className="shrink-0 py-2 pl-2.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative shrink-0">
+    <nav ref={navRef} className="py-2 pl-2.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map(({ id, label, image_url, emoji }) => {
         const isActive = id === activeId;
         return (
@@ -37,5 +38,8 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
       })}
       <span className="shrink-0 w-2.5" aria-hidden />
     </nav>
+    {/* right-edge fade to hint at horizontal overflow */}
+    <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" style={{ background: "linear-gradient(to right, transparent, #fff1c2)" }} aria-hidden />
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-export type CartItemExtra = { id: string; label: string; price: number };
+export type CartItemExtra = { id: string; label: string; price: number; required?: boolean; groupLabel?: string };
 
 export type CartItem = {
   id: string;

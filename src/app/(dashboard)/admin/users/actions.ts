@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -36,7 +36,7 @@ export async function setRole(formData: FormData) {
   const { error } = await admin.from("profiles").update({ role }).eq("id", userId);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/admin/users");
+  updateTag("settings");
   redirect("/admin/users");
 }
 
@@ -63,7 +63,7 @@ export async function removeUser(formData: FormData) {
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/admin/users");
+  updateTag("settings");
   redirect("/admin/users");
 }
 
@@ -95,7 +95,7 @@ export async function inviteUser(
       await admin.from("profiles").update({ role }).eq("id", data.user.id);
     }
 
-    revalidatePath("/admin/users");
+    updateTag("settings");
     return { error: null, success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Unknown error", success: false };

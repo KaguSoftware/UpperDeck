@@ -70,8 +70,9 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
       <Field label="Etiket (TR)" name="label_tr" required placeholder="örn. Yanlar" />
       <Field label="Sıralama" name="sort_order" type="number" defaultValue={defaultSortOrder} />
 
-      <div className="flex items-center">
-        <Checkbox label="Çoklu seçim (birden fazla seçime izin ver)" name="multi" defaultChecked={false} />
+      <div className="flex flex-col gap-3 justify-center">
+        <Checkbox label="Çoklu seçim" name="multi" defaultChecked={false} />
+        <Checkbox label="Zorunlu seçim" name="required" defaultChecked={false} />
       </div>
 
       <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">

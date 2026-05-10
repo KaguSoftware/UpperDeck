@@ -39,6 +39,7 @@ const tr: Messages = {
     subtotal: "Ara Toplam",
     try_again: "Tekrar dene",
     error_validation: "Siparişinizde bir sorun var. Lütfen kontrol edip tekrar deneyin.",
+    error_no_table: "Siparişinizi vermek için masa QR kodunu okutun veya masa numarası girin.",
   },
   toast: {
     empty: "Siparişin boş",
@@ -75,6 +76,7 @@ const tr: Messages = {
     bill: "Hesap",
     call: "Garson Çağır",
     cancel: "İptal",
+    notified: "Garson çağrıldı",
   },
   categories: {
     Breakfast: "Kahvaltı",

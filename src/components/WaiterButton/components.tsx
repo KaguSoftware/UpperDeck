@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
 
@@ -75,6 +75,13 @@ function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: Reac
     return () => el.removeEventListener("scroll", onScroll);
   }, [scrollParent, onDismiss]);
 
+  // Auto-dismiss after 4 seconds
+  useEffect(() => {
+    if (dismissed) return;
+    const t = setTimeout(onDismiss, 4_000);
+    return () => clearTimeout(t);
+  }, [dismissed, onDismiss]);
+
   const visible = !dismissed;
 
   return (
@@ -82,7 +89,7 @@ function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: Reac
       {/* full-page green overlay */}
       <div
         className="fixed inset-0 pointer-events-none transition-opacity duration-500 z-99998"
-        style={{ backgroundColor: "rgba(57,87,72,0.6)", opacity: visible ? 1 : 0 }}
+        style={{ backgroundColor: "rgba(57,87,72,0.35)", opacity: visible ? 1 : 0 }}
         aria-hidden="true"
       />
       {/* bouncing arrows */}
@@ -127,6 +134,7 @@ type WaiterButtonProps = {
   labelWaiter: string;
   labelTitle: string;
   labelCancel: string;
+  labelNotified: string;
   hidden?: boolean;
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
@@ -134,7 +142,7 @@ type WaiterButtonProps = {
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, hidden, scrollRef, heroCollapsed }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed }: WaiterButtonProps) {
   const storageKey = `waiter_t${tableNumber}`;
 
   const [phase, setPhase] = useState<Phase>("idle");
@@ -172,6 +180,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
     return () => clearInterval(id);
   }, [secondsLeft]);
 
+  const handleDismiss = useCallback(() => setArrowsDismissed(true), []);
   const open = () => { setPhase("open"); setArrowsDismissed(true); };
   const close = () => { if (!isPending) setPhase("idle"); };
 
@@ -195,7 +204,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
   return (
     <>
       {/* scroll-away arrows */}
-      {scrollRef && <BellArrows scrollParent={scrollRef} dismissed={arrowsDismissed || !!hidden} onDismiss={() => setArrowsDismissed(true)} />}
+      {scrollRef && tableNumber > 0 && <BellArrows scrollParent={scrollRef} dismissed={arrowsDismissed || !!hidden || phase !== "idle"} onDismiss={handleDismiss} />}
 
       {/* floating button */}
       <button
@@ -219,7 +228,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
             <div className="px-6 py-10 text-center">
               <div className="font-bowlby text-[32px] text-green leading-none mb-2">✓</div>
               <div className="font-ui font-extrabold text-[13px] tracking-[0.18em] uppercase text-green">
-                {labelWaiter} notified
+                {labelNotified}
               </div>
             </div>
           ) : (

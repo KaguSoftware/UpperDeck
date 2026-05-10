@@ -3,7 +3,6 @@ import { PageHeader } from "../../_components";
 import { CategoryForm } from "../_form";
 import { createCategory } from "../actions";
 
-export const dynamic = "force-dynamic";
 
 export default async function NewCategoryPage({
   searchParams,

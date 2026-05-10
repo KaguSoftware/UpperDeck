@@ -43,7 +43,7 @@ export default async function LocaleLayout({
   const lang = locales.includes(locale as Locale) ? locale : defaultLocale;
 
   return (
-    <html lang={lang} className={`${alfaSlabOne.variable} ${teko.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" data-locale={lang} className={`${alfaSlabOne.variable} ${teko.variable} ${inter.variable}`} suppressHydrationWarning>
       <body className="no-scroll">{children}</body>
     </html>
   );

@@ -54,13 +54,20 @@ export function ItemModal({
     return () => clearTimeout(t);
   }, [item?.id, item?.sold_out]);
 
-  const selectedExtras = useMemo<AddonOption[]>(() => {
+  const selectedExtras = useMemo<(AddonOption & { required?: boolean; groupLabel?: string })[]>(() => {
     return addonGroups.flatMap((g) =>
-      g.options.filter((o) => selected[o.id])
+      g.options.filter((o) => selected[o.id]).map((o) => ({ ...o, required: g.required, groupLabel: g.required ? g.label : undefined }))
     );
   }, [addonGroups, selected]);
 
   const extrasTotal = selectedExtras.reduce((s, o) => s + o.price, 0);
+
+  const missingRequired = useMemo(() => {
+    return addonGroups.filter((g) => {
+      if (!g.required) return false;
+      return !g.options.some((o) => selected[o.id]);
+    });
+  }, [addonGroups, selected]);
 
   const toggleAddon = (groupIndex: number, option: AddonOption, multi: boolean) => {
     setSelected((prev) => {
@@ -105,6 +112,10 @@ export function ItemModal({
     if (dragStartY.current === null) return;
     dragStartY.current = null;
     if (dragCurrentY.current > 80) {
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+        sheetRef.current.style.transform = "";
+      }
       onClose();
     } else {
       if (sheetRef.current) {
@@ -118,14 +129,18 @@ export function ItemModal({
   return (
     <div
       className={[
-        "absolute inset-x-0 top-0 bottom-8 bg-[rgba(31,46,38,0.78)] items-end justify-center z-[1000]",
+        "absolute inset-x-0 top-0 bottom-8 bg-[rgba(31,46,38,0.78)] items-end justify-center z-1000",
         isOpen ? "flex" : "hidden",
       ].join(" ")}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
     >
       {item && (
         <div
           ref={sheetRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={item.name}
           className="w-full bg-bg flex flex-col relative max-h-[90dvh]"
           style={{
             animation: "slideUp 0.25s cubic-bezier(0.2,0.8,0.2,1)",
@@ -152,8 +167,7 @@ export function ItemModal({
                   width={390}
                   height={208}
                   loading="eager"
-                  // @ts-expect-error fetchpriority is valid but not yet in React types
-                  fetchpriority="high"
+                  fetchPriority="high"
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
                   style={{ opacity: 0 }}
                   onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "1"; }}
@@ -194,13 +208,16 @@ export function ItemModal({
           >
             ×
           </button>
-          <div ref={scrollRef} className="px-4.5 pt-4 pb-4.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1.5">
+          {/* sticky name header — stays visible while scrolling */}
+          <div className="shrink-0 px-4.5 pt-4 pb-1.5 border-b border-green/30">
+            <div className="font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase mb-1">
               {item.cat}{item.spicy ? ` · 🌶 ${spicyLabel}` : ""}
             </div>
-            <div className="font-bowlby text-[30px] leading-[0.92] text-green uppercase tracking-[-0.8px] mb-2.5">
+            <div className="font-bowlby text-[28px] leading-[0.92] text-green uppercase tracking-[-0.8px]">
               {item.name}
             </div>
+          </div>
+          <div ref={scrollRef} className="px-4.5 pt-3.5 pb-4.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {item.hook && (
               <div className="font-bold text-[11px] tracking-[0.18em] text-green uppercase opacity-85 mb-2">
                 {item.hook}
@@ -212,13 +229,22 @@ export function ItemModal({
               </div>
             )}
 
-            {/* Add-on groups */}
+            {/* Add-on / option groups */}
             {addonGroups.length > 0 && (
               <div className="flex flex-col gap-3 mb-3.5">
-                {addonGroups.map((group, gi) => (
+                {addonGroups.map((group, gi) => {
+                  const isMissing = group.required && !group.options.some((o) => selected[o.id]);
+                  return (
                   <div key={gi}>
-                    <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-2">
-                      {group.label}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase">
+                        {group.label}
+                      </span>
+                      {group.required && (
+                        <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", isMissing ? "bg-orange text-white" : "bg-green/20 text-green"].join(" ")}>
+                          Zorunlu
+                        </span>
+                      )}
                     </div>
                     <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {group.options.map((opt) => {
@@ -278,7 +304,8 @@ export function ItemModal({
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -343,12 +370,18 @@ export function ItemModal({
                 <span className="font-bowlby text-[24px] text-orange">{item.price + extrasTotal} ₺</span>
               )}
             </div>
+            {missingRequired.length > 0 && (
+              <p className="text-[10px] font-bold text-orange mb-2">
+                Zorunlu: {missingRequired.map((g) => g.label).join(", ")}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => onAdd(selectedExtras, itemNote.trim())}
-              className="w-full bg-orange text-white border-0 py-3.5 font-bowlby text-[16px] tracking-[1.5px] uppercase cursor-pointer"
+              disabled={!!item.sold_out || missingRequired.length > 0}
+              className="w-full bg-orange text-white border-0 py-3.5 font-bowlby text-[16px] tracking-[1.5px] uppercase cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {addToOrderLabel}
+              {item.sold_out ? "SOLD OUT" : addToOrderLabel}
             </button>
           </div>
 

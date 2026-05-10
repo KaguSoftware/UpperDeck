@@ -6,7 +6,6 @@ import { PageHeader } from "../_components";
 import { PrintButton } from "./_print-button";
 import { TableWaiterToggle } from "./_table-toggles";
 
-export const dynamic = "force-dynamic";
 
 const TABLE_COUNT = parseInt(process.env.TABLE_COUNT ?? "20", 10);
 

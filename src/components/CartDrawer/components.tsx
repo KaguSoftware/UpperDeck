@@ -65,7 +65,10 @@ export function CartDrawer({
         if (startY.current === null) return;
         startY.current = null;
         if (dragY.current > 80) {
-            if (sheetRef.current) sheetRef.current.style.transform = "";
+            if (sheetRef.current) {
+                sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+                sheetRef.current.style.transform = "";
+            }
             onClose();
         } else {
             if (sheetRef.current) {
@@ -86,9 +89,13 @@ export function CartDrawer({
             onClick={(e) => {
                 if (e.target === e.currentTarget) onClose();
             }}
+            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         >
             <div
                 ref={sheetRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={totalLabel}
                 className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
@@ -107,6 +114,7 @@ export function CartDrawer({
                     <button
                         type="button"
                         onClick={onClose}
+                        aria-label="Close"
                         className="bg-orange text-white border-0 w-8.5 h-8.5 font-bowlby text-[18px] cursor-pointer grid place-items-center"
                     >
                         ×
@@ -161,59 +169,57 @@ export function CartDrawer({
                         items.map((item) => (
                             <div
                                 key={item.id}
-                                className="flex items-center justify-between px-4.5 py-3 border-b border-green/20"
+                                className="flex items-center gap-2 px-4.5 py-3 border-b border-green/20"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => onDecrement(item.id)}
-                                            className="border-0 bg-transparent text-green/60 hover:text-orange cursor-pointer font-bowlby text-[18px] leading-none w-5 grid place-items-center"
-                                        >
-                                            −
-                                        </button>
-                                        <span className="font-bowlby text-[13px] bg-green text-bg w-6 h-6 grid place-items-center shrink-0">
-                                            {item.qty}
+                                {/* name + extras + note */}
+                                <div className="flex-1 min-w-0">
+                                    <span className="font-ui font-semibold text-[13px] text-green wrap-break-word">
+                                        {item.name}
+                                    </span>
+                                    {item.extras && item.extras.length > 0 && (
+                                        <div className="flex flex-col gap-0.5 mt-0.5">
+                                            {item.extras.map((ex) => (
+                                                <span key={ex.id} className="font-ui text-[10px] text-green/60">
+                                                    {ex.required ? `${ex.groupLabel}: ${ex.label}` : `+ ${ex.label}`}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {item.itemNote && (
+                                        <span className="font-ui text-[10px] text-orange/80 italic mt-0.5 block">
+                                            {item.itemNote}
                                         </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => onIncrement(item.id)}
-                                            className="border-0 bg-transparent text-green/60 hover:text-orange cursor-pointer font-bowlby text-[18px] leading-none w-5 grid place-items-center"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                    <div>
-                                        <span className="font-ui font-semibold text-[13px] text-green">
-                                            {item.name}
-                                        </span>
-                                        {item.extras && item.extras.length > 0 && (
-                                            <div className="flex flex-col gap-0.5 mt-0.5">
-                                                {item.extras.map((ex) => (
-                                                    <span key={ex.id} className="font-ui text-[10px] text-green/60">
-                                                        + {ex.label}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {item.itemNote && (
-                                            <span className="font-ui text-[10px] text-orange/80 italic mt-0.5">
-                                                {item.itemNote}
-                                            </span>
-                                        )}
-                                    </div>
+                                    )}
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="font-bowlby text-[13px] text-orange">
-                                        {(
-                                            item.price * item.qty
-                                        ).toLocaleString()}{" "}
-                                        ₺
+                                {/* qty controls + price + remove */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => onDecrement(item.id)}
+                                        aria-label="Decrease quantity"
+                                        className="border-0 bg-transparent text-green/60 hover:text-orange cursor-pointer font-bowlby text-[18px] leading-none w-8 h-8 grid place-items-center"
+                                    >
+                                        −
+                                    </button>
+                                    <span className="font-bowlby text-[13px] bg-green text-bg w-6 h-6 grid place-items-center shrink-0">
+                                        {item.qty}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => onIncrement(item.id)}
+                                        aria-label="Increase quantity"
+                                        className="border-0 bg-transparent text-green/60 hover:text-orange cursor-pointer font-bowlby text-[18px] leading-none w-8 h-8 grid place-items-center"
+                                    >
+                                        +
+                                    </button>
+                                    <span className="font-bowlby text-[18px] text-orange ml-1 w-8 text-right shrink-0">
+                                        {(item.price * item.qty).toLocaleString()} ₺
                                     </span>
                                     <button
                                         type="button"
                                         onClick={() => onRemove(item.id)}
-                                        className="text-green/40 hover:text-orange border-0 bg-transparent cursor-pointer font-bowlby text-[16px] leading-none"
+                                        aria-label="Remove item"
+                                        className="text-green/40 hover:text-orange border-0 bg-transparent cursor-pointer font-bowlby text-[16px] leading-none w-8 h-8 grid place-items-center"
                                     >
                                         ×
                                     </button>

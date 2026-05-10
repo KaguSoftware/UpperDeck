@@ -4,7 +4,6 @@ import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
-import { getServerClient } from "@/lib/supabase/server";
 
 const CategorySchema = z.object({
   slug: z
@@ -76,7 +75,7 @@ export async function deleteCategory(formData: FormData) {
 }
 
 async function reorderCategory(id: string, direction: "up" | "down") {
-  const supabase = await getServerClient();
+  const { supabase } = await requireRole(["admin", "owner"]);
 
   // Fetch the current row including its parent_id so we scope neighbours correctly
   const { data: curr, error: e1 } = await supabase

@@ -4,7 +4,6 @@ import { PageHeader } from "../../../_components";
 import { CategoryForm } from "../../_form";
 import { updateCategory } from "../../actions";
 
-export const dynamic = "force-dynamic";
 
 export default async function EditCategoryPage({
   params,

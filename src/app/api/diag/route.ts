@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   ];
   let actionId: string | null = null;
   for (const c of candidates) {
-    const raw = await fs.readFile(path.resolve(c), "utf8").catch(() => "");
+    const raw = await fs.readFile(path.resolve(/* turbopackIgnore: true */ c), "utf8").catch(() => "");
     if (!raw) continue;
     try {
       const json = JSON.parse(raw) as { node?: Record<string, { exportedName: string }> };

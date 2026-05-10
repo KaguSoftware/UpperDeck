@@ -7,7 +7,7 @@ export type AddonOption = AddonOptionPublic;
 export type ItemModalProps = {
   item: PlacedCard | null;
   onClose: () => void;
-  onAdd: (extras: AddonOptionPublic[], itemNote: string) => void;
+  onAdd: (extras: (AddonOptionPublic & { required?: boolean; groupLabel?: string })[], itemNote: string) => void;
   onSuggestedClick: (item: SuggestedItemPublic) => void;
   spicyLabel: string;
   priceLabel: string;

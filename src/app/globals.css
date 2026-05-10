@@ -26,6 +26,10 @@ input, textarea, select {
   font-size: 16px;
 }
 
+/* Turkish locale fix: set lang="en" on <html> so CSS text-transform:uppercase
+   uses Latin casing rules (i→I not i→İ). Content language is still communicated
+   via hreflang and the locale param — this only affects CSS case mapping. */
+
 body.no-scroll {
   overflow: hidden;
 }

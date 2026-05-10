@@ -60,7 +60,7 @@ export const getHeroSettings = unstable_cache(
 );
 
 export type AddonOptionPublic = { id: string; label: string; price: number; image_url: string | null; emoji: string | null };
-export type AddonGroupPublic  = { id: string; label: string; multi: boolean; options: AddonOptionPublic[] };
+export type AddonGroupPublic  = { id: string; label: string; multi: boolean; required: boolean; options: AddonOptionPublic[] };
 
 export type SuggestedItemPublic = { id: string; name: string; price: number; image_url: string | null; emoji: string };
 
@@ -120,12 +120,12 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select(`id, category_id, menu_item_id, label_${n}, multi, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji))`)
+    .select(`id, category_id, menu_item_id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji))`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
   type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
-  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; [label: string]: unknown; multi: boolean; sort_order: number; addon_options: RawAddonOption[] };
+  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawAddonOption[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
 
   // Fetch all suggested groups with their items
@@ -202,6 +202,7 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
         id: g.id,
         label: g[`label_${n}`] as string,
         multi: g.multi,
+        required: g.required ?? false,
         options: ((g.addon_options ?? []) as RawAddonOption[])
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((o) => ({

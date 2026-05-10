@@ -5,7 +5,6 @@ import { updateGroup, deleteGroup, createItem, deleteItem } from "../../actions"
 import { SuggestedItemForm } from "./_item-form";
 import { ReorderButtons } from "./_reorder-buttons";
 
-export const dynamic = "force-dynamic";
 
 export default async function EditSuggestedPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

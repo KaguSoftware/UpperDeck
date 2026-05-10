@@ -3,6 +3,9 @@ import type { ToastProps } from "./types";
 export function Toast({ message, show }: ToastProps) {
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
       className={[
         "absolute left-1/2 bottom-22.5 -translate-x-1/2 bg-green text-bg px-4 py-2.5 font-bowlby text-[11px] tracking-[1.5px] uppercase z-90 transition-all duration-350 ease-[cubic-bezier(0.2,0.8,0.2,1)] max-w-[90%] text-center pointer-events-none",
         show

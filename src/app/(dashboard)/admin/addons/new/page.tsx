@@ -3,7 +3,6 @@ import { getServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "../../_components";
 import { NewAddonGroupForm } from "./_form";
 
-export const dynamic = "force-dynamic";
 
 export default async function NewAddonPage() {
   const supabase = await getServerClient();

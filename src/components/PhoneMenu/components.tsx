@@ -147,7 +147,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     });
   }, []);
 
-  const handleAdd = useCallback((extras: AddonOptionPublic[], itemNote: string) => {
+  const handleAdd = useCallback((extras: (AddonOptionPublic & { required?: boolean; groupLabel?: string })[], itemNote: string) => {
     if (!activeItem) return;
     const { id: menu_item_id, name, price, discountPct } = activeItem;
     const basePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
@@ -184,28 +184,39 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   const doSubmit = useCallback(async () => {
     if (cartItems.length === 0) return;
+    if (!tableNumber || tableNumber <= 0) {
+      setCheckoutState({ status: "validation", message: t.cart.error_no_table });
+      return;
+    }
     setCheckoutState({ status: "pending" });
 
     const clientTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
-    const result = await submitOrder({
-      table_number: tableNumber ?? 0,
-      _simulateFailure: false,
-      items: cartItems.map((i) => {
-        const extrasLabel = i.extras && i.extras.length > 0
-          ? ` + ${i.extras.map((e) => e.label).join(", ")}`
-          : "";
-        const noteLabel = i.itemNote ? ` (${i.itemNote})` : "";
-        return {
-          menu_item_id: i.menu_item_id,
-          name_en: i.name + extrasLabel + noteLabel,
-          name_tr: i.name + extrasLabel + noteLabel,
-          price: i.price,
-          qty: i.qty,
-        };
+    type OrderResult = { ok: true } | { ok: false; error: "validation" | "network" | "server"; message?: string };
+    const timeout = new Promise<OrderResult>((resolve) =>
+      setTimeout(() => resolve({ ok: false, error: "network", message: "timeout" }), 15_000)
+    );
+    const result = await Promise.race([
+      submitOrder({
+        table_number: tableNumber,
+        _simulateFailure: false,
+        items: cartItems.map((i) => {
+          const extrasLabel = i.extras && i.extras.length > 0
+            ? ` + ${i.extras.map((e) => e.label).join(", ")}`
+            : "";
+          const noteLabel = i.itemNote ? ` (${i.itemNote})` : "";
+          return {
+            menu_item_id: i.menu_item_id,
+            name_en: i.name + extrasLabel + noteLabel,
+            name_tr: i.name + extrasLabel + noteLabel,
+            price: i.price,
+            qty: i.qty,
+          };
+        }),
+        note,
+        total: clientTotal,
       }),
-      note,
-      total: clientTotal,
-    });
+      timeout,
+    ]);
 
     if (result.ok) {
       setCartItems([]);
@@ -385,6 +396,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
+          labelNotified={t.waiter.notified}
           hidden={footerVisible || !!activeItem || (tableNumber != null && tableNumber > 0 && disabledTables.includes(tableNumber))}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}

@@ -5,7 +5,6 @@ import { updateGroup, deleteGroup, createOption, updateOption, deleteOption } fr
 import { AddonOptionForm } from "./_option-form";
 import { ReorderButtons } from "./_reorder-buttons";
 
-export const dynamic = "force-dynamic";
 
 export default async function EditAddonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +27,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
     label_en: string;
     label_tr: string;
     multi: boolean;
+    required: boolean;
     sort_order: number;
     category_id: string | null;
     menu_item_id: string | null;
@@ -77,8 +77,9 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
           <Field label="Etiket (TR)" name="label_tr" required defaultValue={group.label_tr} />
           <Field label="Sıralama" name="sort_order" type="number" defaultValue={group.sort_order} />
 
-          <div className="flex items-center">
+          <div className="flex flex-col gap-3 justify-center">
             <Checkbox label="Çoklu seçim" name="multi" defaultChecked={group.multi} />
+            <Checkbox label="Zorunlu seçim" name="required" defaultChecked={group.required ?? false} />
           </div>
 
           <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">
