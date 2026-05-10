@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import type { ItemModalProps, AddonOption } from "./types";
 
 export function ItemModal({
@@ -157,17 +157,14 @@ export function ItemModal({
             {item.image_url ? (
               <div className="relative w-full h-52 overflow-hidden">
                 {/* blurred thumbnail placeholder — already cached from the menu card */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imgUrl(item.image_url, 128) ?? ""} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-sm" />
+                <Image src={item.image_url} alt="" aria-hidden fill className="object-cover scale-110 blur-sm" />
                 {/* full-res image fades in on load */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imgUrl(item.image_url, 390) ?? ""}
+                <Image
+                  src={item.image_url}
                   alt=""
                   width={390}
                   height={208}
-                  loading="eager"
-                  fetchPriority="high"
+                  priority
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
                   style={{ opacity: 0 }}
                   onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "1"; }}
@@ -263,8 +260,7 @@ export function ItemModal({
                           >
                             <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                               {opt.image_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={imgUrl(opt.image_url, 80) ?? ""} alt="" width={80} height={64} loading="lazy" className="w-full h-full object-cover" />
+                                <Image src={opt.image_url} alt="" width={80} height={64} className="w-full h-full object-cover" />
                               ) : (
                                 <span className="text-[28px] leading-none">{opt.emoji}</span>
                               )}
@@ -339,8 +335,7 @@ export function ItemModal({
                     >
                       <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                         {sug.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={imgUrl(sug.image_url, 80) ?? ""} alt="" width={80} height={64} loading="lazy" className="w-full h-full object-cover" />
+                          <Image src={sug.image_url} alt="" width={80} height={64} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-[28px] leading-none">{sug.emoji}</span>
                         )}

@@ -1,4 +1,4 @@
-import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import type { HeroProps } from "./types";
 
 export function Hero({
@@ -28,8 +28,7 @@ export function Hero({
         ].join(" ")}
       >
         <div className="relative w-full h-44 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imgUrl(heroMediaUrl, 390) ?? ""} alt="" width={390} height={176} className="w-full h-full object-cover" />
+          <Image src={heroMediaUrl} alt="" fill className="object-cover" priority />
         </div>
       </div>
     );
@@ -56,8 +55,7 @@ export function Hero({
           className="relative w-full h-44 shrink-0 overflow-hidden block cursor-pointer"
         >
           {featuredItem.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imgUrl(featuredItem.image_url, 390) ?? ""} alt={featuredItem.name} width={390} height={176} className="w-full h-full object-cover" />
+            <Image src={featuredItem.image_url} alt={featuredItem.name} fill className="object-cover" priority />
           ) : (
             <div className="w-full h-full bg-bg-deep flex items-center justify-center">
               <span className="text-[72px] leading-none">{featuredItem.emoji}</span>

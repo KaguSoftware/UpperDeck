@@ -1,11 +1,10 @@
-import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import type { MenuCardProps } from "./types";
 
 function preloadModalImage(url: string | null) {
   if (!url) return;
-  const src = imgUrl(url, 390);
-  if (!src) return;
-  const img = new Image();
+  const src = `/_next/image?url=${encodeURIComponent(url)}&w=390&q=80`;
+  const img = new window.Image();
   img.src = src;
 }
 
@@ -40,13 +39,11 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             {/* square image/emoji thumbnail */}
             <div className="relative shrink-0 w-32 h-32 grid place-items-center overflow-hidden bg-bg-deep">
                 {card.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={imgUrl(card.image_url, 128) ?? ""}
+                    <Image
+                        src={card.image_url}
                         alt=""
                         width={128}
                         height={128}
-                        loading="lazy"
                         className="w-full h-full object-cover"
                     />
                 ) : (

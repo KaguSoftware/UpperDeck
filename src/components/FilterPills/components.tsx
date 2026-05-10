@@ -1,4 +1,4 @@
-import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import type { FilterPillsProps } from "./types";
 
 export function FilterPills({ items, activeId, onSelect, navRef, compact }: FilterPillsProps) {
@@ -26,8 +26,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
               style={{ height: compact ? 0 : 56 }}
             >
               {image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imgUrl(image_url, 96) ?? ""} alt="" width={96} height={56} loading="lazy" className="w-full h-full object-cover" />
+                <Image src={image_url} alt="" width={96} height={56} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>
               )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import { MenuCard } from "@/components/MenuCard/components";
 import type { Fill } from "@/components/MenuCard/types";
 import type { MenuItem, MenuStageProps } from "./types";
@@ -73,10 +73,9 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
                 onClick={() => setCollapsed((prev) => ({ ...prev, [slug]: !isCollapsed }))}
               >
                 {/* category image — full width, 2-card height (160px) */}
-                <div className="w-full h-28 overflow-hidden bg-bg-deep flex items-center justify-center">
+                <div className="relative w-full h-28 overflow-hidden bg-bg-deep flex items-center justify-center">
                   {image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imgUrl(image_url, 400) ?? ""} alt="" width={400} height={112} loading="lazy" className="w-full h-full object-cover" />
+                    <Image src={image_url} alt="" fill className="object-cover" />
                   ) : (
                     <span className="text-[40px] leading-none">{emoji ?? "🍽"}</span>
                   )}
