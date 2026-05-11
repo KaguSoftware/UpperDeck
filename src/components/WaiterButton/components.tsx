@@ -157,7 +157,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
         type="button"
         onClick={open}
         aria-label="Call waiter"
-        className={["absolute bottom-4 left-4 z-9999 w-12 h-12 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300", hidden ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0", secondsLeft > 0 ? "opacity-60" : ""].join(" ")}
+        className={["absolute bottom-4 left-4 z-99999 w-12 h-12 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300", hidden ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0", secondsLeft > 0 ? "opacity-60" : ""].join(" ")}
       >
         <Bell size={20} strokeWidth={1.8} />
         {secondsLeft > 0 && (
