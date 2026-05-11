@@ -95,9 +95,9 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
             strokeDasharray="100"
             style={{ animation: "arrowDraw 0.9s ease-out both" }}
           />
-          {/* arrowhead: path arrives nearly straight down with slight left lean */}
+          {/* arrowhead: -50deg angle, barbs point back upper-right */}
           <path
-            d="M 40 290 L 55 272 M 40 290 L 25 272"
+            d="M 40 290 L 62 276 M 40 290 L 46 268"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
