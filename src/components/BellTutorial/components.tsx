@@ -33,7 +33,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       className="fixed inset-0 z-99997 cursor-pointer overflow-hidden"
       style={{
         background:
-          "radial-gradient(circle 64px at 40px calc(100% - 40px), transparent 36px, rgba(31,46,38,0.6) 60px, rgba(31,46,38,0.94) 160px)",
+          "radial-gradient(circle 64px at 40px calc(100% - 56px), transparent 36px, rgba(31,46,38,0.6) 60px, rgba(31,46,38,0.94) 160px)",
         animation: closing
           ? `fadeOut ${FADE_OUT_MS}ms ease forwards`
           : "fadeIn 0.3s ease",
@@ -63,21 +63,28 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
         We use height: calc(50% - 40px) so the bottom of the SVG lands exactly at bell center.
         viewBox 0 0 80 400 — we draw the path in this space, tip at (8, 390).
       */}
+      {/*
+        SVG spans from just below the text (~45% from top) down to just above the bell.
+        Bell center: left=40px, bottom=56px → top = 100vh - 56px.
+        SVG bottom anchored at calc(100% - 56px - 16px) = calc(100% - 72px) to stop above bell.
+        Width 120px, left 0 so bell center (40px) is reachable.
+        viewBox 0 0 120 300 — path starts top-center, ends bottom-left near bell.
+      */}
       <svg
         className="absolute pointer-events-none z-99998"
         style={{
           left: "0px",
-          top: "50%",
-          width: "80px",
-          height: "calc(50% - 88px)",
+          top: "45%",
+          width: "120px",
+          height: "calc(55% - 72px)",
         }}
-        viewBox="0 0 80 400"
+        viewBox="0 0 120 300"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "40px 200px" }}>
+        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "60px 150px" }}>
           <path
-            d="M 60 10 C 75 80, 20 140, 55 210 S 75 310, 40 385"
+            d="M 65 10 C 90 80, 20 120, 50 180 C 75 230, 20 260, 40 290"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
@@ -88,9 +95,9 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
             strokeDasharray="100"
             style={{ animation: "arrowDraw 0.9s ease-out both" }}
           />
-          {/* arrowhead pointing down-left */}
+          {/* arrowhead aligned with path end direction (coming from upper-right) */}
           <path
-            d="M 40 385 L 50 372 M 40 385 L 54 384"
+            d="M 40 290 L 52 278 M 40 290 L 53 294"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
