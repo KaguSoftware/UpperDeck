@@ -9,6 +9,7 @@ import { ItemModal } from "@/components/ItemModal/components";
 import { CartDrawer } from "@/components/CartDrawer/components";
 import { WaiterButton } from "@/components/WaiterButton/components";
 import { QrRequiredModal } from "@/components/QrRequiredModal/components";
+import { BellTutorial } from "@/components/BellTutorial/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
@@ -61,6 +62,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [toastShow, setToastShow] = useState(false);
   const [orderCooldownSeconds, setOrderCooldownSeconds] = useState(0);
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [showBellTutorial, setShowBellTutorial] = useState(false);
   const orderCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -73,6 +75,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   // Hydrate from sessionStorage on mount (client-only). URL table number wins over session.
   useEffect(() => {
+    let resolvedTable: number | null = initialTableNumber ?? null;
     try {
       const raw = sessionStorage.getItem(CART_STORAGE_KEY);
       if (raw) {
@@ -81,11 +84,21 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         // URL-provided table number always wins
         if (initialTableNumber === undefined && parsed.tableNumber != null) {
           setTableNumber(parsed.tableNumber);
+          resolvedTable = parsed.tableNumber;
         }
         if (parsed.note != null) setNote(parsed.note);
       }
     } catch {
       // ignore malformed storage
+    }
+    // First-scan bell tutorial: show once per session when a valid, enabled table is present.
+    try {
+      const seen = sessionStorage.getItem("bellTutorial_seen") === "true";
+      const hasTable = resolvedTable != null && resolvedTable > 0;
+      const tableEnabled = hasTable && !disabledTables.includes(resolvedTable!);
+      if (!seen && tableEnabled) setShowBellTutorial(true);
+    } catch {
+      // ignore
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -474,6 +487,24 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       />
       <Toast message={toastMsg} show={toastShow} />
       <Ticker tags={t.ticker} />
+      {showBellTutorial
+        && tableNumber != null
+        && tableNumber > 0
+        && !disabledTables.includes(tableNumber)
+        && !activeItem
+        && !cartOpen
+        && !qrModalOpen
+        && checkoutState.status === "idle" && (
+        <BellTutorial
+          eyebrow={t.bellTutorial.eyebrow}
+          title={t.bellTutorial.title}
+          dismissHint={t.bellTutorial.dismissHint}
+          onDismiss={() => {
+            setShowBellTutorial(false);
+            try { sessionStorage.setItem("bellTutorial_seen", "true"); } catch { /* ignore */ }
+          }}
+        />
+      )}
     </div>
   );
 }

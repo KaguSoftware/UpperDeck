@@ -82,6 +82,11 @@ const tr: Messages = {
     title: "Lütfen QR kodu okutun",
     body: "Sipariş vermek veya garson çağırmak için masanızdaki QR kodu okutun.",
   },
+  bellTutorial: {
+    eyebrow: "Bir şey ister misiniz?",
+    title: "Çana dokun — hemen geliriz.",
+    dismissHint: "devam etmek için dokun",
+  },
   categories: {
     Breakfast: "Kahvaltı",
     Chicken: "Tavuk",
