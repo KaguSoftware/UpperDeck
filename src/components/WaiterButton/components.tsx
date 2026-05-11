@@ -94,7 +94,7 @@ function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: Reac
       />
       {/* bouncing arrows */}
       <div
-        className="absolute bottom-20 flex flex-col items-center gap-1 pointer-events-none transition-opacity duration-500 z-99999"
+        className="absolute bottom-[72px] flex flex-col items-center gap-1 pointer-events-none transition-opacity duration-500 z-99999"
         style={{ left: "8px", opacity: visible ? 1 : 0 }}
         aria-hidden="true"
       >
