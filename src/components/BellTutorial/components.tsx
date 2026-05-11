@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
 
 const AUTO_DISMISS_MS = 6_000;
 const FADE_OUT_MS = 200;
@@ -28,7 +27,6 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Bell sits at bottom-left of viewport: center ~ (40px, vh - 40px), size 48x48.
   return (
     <div
       onClick={handleDismiss}
@@ -43,17 +41,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       aria-modal="true"
       role="dialog"
     >
-      {/* close (×) — top right (away from bell) */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
-        className="absolute top-4 right-4 bg-orange text-white border-0 w-10 h-10 font-bowlby text-[28px] leading-none cursor-pointer grid place-items-center shadow-lg z-99999"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-
-      {/* centred headline — anchored to top so arrow has room below */}
+      {/* centred headline */}
       <div className="absolute top-[22%] inset-x-0 flex flex-col items-center px-8 pointer-events-none z-99998">
         <p
           className="font-bowlby text-orange text-[20px] leading-none tracking-tight mb-3 uppercase"
@@ -70,29 +58,28 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       </div>
 
       {/*
-        Squiggly arrow: fixed-size SVG positioned absolutely so its coordinates
-        map 1:1 to pixels. Top-left of SVG at (32px, 45% of viewport height).
-        Bottom-right of SVG ends just above the bell at (40px from left, ~80px above bell).
+        Arrow: fixed-size SVG. left edge at 0, top at 50% of viewport.
+        The SVG height fills from 50% down to the bell (bell center ~= vh - 40px).
+        We use height: calc(50% - 40px) so the bottom of the SVG lands exactly at bell center.
+        viewBox 0 0 80 400 — we draw the path in this space, tip at (8, 390).
       */}
       <svg
         className="absolute pointer-events-none z-99998"
         style={{
-          left: "32px",
-          top: "45%",
-          width: "120px",
-          height: "calc(55% - 110px)",
-          overflow: "visible",
+          left: "0px",
+          top: "50%",
+          width: "80px",
+          height: "calc(50% - 40px)",
         }}
-        viewBox="0 0 120 400"
+        viewBox="0 0 80 400"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "center" }}>
-          {/* path from top-center (~60,10) curving down-left to bottom-left (~10,380), tip points to bell */}
+        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "40px 200px" }}>
           <path
-            d="M 70 10 C 90 80, 30 120, 60 200 S 90 300, 18 380"
+            d="M 60 10 C 75 80, 20 140, 55 210 S 75 310, 18 385"
             stroke="#e35d07"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
@@ -101,13 +88,12 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
             strokeDasharray="100"
             style={{ animation: "arrowDraw 0.9s ease-out both" }}
           />
-          {/* arrowhead at tip (18,380), pointing down-left toward (0, 400) */}
+          {/* arrowhead pointing down-left */}
           <path
-            d="M 18 380 L 28 368 M 18 380 L 30 380"
+            d="M 18 385 L 28 372 M 18 385 L 32 384"
             stroke="#e35d07"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
-            strokeLinejoin="round"
             fill="none"
             vectorEffect="non-scaling-stroke"
             style={{ animation: "fadeIn 0.3s ease 0.85s both" }}
@@ -115,25 +101,8 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
         </g>
       </svg>
 
-      {/* pulsing ring around the real bell position (mirrors WaiterButton: bottom-4 left-4 w-12 h-12 = 16px,16px,48x48) */}
-      <div
-        className="absolute pointer-events-none z-99998"
-        style={{ left: "16px", bottom: "16px", width: "48px", height: "48px" }}
-        aria-hidden="true"
-      >
-        <div
-          className="absolute inset-0 rounded-full border-2 border-orange"
-          style={{ animation: "tutorialPulse 1.4s ease-in-out infinite" }}
-        />
-        <div className="absolute inset-0 grid place-items-center text-orange">
-          <Bell size={22} strokeWidth={2} />
-        </div>
-      </div>
-
-      {/* dismiss hint — bottom right, away from bell */}
-      <p
-        className="absolute bottom-6 right-4 font-ui text-[10px] uppercase tracking-[0.22em] text-bg/60 pointer-events-none z-99998"
-      >
+      {/* dismiss hint — bottom right */}
+      <p className="absolute bottom-6 right-4 font-ui text-[10px] uppercase tracking-[0.22em] text-bg/60 pointer-events-none z-99998">
         {dismissHint}
       </p>
     </div>
