@@ -75,16 +75,16 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
         style={{
           left: "0px",
           top: "45%",
-          width: "120px",
+          width: "100%",
           height: "calc(55% - 72px)",
         }}
-        viewBox="0 0 120 300"
+        viewBox="0 0 400 300"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "60px 150px" }}>
+        <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "200px 150px" }}>
           <path
-            d="M 65 10 C 90 80, 20 120, 50 180 C 75 230, 20 260, 40 290"
+            d="M 200 10 C 220 80, 80 120, 120 180 C 150 230, 60 255, 40 290"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
@@ -95,9 +95,9 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
             strokeDasharray="100"
             style={{ animation: "arrowDraw 0.9s ease-out both" }}
           />
-          {/* arrowhead aligned with path end direction (coming from upper-right) */}
+          {/* arrowhead: path arrives from upper-right (~60,255 → 40,290), direction ≈ (-20,35) */}
           <path
-            d="M 40 290 L 52 278 M 40 290 L 53 294"
+            d="M 40 290 L 58 277 M 40 290 L 24 275"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
