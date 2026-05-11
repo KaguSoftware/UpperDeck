@@ -76,7 +76,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
           left: "0px",
           top: "45%",
           width: "100%",
-          height: "calc(55% - 72px)",
+          height: "calc(55% - 92px)",
         }}
         viewBox="0 0 400 300"
         preserveAspectRatio="none"
