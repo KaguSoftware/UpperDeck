@@ -34,20 +34,9 @@ export async function proxy(request: NextRequest) {
   );
   if (pathnameHasLocale) return response;
 
-  const locale = detectLocale(request);
   const url = request.nextUrl.clone();
-  url.pathname = `/${locale}${pathname}`;
+  url.pathname = `/${defaultLocale}${pathname}`;
   return NextResponse.redirect(url);
-}
-
-function detectLocale(request: NextRequest): string {
-  const acceptLanguage = request.headers.get("accept-language") ?? "";
-  for (const part of acceptLanguage.split(",")) {
-    const tag = part.trim().split(";")[0].toLowerCase();
-    const matched = locales.find((l) => l === tag || tag.startsWith(`${l}-`));
-    if (matched) return matched;
-  }
-  return defaultLocale;
 }
 
 export const config = {

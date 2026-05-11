@@ -426,6 +426,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             }
             return true;
           }}
+          suppressArrows={showBellTutorial}
         />
       </div>
       <CartDrawer

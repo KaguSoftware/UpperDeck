@@ -139,11 +139,12 @@ type WaiterButtonProps = {
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
   onBeforeOpen?: () => boolean;
+  suppressArrows?: boolean;
 };
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen, suppressArrows }: WaiterButtonProps) {
   const storageKey = `waiter_t${tableNumber}`;
 
   const [phase, setPhase] = useState<Phase>("idle");
@@ -209,7 +210,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
   return (
     <>
       {/* scroll-away arrows */}
-      {scrollRef && tableNumber > 0 && <BellArrows scrollParent={scrollRef} dismissed={arrowsDismissed || !!hidden || phase !== "idle"} onDismiss={handleDismiss} />}
+      {scrollRef && tableNumber > 0 && <BellArrows scrollParent={scrollRef} dismissed={arrowsDismissed || !!hidden || phase !== "idle" || !!suppressArrows} onDismiss={handleDismiss} />}
 
       {/* floating button */}
       <button
