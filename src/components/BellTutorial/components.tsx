@@ -77,7 +77,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       >
         <g style={{ animation: "tutorialFloat 1.8s ease-in-out infinite", transformOrigin: "40px 200px" }}>
           <path
-            d="M 60 10 C 75 80, 20 140, 55 210 S 75 310, 18 385"
+            d="M 60 10 C 75 80, 20 140, 55 210 S 75 310, 40 385"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
@@ -90,7 +90,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
           />
           {/* arrowhead pointing down-left */}
           <path
-            d="M 18 385 L 28 372 M 18 385 L 32 384"
+            d="M 40 385 L 50 372 M 40 385 L 54 384"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
