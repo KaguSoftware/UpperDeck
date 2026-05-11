@@ -33,7 +33,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       className="fixed inset-0 z-99997 cursor-pointer overflow-hidden"
       style={{
         background:
-          "radial-gradient(circle 64px at 40px calc(100% - 56px), transparent 36px, rgba(31,46,38,0.6) 60px, rgba(31,46,38,0.94) 160px)",
+          "radial-gradient(circle 64px at 40px calc(100% - 80px), transparent 36px, rgba(31,46,38,0.6) 60px, rgba(31,46,38,0.94) 160px)",
         animation: closing
           ? `fadeOut ${FADE_OUT_MS}ms ease forwards`
           : "fadeIn 0.3s ease",
@@ -95,9 +95,9 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
             strokeDasharray="100"
             style={{ animation: "arrowDraw 0.9s ease-out both" }}
           />
-          {/* arrowhead: path arrives from upper-right (~60,255 → 40,290), direction ≈ (-20,35) */}
+          {/* arrowhead: path arrives nearly straight down with slight left lean */}
           <path
-            d="M 40 290 L 58 277 M 40 290 L 24 275"
+            d="M 40 290 L 55 272 M 40 290 L 25 272"
             stroke="#e35d07"
             strokeWidth="3.5"
             strokeLinecap="round"
