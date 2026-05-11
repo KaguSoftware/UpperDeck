@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef, useCallback } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
 
@@ -64,59 +64,6 @@ function WaiterSheet({ heroCollapsed, onClose, isPending, children }: {
   );
 }
 
-function BellArrows({ scrollParent, dismissed, onDismiss }: { scrollParent: React.RefObject<HTMLElement | null>; dismissed: boolean; onDismiss: () => void }) {
-  useEffect(() => {
-    const el = scrollParent.current;
-    if (!el) return;
-    function onScroll() {
-      if (el!.scrollTop > 10) onDismiss();
-    }
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [scrollParent, onDismiss]);
-
-  // Auto-dismiss after 4 seconds
-  useEffect(() => {
-    if (dismissed) return;
-    const t = setTimeout(onDismiss, 4_000);
-    return () => clearTimeout(t);
-  }, [dismissed, onDismiss]);
-
-  const visible = !dismissed;
-
-  return (
-    <>
-      {/* full-page green overlay */}
-      <div
-        className="fixed inset-0 pointer-events-none transition-opacity duration-500 z-99998"
-        style={{ backgroundColor: "rgba(57,87,72,0.35)", opacity: visible ? 1 : 0 }}
-        aria-hidden="true"
-      />
-      {/* bouncing arrows */}
-      <div
-        className="absolute bottom-[72px] flex flex-col items-center gap-1 pointer-events-none transition-opacity duration-500 z-99999"
-        style={{ left: "8px", opacity: visible ? 1 : 0 }}
-        aria-hidden="true"
-      >
-        {[0, 160, 320].map((delay) => (
-          <svg
-            key={delay}
-            width="64"
-            height="42"
-            viewBox="0 0 36 24"
-            fill="none"
-            className="text-orange"
-            style={{
-              animation: `arrowBounce 0.8s ease-in-out ${delay}ms infinite`,
-            }}
-          >
-            <path d="M2 2L18 20L34 2" stroke="currentColor" strokeWidth="4" strokeLinecap="square" strokeLinejoin="miter" />
-          </svg>
-        ))}
-      </div>
-    </>
-  );
-}
 
 const COOLDOWNS_MS = [60_000, 300_000, 600_000];
 
@@ -139,18 +86,16 @@ type WaiterButtonProps = {
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
   onBeforeOpen?: () => boolean;
-  suppressArrows?: boolean;
 };
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen, suppressArrows }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen }: WaiterButtonProps) {
   const storageKey = `waiter_t${tableNumber}`;
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [isPending, startTransition] = useTransition();
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [arrowsDismissed, setArrowsDismissed] = useState(false);
   const cooldownUntil = useRef(0);
   const callCount = useRef(0);
 
@@ -182,11 +127,9 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
     return () => clearInterval(id);
   }, [secondsLeft]);
 
-  const handleDismiss = useCallback(() => setArrowsDismissed(true), []);
   const open = () => {
     if (onBeforeOpen && !onBeforeOpen()) return;
     setPhase("open");
-    setArrowsDismissed(true);
   };
   const close = () => { if (!isPending) setPhase("idle"); };
 
@@ -209,9 +152,6 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
 
   return (
     <>
-      {/* scroll-away arrows */}
-      {scrollRef && tableNumber > 0 && <BellArrows scrollParent={scrollRef} dismissed={arrowsDismissed || !!hidden || phase !== "idle" || !!suppressArrows} onDismiss={handleDismiss} />}
-
       {/* floating button */}
       <button
         type="button"
