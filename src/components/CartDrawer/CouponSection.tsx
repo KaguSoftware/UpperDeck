@@ -56,9 +56,9 @@ export function CouponSection({
   }
 
   return (
-    <div className="shrink-0 px-4.5 py-3 border-y border-green/20">
+    <div className="shrink-0 px-4.5 py-2 border-y border-green/20">
       {/* coupon input */}
-      <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-1.5">
+      <div className="font-extrabold text-[8px] tracking-[0.22em] text-green uppercase mb-1">
         {couponLabel}
       </div>
       <div className="flex gap-2">
@@ -67,12 +67,12 @@ export function CouponSection({
           value={code}
           onChange={(e) => { setCode(e.target.value.toUpperCase()); setAttempted(false); setNewsletterOpen(false); }}
           placeholder={couponPlaceholder}
-          className="flex-1 border border-green/30 focus:border-orange outline-none font-ui text-[12px] text-green bg-transparent px-2.5 py-2 placeholder:text-green/40 uppercase tracking-widest"
+          className="flex-1 border border-green/30 focus:border-orange outline-none font-ui text-[11px] text-green bg-transparent px-2 py-1 placeholder:text-green/40 uppercase tracking-widest"
         />
         <button
           type="button"
           onClick={handleApply}
-          className="border-2 border-green text-green font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase px-3 py-2 cursor-pointer hover:bg-green hover:text-bg transition-colors"
+          className="border-2 border-green text-green font-ui font-extrabold text-[9px] tracking-[0.18em] uppercase px-2.5 py-1 cursor-pointer hover:bg-green hover:text-bg transition-colors"
         >
           {couponApply}
         </button>
@@ -80,12 +80,12 @@ export function CouponSection({
 
       {/* inline "no coupon?" hint */}
       {!newsletterOpen && (
-        <div className="mt-1.5 font-ui text-[10px] text-green/50">
+        <div className="mt-1 font-ui text-[9px] text-green/50">
           {noCouponPrefix}{" "}
           <button
             type="button"
             onClick={() => setNewsletterOpen(true)}
-            className="text-orange underline cursor-pointer bg-transparent border-0 font-ui text-[10px] p-0"
+            className="text-orange underline cursor-pointer bg-transparent border-0 font-ui text-[9px] p-0"
           >
             {noCouponLink}
           </button>

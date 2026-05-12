@@ -250,7 +250,7 @@ export function CartDrawer({
                 {/* subtotal + send */}
                 {items.length > 0 && (
                     <div className="shrink-0 border-t-2 border-green">
-                        <div className="flex items-center justify-between px-4.5 py-2.5">
+                        <div className="flex items-center justify-between px-4.5 py-1">
                             <span className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase">
                                 {subtotalLabel}
                             </span>
