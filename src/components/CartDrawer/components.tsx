@@ -159,7 +159,7 @@ export function CartDrawer({
                     />
                 )}
 
-                {/* list */}
+                {/* list + note — all in one scrollable area */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto">
                     {items.length === 0 ? (
                         <p className="px-4.5 py-6 text-green/60 font-ui text-[13px]">
@@ -227,23 +227,23 @@ export function CartDrawer({
                             </div>
                         ))
                     )}
-                </div>
 
-                {/* note */}
-                <div className="shrink-0 px-4.5 py-3 border-t border-green/20">
-                    <div className="relative">
-                        <textarea
-                            value={note}
-                            onChange={(e) =>
-                                onNoteChange(e.target.value.slice(0, 200))
-                            }
-                            placeholder={notePlaceholder}
-                            rows={2}
-                            className="w-full font-ui text-[12px] text-green bg-transparent border border-green/30 focus:border-orange outline-none resize-none px-2.5 py-2 placeholder:text-green/40"
-                        />
-                        <span className="absolute bottom-2.5 right-2.5 font-ui text-[10px] text-green/30">
-                            {note.length}/200
-                        </span>
+                    {/* note — inside scroll, after the items */}
+                    <div className="px-4.5 py-3 border-t border-green/20">
+                        <div className="relative">
+                            <textarea
+                                value={note}
+                                onChange={(e) =>
+                                    onNoteChange(e.target.value.slice(0, 200))
+                                }
+                                placeholder={notePlaceholder}
+                                rows={2}
+                                className="w-full font-ui text-[12px] text-green bg-transparent border border-green/30 focus:border-orange outline-none resize-none px-2.5 py-2 placeholder:text-green/40"
+                            />
+                            <span className="absolute bottom-2.5 right-2.5 font-ui text-[10px] text-green/30">
+                                {note.length}/200
+                            </span>
+                        </div>
                     </div>
                 </div>
 
