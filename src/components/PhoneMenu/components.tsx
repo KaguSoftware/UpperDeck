@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { getBrowserClient } from "@/lib/supabase/client";
 import { TopBar } from "@/components/TopBar/components";
 import { Hero } from "@/components/Hero/components";
 import { FilterPills } from "@/components/FilterPills/components";
@@ -75,7 +75,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   // Listen for menu updates broadcast from admin and refresh server data
   useEffect(() => {
-    const supabase = createClient();
+    const supabase = getBrowserClient();
     const channel = supabase.channel("menu-updates")
       .on("broadcast", { event: "refresh" }, () => { router.refresh(); })
       .subscribe();
