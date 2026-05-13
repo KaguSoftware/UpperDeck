@@ -9,26 +9,32 @@ function HorizontalScroll({ children, className }: { children: React.ReactNode; 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    let startX = 0, startY = 0, locked: boolean | null = null;
+    let startX = 0;
+    let startScroll = 0;
+    let active = false;
     const onStart = (e: TouchEvent) => {
       startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      locked = null;
+      startScroll = el.scrollLeft;
+      active = true;
     };
     const onMove = (e: TouchEvent) => {
-      if (locked === null) {
-        const dx = Math.abs(e.touches[0].clientX - startX);
-        const dy = Math.abs(e.touches[0].clientY - startY);
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 6) locked = dx > dy;
-      }
-      if (locked === true) e.preventDefault();
+      if (!active) return;
+      const dx = e.touches[0].clientX - startX;
+      el.scrollLeft = startScroll - dx;
     };
+    const onEnd = () => { active = false; };
     el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: false });
-    return () => { el.removeEventListener("touchstart", onStart); el.removeEventListener("touchmove", onMove); };
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
   }, []);
-  return <div ref={ref} className={className}>{children}</div>;
+  return <div ref={ref} className={className} style={{ touchAction: "pan-y" }}>{children}</div>;
 }
 
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
