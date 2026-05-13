@@ -66,6 +66,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
+  const pillsWrapRef = useRef<HTMLDivElement>(null);
   const topbarRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
@@ -267,7 +268,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         const wrap = stageWrapRef.current;
         const targetTop = target.getBoundingClientRect().top;
         const wrapTop = wrap.getBoundingClientRect().top;
-        wrap.scrollTo({ top: wrap.scrollTop + (targetTop - wrapTop), behavior: "smooth" });
+        const pillsHeight = pillsWrapRef.current?.offsetHeight ?? 0;
+        wrap.scrollTo({ top: wrap.scrollTop + (targetTop - wrapTop) - pillsHeight, behavior: "smooth" });
       }
       scrollPillIntoView(slug);
       setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
@@ -379,7 +381,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             onFeaturedClick={handleFeaturedClick}
           />
           <div ref={heroSentinelRef} className="h-0" style={{ overflowAnchor: "none" }} />
-          <div className="sticky top-0 z-10" style={{ overflowAnchor: "none" }}>
+          <div ref={pillsWrapRef} className="sticky top-0 z-10" style={{ overflowAnchor: "none" }}>
             <FilterPills
               items={pillItems}
               activeId={activeSlug}
