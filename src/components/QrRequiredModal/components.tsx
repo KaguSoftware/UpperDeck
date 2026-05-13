@@ -57,7 +57,7 @@ function QrIllustration() {
               y={r * CELL}
               width={CELL}
               height={CELL}
-              fill="var(--color-green, #395748)"
+              fill="var(--color-green, #395A66)"
             />
           ) : null
         )

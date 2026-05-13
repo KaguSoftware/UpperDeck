@@ -175,7 +175,7 @@ export function ItemModal({
   alsoTryLabel = "Also try this",
 }: ItemModalProps) {
   const isOpen = item !== null;
-  const topBg = item?.fill === "orange-fill" ? "#e35d07" : "#395748";
+  const topBg = item?.fill === "orange-fill" ? "#FF5138" : "#395A66";
 
   const [showStamp, setShowStamp] = useState(false);
   const [lightbox, setLightbox] = useState(false);

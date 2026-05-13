@@ -97,7 +97,7 @@ export function Hero({
         <br />
         <span className="text-orange">{headline2}</span>
         <br />
-        &amp; <span className="[-webkit-text-stroke:2px_#395748] text-transparent">{headline3}</span>
+        &amp; <span className="[-webkit-text-stroke:2px_#395A66] text-transparent">{headline3}</span>
         <br />
         {headline4}
       </h1>

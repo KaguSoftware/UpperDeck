@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #fff1c2;
-  --color-bg-deep: #f0e1aa;
-  --color-green: #395748;
+  --color-bg: #FFF8EC;
+  --color-bg-deep: #F5EDDA;
+  --color-green: #395A66;
+  --color-green-deep: #243845;
   --color-green-dark: #1f2e26;
-  --color-orange: #e35d07;
+  --color-orange: #FF5138;
   --color-ink: #1f2e26;
 
   --font-bowlby: var(--font-bowlby-one, 'Teko', sans-serif);
@@ -16,7 +17,7 @@
 html,
 body {
   height: 100%;
-  background-color: #fff1c2;
+  background-color: #FFF8EC;
   font-family: var(--font-inter-next), sans-serif;
   color: #1f2e26;
 }
@@ -59,8 +60,8 @@ a {
 }
 
 @keyframes pulse-border {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(227, 93, 7, 0.7); }
-  50% { box-shadow: 0 0 0 6px rgba(227, 93, 7, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 81, 56, 0.7); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 81, 56, 0); }
 }
 
 @keyframes flicker {
@@ -147,18 +148,18 @@ a {
 }
 
 @keyframes fireGlow {
-  0%, 100% { box-shadow: 0 0 12px 4px #CC2222, 0 0 30px 8px #e35d07, 0 0 50px 12px rgba(204,34,34,0.4); }
-  25%       { box-shadow: 0 0 20px 8px #e35d07, 0 0 45px 14px #CC2222, 0 0 70px 18px rgba(255,106,0,0.5); }
-  50%       { box-shadow: 0 0 16px 6px #ff6a00, 0 0 38px 10px #CC2222, 0 0 60px 16px rgba(204,34,34,0.6); }
-  75%       { box-shadow: 0 0 22px 9px #CC2222, 0 0 50px 15px #e35d07, 0 0 80px 20px rgba(255,106,0,0.4); }
+  0%, 100% { box-shadow: 0 0 12px 4px #CC2222, 0 0 30px 8px #FF5138, 0 0 50px 12px rgba(204,34,34,0.4); }
+  25%       { box-shadow: 0 0 20px 8px #FF5138, 0 0 45px 14px #CC2222, 0 0 70px 18px rgba(255,81,56,0.5); }
+  50%       { box-shadow: 0 0 16px 6px #FF5138, 0 0 38px 10px #CC2222, 0 0 60px 16px rgba(204,34,34,0.6); }
+  75%       { box-shadow: 0 0 22px 9px #CC2222, 0 0 50px 15px #FF5138, 0 0 80px 20px rgba(255,81,56,0.4); }
 }
 
 .shimmer {
   background: linear-gradient(
     90deg,
-    #f0e1aa 25%,
-    #fff1c2 50%,
-    #f0e1aa 75%
+    #F5EDDA 25%,
+    #FFF8EC 50%,
+    #F5EDDA 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
