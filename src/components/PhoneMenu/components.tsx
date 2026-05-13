@@ -328,11 +328,18 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           locale={locale}
         />
       </div>
+      <FilterPills
+        items={pillItems}
+        activeId={activeSlug}
+        onSelect={handlePillSelect}
+        navRef={pillsNavRef}
+        compact={heroCollapsed}
+      />
       <div className="relative flex-1 min-h-0">
         <div
           ref={stageWrapRef}
           onScroll={handleScroll}
-          className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [overflow-anchor:none]"
+          className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <Hero
             collapsed={false}
@@ -353,15 +360,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           />
           {/* sentinel: when this exits the viewport the pills go compact */}
           <div ref={heroSentinelRef} className="h-0" />
-          <div className="sticky top-0 z-10 [overflow-anchor:none]">
-            <FilterPills
-              items={pillItems}
-              activeId={activeSlug}
-              onSelect={handlePillSelect}
-              navRef={pillsNavRef}
-              compact={heroCollapsed}
-            />
-          </div>
           <MenuStage
             onOpen={setActiveItem}
             stageRef={stageRef}
@@ -453,6 +451,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         addToOrderLabel={t.modal.addToOrder}
         specialInstructionsLabel={t.modal.specialInstructions}
         specialInstructionsPlaceholder={t.modal.specialInstructionsPlaceholder}
+        alsoTryLabel={t.modal.alsoTry}
         addonGroups={activeItem?.addonGroups ?? []}
         suggestedItems={activeItem?.suggestedItems ?? []}
       />

@@ -29,6 +29,7 @@ const tr: Messages = {
     addToOrder: "Siparişe Ekle",
     specialInstructions: "Özel İstek",
     specialInstructionsPlaceholder: "örn. soğansız, bol sos…",
+    alsoTry: "Bunları da dene",
   },
   cart: {
     title: "Siparişiniz",

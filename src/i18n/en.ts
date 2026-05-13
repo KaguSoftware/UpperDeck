@@ -11,7 +11,7 @@ type EnShape = {
   topbar: { order: string };
   filter: { all: string };
   stage: { item: string; items: string };
-  modal: { spicy: string; price: string; addToOrder: string; specialInstructions: string; specialInstructionsPlaceholder: string };
+  modal: { spicy: string; price: string; addToOrder: string; specialInstructions: string; specialInstructionsPlaceholder: string; alsoTry: string };
   coupon: { label: string; placeholder: string; apply: string; noOfferTitle: string; noOfferBody: string; emailPlaceholder: string; subscribe: string; subscribed: string; noCouponPrefix: string; noCouponLink: string };
   cart: {
     title: string;
@@ -66,6 +66,7 @@ const en: EnShape = {
     addToOrder: "Add to Order",
     specialInstructions: "Special Instructions",
     specialInstructionsPlaceholder: "e.g. no onions, extra sauce…",
+    alsoTry: "Also try this",
   },
   cart: {
     title: "Your Order",
