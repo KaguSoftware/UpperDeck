@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { CouponSection } from "./CouponSection";
 import type { CartDrawerProps } from "./types";
 
@@ -22,12 +22,15 @@ export function CartDrawer({
     tableFromQrLabel,
     notePlaceholder,
     callWaiterLabel,
+    onCallWaiter,
+    waiterCooldownSeconds,
+    waiterCooldownLabel,
     tableFromQr = false,
     topOffset = 0,
     coupon,
 }: CartDrawerProps) {
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-    const [waiterCalled, setWaiterCalled] = useState(false);
+    const waiterCalled = waiterCooldownSeconds > 0;
 
     const dragY = useRef(0);
     const startY = useRef<number | null>(null);
@@ -230,7 +233,7 @@ export function CartDrawer({
                             </span>
                         </div>
                         <CouponSection {...coupon} />
-                        <div className="px-4.5 pb-4">
+                        <div className="px-4.5 pb-4 flex flex-col gap-2">
                             {waiterCalled ? (
                                 <div className="w-full bg-green text-bg font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 text-center">
                                     A waiter is headed your way to place your order!
@@ -238,12 +241,17 @@ export function CartDrawer({
                             ) : (
                                 <button
                                     type="button"
-                                    onClick={() => setWaiterCalled(true)}
+                                    onClick={onCallWaiter}
                                     disabled={items.length === 0}
                                     className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     {callWaiterLabel}
                                 </button>
+                            )}
+                            {waiterCalled && (
+                                <p className="text-center font-ui text-[11px] text-green/60">
+                                    {waiterCooldownLabel}
+                                </p>
                             )}
                         </div>
                     </div>

@@ -59,6 +59,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [toastShow, setToastShow] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [showBellTutorial, setShowBellTutorial] = useState(false);
+  const [waiterSecondsLeft, setWaiterSecondsLeft] = useState(0);
+  const waiterCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
@@ -110,6 +112,48 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     }, 200);
   }, [cartItems, tableNumber, note]);
 
+  // Restore persisted waiter cooldown on mount
+  useEffect(() => {
+    if (!tableNumber) return;
+    try {
+      const raw = localStorage.getItem(`waiter_t${tableNumber}`);
+      if (!raw) return;
+      const { until } = JSON.parse(raw) as { until: number; count: number };
+      const remaining = Math.ceil((until - Date.now()) / 1000);
+      if (remaining > 0) {
+        waiterCooldownUntil.current = until;
+        setWaiterSecondsLeft(remaining);
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableNumber]);
+
+  // Waiter cooldown ticker
+  useEffect(() => {
+    if (waiterSecondsLeft <= 0) return;
+    const id = setInterval(() => {
+      const remaining = Math.ceil((waiterCooldownUntil.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setWaiterSecondsLeft(0);
+        clearInterval(id);
+      } else {
+        setWaiterSecondsLeft(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [waiterSecondsLeft]);
+
+  const handleWaiterCalled = useCallback((cooldownMs: number) => {
+    waiterCooldownUntil.current = Date.now() + cooldownMs;
+    setWaiterSecondsLeft(Math.ceil(cooldownMs / 1000));
+    if (tableNumber) {
+      try {
+        const raw = localStorage.getItem(`waiter_t${tableNumber}`);
+        const prev = raw ? JSON.parse(raw) as { until: number; count: number } : { count: 0 };
+        localStorage.setItem(`waiter_t${tableNumber}`, JSON.stringify({ until: waiterCooldownUntil.current, count: prev.count }));
+      } catch { /* ignore */ }
+    }
+  }, [tableNumber]);
 
   const flashToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -128,6 +172,19 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     setHeroCollapsed(true);
     setCartOpen(true);
   }, [tableNumber]);
+
+  const WAITER_COOLDOWNS_MS = [60_000, 300_000, 600_000];
+  const waiterCallCount = useRef(0);
+
+  const handleCartCallWaiter = useCallback(async () => {
+    if (waiterSecondsLeft > 0 || !tableNumber || tableNumber <= 0) return;
+    const { callWaiter } = await import("@/lib/waiter/call");
+    await callWaiter(tableNumber, "order");
+    const cooldownMs = WAITER_COOLDOWNS_MS[Math.min(waiterCallCount.current, WAITER_COOLDOWNS_MS.length - 1)];
+    waiterCallCount.current += 1;
+    handleWaiterCalled(cooldownMs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiterSecondsLeft, tableNumber, handleWaiterCalled]);
 
   const handleRemove = useCallback((id: string) => {
     setCartItems((prev) => prev.filter((i) => i.id !== id));
@@ -340,6 +397,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             }
             return true;
           }}
+          secondsLeft={waiterSecondsLeft}
+          onWaiterCalled={handleWaiterCalled}
         />
       </div>
       <CartDrawer
@@ -360,6 +419,9 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         tableFromQrLabel={t.cart.table_from_qr}
         notePlaceholder={t.cart.note_placeholder}
         callWaiterLabel={t.cart.callWaiter}
+        onCallWaiter={() => { void handleCartCallWaiter(); }}
+        waiterCooldownSeconds={waiterSecondsLeft}
+        waiterCooldownLabel={waiterSecondsLeft > 0 ? `You can send another request in ${Math.floor(waiterSecondsLeft / 60)}:${String(waiterSecondsLeft % 60).padStart(2, "0")}` : ""}
         tableFromQr={tableLocked}
         topOffset={topbarRef.current?.offsetHeight ?? 0}
         coupon={{

@@ -41,6 +41,9 @@ export type CartDrawerProps = {
   tableFromQrLabel: string;
   notePlaceholder: string;
   callWaiterLabel: string;
+  onCallWaiter: () => void;
+  waiterCooldownSeconds: number;
+  waiterCooldownLabel: string;
   tableFromQr?: boolean;
   topOffset?: number;
   coupon: CouponProps;

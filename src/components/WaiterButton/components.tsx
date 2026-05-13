@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useRef } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
 
@@ -86,46 +86,17 @@ type WaiterButtonProps = {
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
   onBeforeOpen?: () => boolean;
+  // shared cooldown — owned by parent
+  secondsLeft: number;
+  onWaiterCalled: (cooldownMs: number) => void;
 };
 
 type Phase = "idle" | "open" | "sending" | "done";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen }: WaiterButtonProps) {
-  const storageKey = `waiter_t${tableNumber}`;
-
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen, secondsLeft, onWaiterCalled }: WaiterButtonProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [isPending, startTransition] = useTransition();
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const cooldownUntil = useRef(0);
   const callCount = useRef(0);
-
-  // Restore persisted cooldown on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) return;
-      const { until, count } = JSON.parse(raw) as { until: number; count: number };
-      const remaining = Math.ceil((until - Date.now()) / 1000);
-      cooldownUntil.current = until;
-      callCount.current = count;
-      if (remaining > 0) setSecondsLeft(remaining);
-    } catch { /* ignore corrupt data */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const id = setInterval(() => {
-      const remaining = Math.ceil((cooldownUntil.current - Date.now()) / 1000);
-      if (remaining <= 0) {
-        setSecondsLeft(0);
-        clearInterval(id);
-      } else {
-        setSecondsLeft(remaining);
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [secondsLeft]);
 
   const open = () => {
     if (onBeforeOpen && !onBeforeOpen()) return;
@@ -138,13 +109,9 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
     setPhase("sending");
     startTransition(async () => {
       await callWaiter(tableNumber, reason);
-      const idleSinceCooldown = cooldownUntil.current > 0 ? Date.now() - cooldownUntil.current : 0;
-      if (idleSinceCooldown > 2 * 60_000) callCount.current = 0;
       const cooldownMs = COOLDOWNS_MS[Math.min(callCount.current, COOLDOWNS_MS.length - 1)];
       callCount.current += 1;
-      cooldownUntil.current = Date.now() + cooldownMs;
-      try { localStorage.setItem(storageKey, JSON.stringify({ until: cooldownUntil.current, count: callCount.current })); } catch { /* ignore */ }
-      setSecondsLeft(Math.ceil(cooldownMs / 1000));
+      onWaiterCalled(cooldownMs);
       setPhase("done");
       setTimeout(() => setPhase("idle"), 2500);
     });
