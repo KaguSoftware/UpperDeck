@@ -10,12 +10,6 @@ export type CartItem = {
   itemNote?: string;
 };
 
-export type CheckoutState =
-  | { status: "idle" }
-  | { status: "pending" }
-  | { status: "offline" }
-  | { status: "validation"; message: string };
-
 export type CouponProps = {
   couponLabel: string;
   couponPlaceholder: string;
@@ -38,21 +32,16 @@ export type CartDrawerProps = {
   onDecrement: (id: string) => void;
   onTableChange: (n: number | null) => void;
   onNoteChange: (s: string) => void;
-  onCheckout: () => void;
-  onRetry: () => void;
   tableNumber: number | null;
   note: string;
-  checkoutState: CheckoutState;
   totalLabel: string;
   subtotalLabel: string;
   emptyLabel: string;
   tableLabel: string;
   tableFromQrLabel: string;
   notePlaceholder: string;
-  sendLabel: string;
-  tryAgainLabel: string;
+  callWaiterLabel: string;
   tableFromQr?: boolean;
   topOffset?: number;
-  orderCooldownSeconds?: number;
   coupon: CouponProps;
 };

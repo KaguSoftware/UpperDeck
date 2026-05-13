@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef } from "react";
-import { OfflineFallback } from "./_offline-fallback";
+import { useRef, useState } from "react";
 import { CouponSection } from "./CouponSection";
 import type { CartDrawerProps } from "./types";
 
@@ -14,29 +13,21 @@ export function CartDrawer({
     onDecrement,
     onTableChange,
     onNoteChange,
-    onCheckout,
-    onRetry,
     tableNumber,
     note,
-    checkoutState,
     totalLabel,
     subtotalLabel,
     emptyLabel,
     tableLabel,
     tableFromQrLabel,
     notePlaceholder,
-    sendLabel,
-    tryAgainLabel,
+    callWaiterLabel,
     tableFromQr = false,
     topOffset = 0,
-    orderCooldownSeconds = 0,
     coupon,
 }: CartDrawerProps) {
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-    const isPending = checkoutState.status === "pending";
-    const isOffline = checkoutState.status === "offline";
-    const isValidationError = checkoutState.status === "validation";
-    const canSend = items.length > 0 && !isPending && orderCooldownSeconds === 0;
+    const [waiterCalled, setWaiterCalled] = useState(false);
 
     const dragY = useRef(0);
     const startY = useRef<number | null>(null);
@@ -139,26 +130,6 @@ export function CartDrawer({
                     </div>
                 )}
 
-                {/* validation error banner */}
-                {isValidationError && (
-                    <div className="shrink-0 px-4.5 py-2.5 bg-orange/10 border-b border-orange/30">
-                        <p className="font-ui text-[12px] text-orange">
-                            {checkoutState.message}
-                        </p>
-                    </div>
-                )}
-
-                {/* offline fallback — shown above list when network/server error */}
-                {isOffline && (
-                    <OfflineFallback
-                        tableNumber={tableNumber}
-                        items={items}
-                        note={note}
-                        onRetry={onRetry}
-                        retryLabel={tryAgainLabel}
-                    />
-                )}
-
                 {/* list + note — all in one scrollable area */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto">
                     {items.length === 0 ? (
@@ -247,7 +218,7 @@ export function CartDrawer({
                     </div>
                 </div>
 
-                {/* subtotal + send */}
+                {/* subtotal + call waiter */}
                 {items.length > 0 && (
                     <div className="shrink-0 border-t-2 border-green">
                         <div className="flex items-center justify-between px-4.5 py-1">
@@ -260,14 +231,20 @@ export function CartDrawer({
                         </div>
                         <CouponSection {...coupon} />
                         <div className="px-4.5 pb-4">
-                            <button
-                                type="button"
-                                onClick={onCheckout}
-                                disabled={!canSend}
-                                className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                {isPending ? "…" : orderCooldownSeconds > 0 ? `${orderCooldownSeconds}s` : sendLabel}
-                            </button>
+                            {waiterCalled ? (
+                                <div className="w-full bg-green text-bg font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 text-center">
+                                    A waiter is headed your way to place your order!
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setWaiterCalled(true)}
+                                    disabled={items.length === 0}
+                                    className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    {callWaiterLabel}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}

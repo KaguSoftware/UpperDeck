@@ -18,9 +18,8 @@ type EnShape = {
     table_number: string;
     table_from_qr: string;
     note_placeholder: string;
-    send: string;
+    callWaiter: string;
     subtotal: string;
-    try_again: string;
     error_validation: string;
     error_no_table: string;
   };
@@ -73,9 +72,8 @@ const en: EnShape = {
     table_number: "Table number",
     table_from_qr: "from QR",
     note_placeholder: "Special requests, allergies…",
-    send: "Send Order",
+    callWaiter: "Call Waiter",
     subtotal: "Subtotal",
-    try_again: "Try again",
     error_validation: "Something looks wrong with your order. Please check and try again.",
     error_no_table: "Scan your table QR code or enter a table number to place your order.",
   },

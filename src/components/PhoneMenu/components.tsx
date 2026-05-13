@@ -14,13 +14,11 @@ import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
-import type { CartItem, CheckoutState } from "@/components/CartDrawer/types";
+import type { CartItem } from "@/components/CartDrawer/types";
 import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
-import { submitOrder } from "@/lib/orders/submit";
-
 const COLLAPSE_AT = 40;
 const EXPAND_AT = 8;
 const CART_STORAGE_KEY = "upperdeck-cart";
@@ -53,17 +51,14 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [tableLocked] = useState(initialTableNumber !== undefined);
   const [note, setNote] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
-  const [checkoutState, setCheckoutState] = useState<CheckoutState>({ status: "idle" });
   const [activeItem, setActiveItem] = useState<PlacedCard | null>(null);
   const [activeSlug, setActiveSlug] = useState("");
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
-  const [orderCooldownSeconds, setOrderCooldownSeconds] = useState(0);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [showBellTutorial, setShowBellTutorial] = useState(false);
-  const orderCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
@@ -102,21 +97,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Order submit cooldown ticker
-  useEffect(() => {
-    if (orderCooldownSeconds <= 0) return;
-    const id = setInterval(() => {
-      const remaining = Math.ceil((orderCooldownUntil.current - Date.now()) / 1000);
-      if (remaining <= 0) {
-        setOrderCooldownSeconds(0);
-        clearInterval(id);
-      } else {
-        setOrderCooldownSeconds(remaining);
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [orderCooldownSeconds]);
 
   // Debounced save on every change
   useEffect(() => {
@@ -200,72 +180,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       y: 0,
     });
   }, [items]);
-
-  const doSubmit = useCallback(async () => {
-    if (cartItems.length === 0) return;
-    if (!tableNumber || tableNumber <= 0) {
-      setCheckoutState({ status: "validation", message: t.cart.error_no_table });
-      return;
-    }
-    setCheckoutState({ status: "pending" });
-
-    const clientTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
-    type OrderResult = { ok: true } | { ok: false; error: "validation" | "network" | "server"; message?: string };
-    const timeout = new Promise<OrderResult>((resolve) =>
-      setTimeout(() => resolve({ ok: false, error: "network", message: "timeout" }), 15_000)
-    );
-    const result = await Promise.race([
-      submitOrder({
-        table_number: tableNumber,
-        _simulateFailure: false,
-        items: cartItems.map((i) => {
-          const extrasLabel = i.extras && i.extras.length > 0
-            ? ` + ${i.extras.map((e) => e.label).join(", ")}`
-            : "";
-          const noteLabel = i.itemNote ? ` (${i.itemNote})` : "";
-          return {
-            menu_item_id: i.menu_item_id,
-            name_en: i.name + extrasLabel + noteLabel,
-            name_tr: i.name + extrasLabel + noteLabel,
-            price: i.price,
-            qty: i.qty,
-          };
-        }),
-        note,
-        total: clientTotal,
-      }),
-      timeout,
-    ]);
-
-    if (result.ok) {
-      setCartItems([]);
-      setNote("");
-      if (!tableLocked) setTableNumber(null);
-      try { sessionStorage.removeItem(CART_STORAGE_KEY); } catch { /* ignore */ }
-      setCheckoutState({ status: "idle" });
-      setCartOpen(false);
-      orderCooldownUntil.current = Date.now() + 60_000;
-      setOrderCooldownSeconds(60);
-      flashToast(`${t.toast.orderSentPrefix}${tableNumber && tableNumber > 0 ? tableNumber : "—"}`);
-    } else if (result.error === "validation") {
-      setCheckoutState({
-        status: "validation",
-        message: result.message ?? t.cart.error_validation,
-      });
-    } else {
-      // network or server — keep cart, show offline fallback
-      setCheckoutState({ status: "offline" });
-    }
-  }, [cartItems, tableNumber, note, tableLocked, flashToast, t]);
-
-  const handleCheckout = useCallback(() => {
-    void doSubmit();
-  }, [doSubmit]);
-
-  const handleRetry = useCallback(() => {
-    setCheckoutState({ status: "idle" });
-    void doSubmit();
-  }, [doSubmit]);
 
   const handlePillSelect = useCallback(
     (slug: string, btn: HTMLButtonElement) => {
@@ -437,22 +351,17 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         onDecrement={handleDecrement}
         onTableChange={setTableNumber}
         onNoteChange={setNote}
-        onCheckout={handleCheckout}
-        onRetry={handleRetry}
         tableNumber={tableNumber}
         note={note}
-        checkoutState={checkoutState}
         totalLabel={t.cart.title}
         subtotalLabel={t.cart.subtotal}
         emptyLabel={t.toast.empty}
         tableLabel={t.cart.table_number}
         tableFromQrLabel={t.cart.table_from_qr}
         notePlaceholder={t.cart.note_placeholder}
-        sendLabel={t.cart.send}
-        tryAgainLabel={t.cart.try_again}
+        callWaiterLabel={t.cart.callWaiter}
         tableFromQr={tableLocked}
         topOffset={topbarRef.current?.offsetHeight ?? 0}
-        orderCooldownSeconds={orderCooldownSeconds}
         coupon={{
           couponLabel: t.coupon.label,
           couponPlaceholder: t.coupon.placeholder,
@@ -494,7 +403,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         && !activeItem
         && !cartOpen
         && !qrModalOpen
-        && checkoutState.status === "idle" && (
+        && (
         <BellTutorial
           eyebrow={t.bellTutorial.eyebrow}
           title={t.bellTutorial.title}
