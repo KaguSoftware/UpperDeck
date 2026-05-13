@@ -9,7 +9,7 @@ const getAdminAddons = unstable_cache(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from("addon_groups")
-      .select("id, label_en, multi, sort_order, category_id, menu_item_id, addon_options(count), categories(name_en), menu_items(name_en)")
+      .select("id, label_en, multi, sort_order, category_id, addon_options(count), categories(name_en), addon_group_items(menu_items(name_en))")
       .order("sort_order", { ascending: true });
     if (error) throw new Error((error as { message: string }).message);
     return data ?? [];
@@ -23,23 +23,29 @@ export default async function AddonsPage() {
 
   type RawGroup = {
     id: string; label_en: string; multi: boolean; sort_order: number;
-    category_id: string | null; menu_item_id: string | null;
+    category_id: string | null;
     addon_options: { count: number }[];
     categories: { name_en: string } | null;
-    menu_items: { name_en: string } | null;
+    addon_group_items: { menu_items: { name_en: string } | null }[];
   };
 
-  const groups = ((data ?? []) as RawGroup[]).map((g) => ({
-    id: g.id,
-    label: g.label_en,
-    multi: g.multi,
-    sort_order: g.sort_order,
-    scope: g.category_id ? "category" : "item",
-    scopeName: g.category_id
-      ? ((g.categories as { name_en: string } | null)?.name_en ?? "—")
-      : ((g.menu_items as { name_en: string } | null)?.name_en ?? "—"),
-    optionCount: (g.addon_options as { count: number }[])?.[0]?.count ?? 0,
-  }));
+  const groups = ((data ?? []) as RawGroup[]).map((g) => {
+    const itemNames = (g.addon_group_items ?? [])
+      .map((gi) => gi.menu_items?.name_en)
+      .filter(Boolean)
+      .join(", ");
+    return {
+      id: g.id,
+      label: g.label_en,
+      multi: g.multi,
+      sort_order: g.sort_order,
+      scope: g.category_id ? "category" : "item",
+      scopeName: g.category_id
+        ? ((g.categories as { name_en: string } | null)?.name_en ?? "—")
+        : (itemNames || "—"),
+      optionCount: (g.addon_options as { count: number }[])?.[0]?.count ?? 0,
+    };
+  });
 
   const categoryGroups = groups.filter((g) => g.scope === "category");
   const itemGroups = groups.filter((g) => g.scope === "item");

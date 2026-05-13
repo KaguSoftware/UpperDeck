@@ -11,7 +11,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await getServerClient();
 
-  const [{ data: groupRaw, error }, { data: allItems }, { data: assignedRaw }, { data: allGroupsRaw }] = await Promise.all([
+  const [{ data: groupRaw, error }, { data: allItems }] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("addon_groups")
@@ -19,11 +19,14 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
       .eq("id", id)
       .single(),
     supabase.from("menu_items").select("id, name_en, image_url, emoji, price").order("name_en"),
+  ]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [{ data: assignedRaw }, { data: allGroupsRaw }] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_group_items").select("menu_item_id").eq("addon_group_id", id),
-    // All addon groups available as reveal targets (excluding this group)
+    (supabase as any).from("addon_group_items").select("menu_item_id").eq("addon_group_id", id).catch(() => ({ data: [] })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_groups").select("id, label_en").neq("id", id).order("label_en"),
+    (supabase as any).from("addon_groups").select("id, label_en").neq("id", id).order("label_en").catch(() => ({ data: [] })),
   ]);
 
   if (error || !groupRaw) notFound();
@@ -61,10 +64,10 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
   // Fetch existing reveal assignments for all options in this group
   const optionIds = options.map((o) => o.id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: revealsRaw } = optionIds.length > 0 ? await (supabase as any)
-    .from("addon_option_reveals")
-    .select("addon_option_id, addon_group_id")
-    .in("addon_option_id", optionIds) : { data: [] };
+  const { data: revealsRaw } = optionIds.length > 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? await (supabase as any).from("addon_option_reveals").select("addon_option_id, addon_group_id").in("addon_option_id", optionIds).catch(() => ({ data: [] }))
+    : { data: [] };
 
   const revealsByOption = new Map<string, string[]>();
   ((revealsRaw ?? []) as { addon_option_id: string; addon_group_id: string }[]).forEach((r) => {
