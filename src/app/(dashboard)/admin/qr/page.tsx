@@ -17,7 +17,7 @@ export default async function QRPage() {
   const tables = await Promise.all(
     Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {
       const { tok, w } = generateToken(n);
-      const url = `${baseUrl}/en/scan?t=${n}&w=${w}&tok=${tok}`;
+      const url = `${baseUrl}/tr/scan?t=${n}&w=${w}&tok=${tok}`;
       const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 3 });
       return { n, url, dataUrl };
     })
