@@ -18,7 +18,6 @@ const GroupSchema = z.object({
   required: z.coerce.boolean(),
   sort_order: z.coerce.number().int().default(0),
   category_id: z.string().uuid().nullable().optional(),
-  menu_item_id: z.string().uuid().nullable().optional(),
 });
 
 const OptionSchema = z.object({
@@ -32,16 +31,18 @@ const OptionSchema = z.object({
 function parseGroup(formData: FormData) {
   const scope = formData.get("scope") as string;
   const rawCat = formData.get("category_id");
-  const rawItem = formData.get("menu_item_id");
-  return GroupSchema.parse({
-    label_en: formData.get("label_en"),
-    label_tr: formData.get("label_tr"),
-    multi: formData.get("multi") === "on",
-    required: formData.get("required") === "on",
-    sort_order: formData.get("sort_order") ?? 0,
-    category_id: scope === "category" && rawCat ? rawCat : null,
-    menu_item_id: scope === "item" && rawItem ? rawItem : null,
-  });
+  const itemIds = formData.getAll("menu_item_ids[]").map(String).filter(Boolean);
+  return {
+    group: GroupSchema.parse({
+      label_en: formData.get("label_en"),
+      label_tr: formData.get("label_tr"),
+      multi: formData.get("multi") === "on",
+      required: formData.get("required") === "on",
+      sort_order: formData.get("sort_order") ?? 0,
+      category_id: scope === "category" && rawCat ? rawCat : null,
+    }),
+    itemIds: scope === "item" ? itemIds : [],
+  };
 }
 
 function parseOption(formData: FormData) {
@@ -57,22 +58,37 @@ function parseOption(formData: FormData) {
 
 export async function createGroup(formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
-  const data = parseGroup(formData);
-  const { data: group, error } = await db(supabase)
+  const { group, itemIds } = parseGroup(formData);
+  const { data: created, error } = await db(supabase)
     .from("addon_groups")
-    .insert(data)
+    .insert(group)
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  const groupId = (created as { id: string }).id;
+  if (itemIds.length > 0) {
+    const { error: joinError } = await db(supabase)
+      .from("addon_group_items")
+      .insert(itemIds.map((menu_item_id) => ({ addon_group_id: groupId, menu_item_id })));
+    if (joinError) throw new Error(joinError.message);
+  }
   updateTag("menu");
-  redirect(`/admin/addons/${(group as { id: string }).id}/edit`);
+  redirect(`/admin/addons/${groupId}/edit`);
 }
 
 export async function updateGroup(id: string, formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
-  const data = parseGroup(formData);
-  const { error } = await db(supabase).from("addon_groups").update(data).eq("id", id);
+  const { group, itemIds } = parseGroup(formData);
+  const { error } = await db(supabase).from("addon_groups").update(group).eq("id", id);
   if (error) throw new Error(error.message);
+  // Replace item assignments: delete all then re-insert
+  await db(supabase).from("addon_group_items").delete().eq("addon_group_id", id);
+  if (itemIds.length > 0) {
+    const { error: joinError } = await db(supabase)
+      .from("addon_group_items")
+      .insert(itemIds.map((menu_item_id) => ({ addon_group_id: id, menu_item_id })));
+    if (joinError) throw new Error(joinError.message);
+  }
   updateTag("menu");
 }
 

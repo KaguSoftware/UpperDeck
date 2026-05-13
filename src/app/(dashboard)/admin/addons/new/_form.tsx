@@ -17,6 +17,18 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
   const preCategoryId = searchParams.get("category_id") ?? "";
   const defaultScope: "category" | "item" = preItemId ? "item" : "category";
   const [scope, setScope] = useState<"category" | "item">(defaultScope);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(
+    preItemId ? new Set([preItemId]) : new Set()
+  );
+
+  const toggleItem = (id: string) => {
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <form
@@ -24,6 +36,10 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
       className="border-2 border-green bg-white p-6 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl"
     >
       <input type="hidden" name="scope" value={scope} />
+      {/* submit selected item ids */}
+      {Array.from(selectedItems).map((id) => (
+        <input key={id} type="hidden" name="menu_item_ids[]" value={id} />
+      ))}
 
       <div className="md:col-span-2">
         <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green mb-2">Kapsam</div>
@@ -39,7 +55,7 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
                 className="accent-orange w-4 h-4"
               />
               <span className="font-ui font-extrabold text-[11px] uppercase tracking-[0.18em] text-green">
-                {s === "category" ? "Kategori" : "Menü Ürünü"}
+                {s === "category" ? "Kategori" : "Menü Ürünleri"}
               </span>
             </label>
           ))}
@@ -57,12 +73,22 @@ export function NewAddonGroupForm({ categories, items, defaultSortOrder }: Props
         </div>
       ) : (
         <div className="md:col-span-2">
-          <Select
-            label="Menü Ürünü"
-            name="menu_item_id"
-            defaultValue={preItemId || items[0]?.id}
-            options={items.map((i) => ({ value: i.id, label: i.name_en }))}
-          />
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green mb-2">
+            Menü Ürünleri <span className="text-green/50 font-normal normal-case tracking-normal">({selectedItems.size} seçildi)</span>
+          </div>
+          <div className="border-2 border-green/30 max-h-48 overflow-y-auto divide-y divide-green/10">
+            {items.map((item) => (
+              <label key={item.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-bg-deep transition-colors">
+                <input
+                  type="checkbox"
+                  checked={selectedItems.has(item.id)}
+                  onChange={() => toggleItem(item.id)}
+                  className="accent-orange w-4 h-4 shrink-0"
+                />
+                <span className="font-ui text-[12px] text-green">{item.name_en}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
 

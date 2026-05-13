@@ -329,7 +329,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         <div
           ref={stageWrapRef}
           onScroll={handleScroll}
-          className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [overflow-anchor:none]"
         >
           <Hero
             collapsed={false}
@@ -350,7 +350,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           />
           {/* sentinel: when this exits the viewport the pills go compact */}
           <div ref={heroSentinelRef} className="h-0" />
-          <div className="sticky top-0 z-10">
+          <div className="sticky top-0 z-10 [overflow-anchor:none]">
             <FilterPills
               items={pillItems}
               activeId={activeSlug}

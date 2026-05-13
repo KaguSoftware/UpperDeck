@@ -116,16 +116,16 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
     throw new Error(`Failed to fetch menu items: ${itemsError.message}`);
   }
 
-  // Fetch all addon groups with their options in one query
+  // Fetch all addon groups with their options and item assignments in one query
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select(`id, category_id, menu_item_id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji))`)
+    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)), addon_group_items(menu_item_id)`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
   type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
-  type RawAddonGroup  = { id: string; category_id: string | null; menu_item_id: string | null; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawAddonOption[] };
+  type RawAddonGroup  = { id: string; category_id: string | null; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawAddonOption[]; addon_group_items: { menu_item_id: string }[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
 
   // Fetch all suggested groups with their items
@@ -194,7 +194,9 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cat = catById.get(r.category_id) as any;
       const parentCatId = cat?.parent_id ?? null;
-      const itemGroups = addonGroups.filter((g) => g.menu_item_id === r.id);
+      const itemGroups = addonGroups.filter((g) =>
+        (g.addon_group_items ?? []).some((gi) => gi.menu_item_id === r.id)
+      );
       const catGroups  = addonGroups.filter(
         (g) => g.category_id === r.category_id || (parentCatId && g.category_id === parentCatId)
       );

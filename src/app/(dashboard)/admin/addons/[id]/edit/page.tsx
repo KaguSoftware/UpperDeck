@@ -4,20 +4,23 @@ import { Field, Checkbox, PrimaryButton, GhostButton, DangerButton, PageHeader }
 import { updateGroup, deleteGroup, createOption, updateOption, deleteOption } from "../../actions";
 import { AddonOptionForm } from "./_option-form";
 import { ReorderButtons } from "./_reorder-buttons";
+import { EditGroupItemsForm } from "./_edit-items-form";
 
 
 export default async function EditAddonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await getServerClient();
 
-  const [{ data: groupRaw, error }, { data: allItems }] = await Promise.all([
+  const [{ data: groupRaw, error }, { data: allItems }, { data: assignedRaw }] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("addon_groups")
-      .select("*, categories(name_en), menu_items(name_en), addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(name_en, image_url, emoji))")
+      .select("*, categories(name_en), addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(name_en, image_url, emoji))")
       .eq("id", id)
       .single(),
     supabase.from("menu_items").select("id, name_en, image_url, emoji, price").order("name_en"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("addon_group_items").select("menu_item_id").eq("addon_group_id", id),
   ]);
 
   if (error || !groupRaw) notFound();
@@ -30,9 +33,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
     required: boolean;
     sort_order: number;
     category_id: string | null;
-    menu_item_id: string | null;
     categories: { name_en: string } | null;
-    menu_items: { name_en: string } | null;
     addon_options: {
       id: string;
       label_en: string;
@@ -45,10 +46,13 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
   };
 
   const menuItems = (allItems ?? []) as { id: string; name_en: string; image_url: string | null; emoji: string; price: number }[];
-  const scopeName = group.category_id
-    ? ((group.categories as { name_en: string } | null)?.name_en ?? "—")
-    : ((group.menu_items as { name_en: string } | null)?.name_en ?? "—");
-  const scopeType = group.category_id ? "Category" : "Menu Item";
+  const assignedItemIds = ((assignedRaw ?? []) as { menu_item_id: string }[]).map((r) => r.menu_item_id);
+
+  const isItemScope = !group.category_id;
+  const scopeLabel = group.category_id
+    ? `Kategori: ${(group.categories as { name_en: string } | null)?.name_en ?? "—"}`
+    : `${assignedItemIds.length} Menü Ürünü`;
+
   const options = (group.addon_options ?? []).sort((a, b) => a.sort_order - b.sort_order);
 
   const updateGroupWithId = updateGroup.bind(null, id);
@@ -58,7 +62,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
     <>
       <PageHeader
         title={group.label_en}
-        subtitle={`${scopeType}: ${scopeName}`}
+        subtitle={scopeLabel}
         action={<GhostButton href="/admin/addons">← Tüm Ekstralar</GhostButton>}
       />
 
@@ -69,9 +73,8 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
           action={updateGroupWithId}
           className="border-2 border-green bg-white p-6 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl"
         >
-          <input type="hidden" name="scope" value={group.category_id ? "category" : "item"} />
+          <input type="hidden" name="scope" value={isItemScope ? "item" : "category"} />
           {group.category_id && <input type="hidden" name="category_id" value={group.category_id} />}
-          {group.menu_item_id && <input type="hidden" name="menu_item_id" value={group.menu_item_id} />}
 
           <Field label="Etiket (İNG)" name="label_en" required defaultValue={group.label_en} />
           <Field label="Etiket (TR)" name="label_tr" required defaultValue={group.label_tr} />
@@ -81,6 +84,16 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
             <Checkbox label="Çoklu seçim" name="multi" defaultChecked={group.multi} />
             <Checkbox label="Zorunlu seçim" name="required" defaultChecked={group.required ?? false} />
           </div>
+
+          {/* Item assignments for item-scoped groups */}
+          {isItemScope && (
+            <div className="md:col-span-2">
+              <EditGroupItemsForm
+                allItems={menuItems}
+                assignedItemIds={assignedItemIds}
+              />
+            </div>
+          )}
 
           <div className="md:col-span-2 flex gap-3 pt-2 border-t-2 border-green/20">
             <PrimaryButton>Değişiklikleri Kaydet</PrimaryButton>
