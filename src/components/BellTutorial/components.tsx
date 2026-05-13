@@ -33,7 +33,7 @@ export function BellTutorial({ onDismiss, eyebrow, title, dismissHint }: Props) 
       className="fixed inset-0 z-99997 cursor-pointer overflow-hidden"
       style={{
         background:
-          "radial-gradient(circle 64px at 40px calc(100% - 80px), transparent 36px, rgba(31,46,38,0.6) 60px, rgba(31,46,38,0.94) 160px)",
+          "radial-gradient(circle 64px at 40px calc(100% - 80px), transparent 36px, rgba(57,90,102,0.6) 60px, rgba(57,90,102,0.94) 160px)",
         animation: closing
           ? `fadeOut ${FADE_OUT_MS}ms ease forwards`
           : "fadeIn 0.3s ease",

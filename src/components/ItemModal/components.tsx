@@ -409,7 +409,7 @@ export function ItemModal({
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
                       {group.options.map((opt) => {
                         const active = !!selected[opt.id];
                         const hasMedia = !!(opt.image_url || opt.emoji);
@@ -491,7 +491,7 @@ export function ItemModal({
                 <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-2">
                   {alsoTryLabel}
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
                   {suggestedItems.map((sug) => (
                     <button
                       key={sug.id}
