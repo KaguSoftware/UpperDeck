@@ -24,7 +24,7 @@ type Props =
       availableSubGroups?: AvailableSubGroup[];
       assignedRevealIds?: string[];
       updateAction: (formData: FormData) => Promise<void>;
-      createRevealedGroupAction: (formData: FormData) => Promise<void>;
+      createRevealedGroupAction?: (formData: FormData) => Promise<void>;
       createAction?: never;
       defaultSortOrder?: never;
     }
