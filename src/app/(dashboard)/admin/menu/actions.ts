@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -50,6 +51,7 @@ export async function createItem(formData: FormData) {
     .insert({ ...data, created_by: user.id });
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect("/admin/menu");
 }
 
@@ -59,6 +61,7 @@ export async function updateItem(id: string, formData: FormData) {
   const { error } = await supabase.from("menu_items").update(data).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect("/admin/menu");
 }
 
@@ -67,6 +70,7 @@ export async function toggleSoldOut(id: string, sold_out: boolean) {
   const { error } = await supabase.from("menu_items").update({ sold_out }).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function toggleAvailability(id: string, is_available: boolean) {
@@ -74,6 +78,7 @@ export async function toggleAvailability(id: string, is_available: boolean) {
   const { error } = await supabase.from("menu_items").update({ is_available }).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function deleteItem(formData: FormData) {
@@ -82,4 +87,5 @@ export async function deleteItem(formData: FormData) {
   const { error } = await supabase.from("menu_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }

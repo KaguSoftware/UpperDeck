@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -52,6 +53,7 @@ export async function createCategory(formData: FormData) {
     .insert({ ...data, sort_order, created_by: user.id });
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 
   redirect("/admin/categories");
 }
@@ -62,6 +64,7 @@ export async function updateCategory(id: string, formData: FormData) {
   const { error } = await supabase.from("categories").update(data).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect("/admin/categories");
 }
 
@@ -71,6 +74,7 @@ export async function deleteCategory(formData: FormData) {
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 
 }
 
@@ -111,6 +115,7 @@ async function reorderCategory(id: string, direction: "up" | "down") {
   ]);
 
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function moveCategoryUp(id: string) {

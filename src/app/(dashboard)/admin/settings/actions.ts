@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 
@@ -45,4 +46,5 @@ export async function saveHeroSettings(formData: FormData) {
   if (error) throw new Error(error.message);
 
   updateTag("hero");
+  void broadcastMenuUpdate();
 }

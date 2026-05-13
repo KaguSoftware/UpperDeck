@@ -212,31 +212,71 @@ export function ItemModal({
     return () => clearTimeout(t);
   }, [item?.id, item?.sold_out]);
 
+  // Collect all revealed groups from currently selected options
+  const revealedGroups = useMemo(() => {
+    const result: { optionId: string; group: AddonOption["revealedGroups"][number] }[] = [];
+    addonGroups.forEach((g) => {
+      g.options.forEach((o) => {
+        if (selected[o.id]) {
+          (o.revealedGroups ?? []).forEach((rg) => result.push({ optionId: o.id, group: rg }));
+        }
+      });
+    });
+    return result;
+  }, [addonGroups, selected]);
+
   const selectedExtras = useMemo<(AddonOption & { required?: boolean; groupLabel?: string })[]>(() => {
-    return addonGroups.flatMap((g) =>
+    const fromMain = addonGroups.flatMap((g) =>
       g.options.filter((o) => selected[o.id]).map((o) => ({ ...o, required: g.required, groupLabel: g.required ? g.label : undefined }))
     );
-  }, [addonGroups, selected]);
+    const fromRevealed = revealedGroups.flatMap(({ group: g }) =>
+      g.options.filter((o) => selected[o.id]).map((o) => ({ ...o, required: g.required, groupLabel: g.required ? g.label : undefined }))
+    );
+    return [...fromMain, ...fromRevealed];
+  }, [addonGroups, revealedGroups, selected]);
 
   const extrasTotal = selectedExtras.reduce((s, o) => s + o.price, 0);
 
   const missingRequired = useMemo(() => {
-    return addonGroups.filter((g) => {
-      if (!g.required) return false;
-      return !g.options.some((o) => selected[o.id]);
-    });
-  }, [addonGroups, selected]);
+    const fromMain = addonGroups.filter((g) => g.required && !g.options.some((o) => selected[o.id]));
+    const fromRevealed = revealedGroups
+      .filter(({ group: g }) => g.required && !g.options.some((o) => selected[o.id]))
+      .map(({ group }) => group);
+    return [...fromMain, ...fromRevealed];
+  }, [addonGroups, revealedGroups, selected]);
 
-  const toggleAddon = (groupIndex: number, option: AddonOption, multi: boolean) => {
+  const toggleAddon = (groupIndex: number, option: AddonOption, multi: boolean, isRevealed = false, revealedGroupOptions?: AddonOption[]) => {
     setSelected((prev) => {
-      if (multi) {
-        return { ...prev, [option.id]: !prev[option.id] };
-      }
-      // single-select: deselect all options in this group first
-      const groupOptionIds = addonGroups[groupIndex].options.map((o) => o.id);
       const next = { ...prev };
-      groupOptionIds.forEach((id) => { next[id] = false; });
-      next[option.id] = !prev[option.id];
+      if (isRevealed && revealedGroupOptions) {
+        if (multi) {
+          next[option.id] = !prev[option.id];
+        } else {
+          revealedGroupOptions.forEach((o) => { next[o.id] = false; });
+          next[option.id] = !prev[option.id];
+        }
+        return next;
+      }
+      if (multi) {
+        next[option.id] = !prev[option.id];
+        // clear revealed group selections when deselecting
+        if (!next[option.id]) {
+          (option.revealedGroups ?? []).forEach((rg) => rg.options.forEach((ro) => { next[ro.id] = false; }));
+        }
+      } else {
+        const groupOptionIds = addonGroups[groupIndex].options.map((o) => o.id);
+        // clear revealed groups of previously selected option
+        addonGroups[groupIndex].options.forEach((o) => {
+          if (prev[o.id] && o.id !== option.id) {
+            (o.revealedGroups ?? []).forEach((rg) => rg.options.forEach((ro) => { next[ro.id] = false; }));
+          }
+        });
+        groupOptionIds.forEach((id) => { next[id] = false; });
+        next[option.id] = !prev[option.id];
+        if (!next[option.id]) {
+          (option.revealedGroups ?? []).forEach((rg) => rg.options.forEach((ro) => { next[ro.id] = false; }));
+        }
+      }
       return next;
     });
   };
@@ -414,15 +454,11 @@ export function ItemModal({
                         const active = !!selected[opt.id];
                         const hasMedia = !!(opt.image_url || opt.emoji);
                         return hasMedia ? (
-                          /* image / emoji card */
                           <button
                             key={opt.id}
                             type="button"
                             onClick={() => toggleAddon(gi, opt, group.multi)}
-                            className={[
-                              "flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden",
-                              active ? "border-green" : "border-green/30",
-                            ].join(" ")}
+                            className={["flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden", active ? "border-green" : "border-green/30"].join(" ")}
                           >
                             <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
                               {opt.image_url ? (
@@ -432,39 +468,71 @@ export function ItemModal({
                               )}
                             </div>
                             <div className={["px-1 py-1.5 text-center flex-1", active ? "bg-green" : "bg-transparent"].join(" ")}>
-                              <div className={["font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight", active ? "text-bg" : "text-green"].join(" ")}>
-                                {opt.label}
-                              </div>
-                              {opt.price > 0 && (
-                                <div className={["font-bowlby text-[11px] leading-tight mt-0.5", active ? "text-bg/80" : "text-orange"].join(" ")}>
-                                  +{opt.price}₺
-                                </div>
-                              )}
+                              <div className={["font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight", active ? "text-bg" : "text-green"].join(" ")}>{opt.label}</div>
+                              {opt.price > 0 && <div className={["font-bowlby text-[11px] leading-tight mt-0.5", active ? "text-bg/80" : "text-orange"].join(" ")}>+{opt.price}₺</div>}
                             </div>
                           </button>
                         ) : (
-                          /* text pill — no media linked */
                           <button
                             key={opt.id}
                             type="button"
                             onClick={() => toggleAddon(gi, opt, group.multi)}
-                            className={[
-                              "shrink-0 border-2 cursor-pointer transition-colors px-3 py-2 flex flex-col items-center justify-center gap-0.5",
-                              active ? "border-green bg-green" : "border-green/30 bg-transparent",
-                            ].join(" ")}
+                            className={["shrink-0 border-2 cursor-pointer transition-colors px-3 py-2 flex flex-col items-center justify-center gap-0.5", active ? "border-green bg-green" : "border-green/30 bg-transparent"].join(" ")}
                           >
-                            <span className={["font-ui font-extrabold text-[10px] tracking-wide uppercase whitespace-nowrap", active ? "text-bg" : "text-green"].join(" ")}>
-                              {opt.label}
-                            </span>
-                            {opt.price > 0 && (
-                              <span className={["font-bowlby text-[11px]", active ? "text-bg/80" : "text-orange"].join(" ")}>
-                                +{opt.price}₺
-                              </span>
-                            )}
+                            <span className={["font-ui font-extrabold text-[10px] tracking-wide uppercase whitespace-nowrap", active ? "text-bg" : "text-green"].join(" ")}>{opt.label}</span>
+                            {opt.price > 0 && <span className={["font-bowlby text-[11px]", active ? "text-bg/80" : "text-orange"].join(" ")}>+{opt.price}₺</span>}
                           </button>
                         );
                       })}
                     </div>
+                    {/* Revealed groups — shown per-option when selected */}
+                    {group.options.filter((o) => selected[o.id] && (o.revealedGroups ?? []).length > 0).map((opt) =>
+                      (opt.revealedGroups ?? []).map((rg) => {
+                        const rgMissing = rg.required && !rg.options.some((ro) => selected[ro.id]);
+                        return (
+                          <div key={rg.id} className="mt-2 pl-3 border-l-2 border-orange/40">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-extrabold text-[9px] tracking-[0.22em] text-orange uppercase">{rg.label}</span>
+                              {rg.required && (
+                                <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", rgMissing ? "bg-orange text-white" : "bg-orange/20 text-orange"].join(" ")}>Zorunlu</span>
+                              )}
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
+                              {rg.options.map((ro) => {
+                                const roActive = !!selected[ro.id];
+                                const roHasMedia = !!(ro.image_url || ro.emoji);
+                                return roHasMedia ? (
+                                  <button
+                                    key={ro.id}
+                                    type="button"
+                                    onClick={() => toggleAddon(gi, ro, rg.multi, true, rg.options)}
+                                    className={["flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden", roActive ? "border-green" : "border-green/30"].join(" ")}
+                                  >
+                                    <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
+                                      {ro.image_url ? <Image src={ro.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" /> : <span className="text-[28px] leading-none">{ro.emoji}</span>}
+                                    </div>
+                                    <div className={["px-1 py-1.5 text-center flex-1", roActive ? "bg-green" : "bg-transparent"].join(" ")}>
+                                      <div className={["font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight", roActive ? "text-bg" : "text-green"].join(" ")}>{ro.label}</div>
+                                      {ro.price > 0 && <div className={["font-bowlby text-[11px] leading-tight mt-0.5", roActive ? "text-bg/80" : "text-orange"].join(" ")}>+{ro.price}₺</div>}
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <button
+                                    key={ro.id}
+                                    type="button"
+                                    onClick={() => toggleAddon(gi, ro, rg.multi, true, rg.options)}
+                                    className={["shrink-0 border-2 cursor-pointer transition-colors px-3 py-2 flex flex-col items-center justify-center gap-0.5", roActive ? "border-green bg-green" : "border-green/30 bg-transparent"].join(" ")}
+                                  >
+                                    <span className={["font-ui font-extrabold text-[10px] tracking-wide uppercase whitespace-nowrap", roActive ? "text-bg" : "text-green"].join(" ")}>{ro.label}</span>
+                                    {ro.price > 0 && <span className={["font-bowlby text-[11px]", roActive ? "text-bg/80" : "text-orange"].join(" ")}>+{ro.price}₺</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                   );
                 })}

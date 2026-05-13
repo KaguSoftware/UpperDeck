@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { TopBar } from "@/components/TopBar/components";
 import { Hero } from "@/components/Hero/components";
 import { FilterPills } from "@/components/FilterPills/components";
@@ -44,6 +46,7 @@ type PhoneMenuProps = {
 };
 
 export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
+  const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
@@ -69,6 +72,15 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const heroSentinelRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Listen for menu updates broadcast from admin and refresh server data
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase.channel("menu-updates")
+      .on("broadcast", { event: "refresh" }, () => { router.refresh(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [router]);
 
   // Hydrate from sessionStorage on mount (client-only). URL table number wins over session.
   useEffect(() => {

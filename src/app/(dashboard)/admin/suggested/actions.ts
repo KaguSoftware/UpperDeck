@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -40,6 +41,7 @@ export async function createGroup(formData: FormData) {
     .single();
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect(`/admin/suggested/${(group as { id: string }).id}/edit`);
 }
 
@@ -49,6 +51,7 @@ export async function updateGroup(id: string, formData: FormData) {
   const { error } = await db(supabase).from("suggested_groups").update(data).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function deleteGroup(formData: FormData) {
@@ -57,6 +60,7 @@ export async function deleteGroup(formData: FormData) {
   const { error } = await db(supabase).from("suggested_groups").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect("/admin/suggested");
 }
 
@@ -69,6 +73,7 @@ export async function createItem(groupId: string, formData: FormData) {
     .insert({ suggested_group_id: groupId, menu_item_id, sort_order });
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function deleteItem(formData: FormData) {
@@ -77,6 +82,7 @@ export async function deleteItem(formData: FormData) {
   const { error } = await db(supabase).from("suggested_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function reorderItem(formData: FormData) {
@@ -104,4 +110,5 @@ export async function reorderItem(formData: FormData) {
   ]);
 
   updateTag("menu");
+  void broadcastMenuUpdate();
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
@@ -73,6 +74,7 @@ export async function createGroup(formData: FormData) {
     if (joinError) throw new Error(joinError.message);
   }
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect(`/admin/addons/${groupId}/edit`);
 }
 
@@ -90,6 +92,7 @@ export async function updateGroup(id: string, formData: FormData) {
     if (joinError) throw new Error(joinError.message);
   }
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function deleteGroup(formData: FormData) {
@@ -98,17 +101,28 @@ export async function deleteGroup(formData: FormData) {
   const { error } = await db(supabase).from("addon_groups").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
   redirect("/admin/addons");
 }
 
 export async function createOption(groupId: string, formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const data = parseOption(formData);
-  const { error } = await db(supabase)
+  const { data: created, error } = await db(supabase)
     .from("addon_options")
-    .insert({ ...data, addon_group_id: groupId });
+    .insert({ ...data, addon_group_id: groupId })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  const optionId = (created as { id: string }).id;
+  const revealIds = formData.getAll("reveal_group_ids[]").map(String).filter(Boolean);
+  if (revealIds.length > 0) {
+    await db(supabase).from("addon_option_reveals").insert(
+      revealIds.map((addon_group_id, i) => ({ addon_option_id: optionId, addon_group_id, sort_order: i }))
+    );
+  }
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function updateOption(id: string, _groupId: string, formData: FormData) {
@@ -116,7 +130,15 @@ export async function updateOption(id: string, _groupId: string, formData: FormD
   const data = parseOption(formData);
   const { error } = await db(supabase).from("addon_options").update(data).eq("id", id);
   if (error) throw new Error(error.message);
+  const revealIds = formData.getAll("reveal_group_ids[]").map(String).filter(Boolean);
+  await db(supabase).from("addon_option_reveals").delete().eq("addon_option_id", id);
+  if (revealIds.length > 0) {
+    await db(supabase).from("addon_option_reveals").insert(
+      revealIds.map((addon_group_id, i) => ({ addon_option_id: id, addon_group_id, sort_order: i }))
+    );
+  }
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function reorderOption(formData: FormData) {
@@ -144,6 +166,7 @@ export async function reorderOption(formData: FormData) {
   ]);
 
   updateTag("menu");
+  void broadcastMenuUpdate();
 }
 
 export async function deleteOption(formData: FormData) {
@@ -152,4 +175,5 @@ export async function deleteOption(formData: FormData) {
   const { error } = await db(supabase).from("addon_options").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
+  void broadcastMenuUpdate();
 }

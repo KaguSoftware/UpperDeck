@@ -59,7 +59,7 @@ export const getHeroSettings = unstable_cache(
   { tags: ["hero"] }
 );
 
-export type AddonOptionPublic = { id: string; label: string; price: number; image_url: string | null; emoji: string | null };
+export type AddonOptionPublic = { id: string; label: string; price: number; image_url: string | null; emoji: string | null; revealedGroups: AddonGroupPublic[] };
 export type AddonGroupPublic  = { id: string; label: string; multi: boolean; required: boolean; options: AddonOptionPublic[] };
 
 export type SuggestedItemPublic = { id: string; name: string; price: number; image_url: string | null; emoji: string };
@@ -120,13 +120,27 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)), addon_group_items(menu_item_id)`)
+    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_group_items(menu_item_id), addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji), addon_option_reveals(sort_order, addon_groups(id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)))))`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
-  type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
+  type RawRevealedOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
+  type RawRevealedGroup  = { id: string; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawRevealedOption[] };
+  type RawReveal = { sort_order: number; addon_groups: RawRevealedGroup };
+  type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null; addon_option_reveals: RawReveal[] };
   type RawAddonGroup  = { id: string; category_id: string | null; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawAddonOption[]; addon_group_items: { menu_item_id: string }[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
+
+  function mapOption(o: RawRevealedOption, locale: string): AddonOptionPublic {
+    return {
+      id: o.id,
+      label: o[`label_${locale}`] as string,
+      price: o.price,
+      image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
+      emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
+      revealedGroups: [],
+    };
+  }
 
   // Fetch all suggested groups with their items
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -213,6 +227,17 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
             price: o.price,
             image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
             emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
+            revealedGroups: ((o.addon_option_reveals ?? []) as RawReveal[])
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((r) => ({
+                id: r.addon_groups.id,
+                label: r.addon_groups[`label_${n}`] as string,
+                multi: r.addon_groups.multi,
+                required: r.addon_groups.required ?? false,
+                options: ((r.addon_groups.addon_options ?? []) as RawRevealedOption[])
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((ro) => mapOption(ro, n)),
+              })),
           })),
       }));
 
