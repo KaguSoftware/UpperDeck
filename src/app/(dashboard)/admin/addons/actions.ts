@@ -121,6 +121,14 @@ export async function updateOption(id: string, _groupId: string, formData: FormD
   const data = parseOption(formData);
   const { error } = await db(supabase).from("addon_options").update(data).eq("id", id);
   if (error) throw new Error(error.message);
+  // Update reveal assignments
+  const revealIds = formData.getAll("reveal_group_ids[]").map(String).filter(Boolean);
+  await db(supabase).from("addon_option_reveals").delete().eq("addon_option_id", id);
+  if (revealIds.length > 0) {
+    await db(supabase).from("addon_option_reveals").insert(
+      revealIds.map((addon_group_id, i) => ({ addon_option_id: id, addon_group_id, sort_order: i }))
+    );
+  }
   updateTag("menu");
   void broadcastMenuUpdate();
 }

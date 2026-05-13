@@ -116,31 +116,51 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
     throw new Error(`Failed to fetch menu items: ${itemsError.message}`);
   }
 
-  // Fetch all addon groups with their options and item assignments in one query
+  // Fetch all addon groups with their options, item assignments, and reveal links
+  // Reveals only fetch the group_id — full group data is looked up from the already-fetched groups map
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_group_items(menu_item_id), addon_options!addon_group_id(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji), addon_option_reveals(sort_order, addon_groups(id, label_${n}, multi, required, sort_order, addon_options!addon_group_id(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)))))`)
+    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_group_items(menu_item_id), addon_options!addon_group_id(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji), addon_option_reveals(sort_order, addon_group_id))`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
-  type RawRevealedOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null };
-  type RawRevealedGroup  = { id: string; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawRevealedOption[] };
-  type RawReveal = { sort_order: number; addon_groups: RawRevealedGroup };
-  type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null; addon_option_reveals: RawReveal[] };
+  type RawAddonOption = { id: string; [label: string]: unknown; price: number; sort_order: number; menu_item_id: string | null; menu_items: { image_url: string | null; emoji: string } | null; addon_option_reveals: { sort_order: number; addon_group_id: string }[] };
   type RawAddonGroup  = { id: string; category_id: string | null; [label: string]: unknown; multi: boolean; required: boolean; sort_order: number; addon_options: RawAddonOption[]; addon_group_items: { menu_item_id: string }[] };
   const addonGroups: RawAddonGroup[] = (addonRaw ?? []) as RawAddonGroup[];
 
-  function mapOption(o: RawRevealedOption, locale: string): AddonOptionPublic {
-    return {
-      id: o.id,
-      label: o[`label_${locale}`] as string,
-      price: o.price,
-      image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
-      emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
-      revealedGroups: [],
-    };
-  }
+  // Build a lookup map: group id → AddonGroupPublic (used to resolve reveal links without deep nesting)
+  const groupById = new Map<string, AddonGroupPublic>();
+  addonGroups.forEach((g) => {
+    groupById.set(g.id, {
+      id: g.id,
+      label: g[`label_${n}`] as string,
+      multi: g.multi,
+      required: g.required ?? false,
+      options: ((g.addon_options ?? []) as RawAddonOption[])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((o) => ({
+          id: o.id,
+          label: o[`label_${n}`] as string,
+          price: o.price,
+          image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
+          emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
+          revealedGroups: [], // filled in below after full map is built
+        })),
+    });
+  });
+  // Second pass: fill in revealedGroups now that all groups are in the map
+  addonGroups.forEach((g) => {
+    const pub = groupById.get(g.id)!;
+    pub.options.forEach((pubOpt, i) => {
+      const rawOpt = ((g.addon_options ?? []) as RawAddonOption[]).sort((a, b) => a.sort_order - b.sort_order)[i];
+      if (!rawOpt) return;
+      pubOpt.revealedGroups = ((rawOpt.addon_option_reveals ?? []) as { sort_order: number; addon_group_id: string }[])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((rev) => groupById.get(rev.addon_group_id))
+        .filter((rg): rg is AddonGroupPublic => rg !== undefined);
+    });
+  });
 
   // Fetch all suggested groups with their items
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,32 +234,9 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
       const catGroups  = addonGroups.filter(
         (g) => g.category_id === r.category_id || (parentCatId && g.category_id === parentCatId)
       );
-      const resolved = (itemGroups.length > 0 ? itemGroups : catGroups).map((g) => ({
-        id: g.id,
-        label: g[`label_${n}`] as string,
-        multi: g.multi,
-        required: g.required ?? false,
-        options: ((g.addon_options ?? []) as RawAddonOption[])
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((o) => ({
-            id: o.id,
-            label: o[`label_${n}`] as string,
-            price: o.price,
-            image_url: (o.menu_items as { image_url: string | null; emoji: string } | null)?.image_url ?? null,
-            emoji: (o.menu_items as { image_url: string | null; emoji: string } | null)?.emoji ?? null,
-            revealedGroups: ((o.addon_option_reveals ?? []) as RawReveal[])
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((r) => ({
-                id: r.addon_groups.id,
-                label: r.addon_groups[`label_${n}`] as string,
-                multi: r.addon_groups.multi,
-                required: r.addon_groups.required ?? false,
-                options: ((r.addon_groups.addon_options ?? []) as RawRevealedOption[])
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((ro) => mapOption(ro, n)),
-              })),
-          })),
-      }));
+      const resolved = (itemGroups.length > 0 ? itemGroups : catGroups)
+        .map((g) => groupById.get(g.id))
+        .filter((g): g is AddonGroupPublic => g !== undefined);
 
       const sugItemGroups = suggestedGroups.filter((g) => g.menu_item_id === r.id);
       const sugCatGroups  = suggestedGroups.filter(

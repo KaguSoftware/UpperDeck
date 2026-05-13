@@ -14,11 +14,15 @@ type Opt = {
   menu_item_id: string | null;
 };
 
+type AvailableSubGroup = { id: string; label_en: string };
+
 type Props =
   | {
       opt: Opt;
       groupId: string;
       menuItems: MenuItem[];
+      availableSubGroups?: AvailableSubGroup[];
+      assignedRevealIds?: string[];
       updateAction: (formData: FormData) => Promise<void>;
       createRevealedGroupAction: (formData: FormData) => Promise<void>;
       createAction?: never;
@@ -28,6 +32,8 @@ type Props =
       opt?: never;
       groupId: string;
       menuItems: MenuItem[];
+      availableSubGroups?: never;
+      assignedRevealIds?: never;
       createAction: (formData: FormData) => Promise<void>;
       createRevealedGroupAction?: never;
       updateAction?: never;
@@ -50,14 +56,24 @@ function FieldRaw({ label, name, value, onChange, type = "text", required, min, 
   );
 }
 
-export function AddonOptionForm({ opt, groupId, menuItems, updateAction, createRevealedGroupAction, createAction, defaultSortOrder = 0 }: Props) {
+export function AddonOptionForm({ opt, groupId, menuItems, availableSubGroups = [], assignedRevealIds = [], updateAction, createRevealedGroupAction, createAction, defaultSortOrder = 0 }: Props) {
   const isEdit = !!opt;
   const [pickedId, setPickedId] = useState(opt?.menu_item_id ?? "");
   const [labelEn, setLabelEn] = useState(opt?.label_en ?? "");
   const [labelTr, setLabelTr] = useState(opt?.label_tr ?? "");
   const [price, setPrice] = useState<number>(opt?.price ?? 0);
   const [sortOrder, setSortOrder] = useState(isEdit ? opt!.sort_order : defaultSortOrder);
+  const [revealIds, setRevealIds] = useState<Set<string>>(new Set(assignedRevealIds));
   const [showNewSubGroup, setShowNewSubGroup] = useState(false);
+
+  const toggleReveal = (gid: string) => {
+    setRevealIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(gid)) next.delete(gid);
+      else next.add(gid);
+      return next;
+    });
+  };
 
   const picked = menuItems.find((m) => m.id === pickedId) ?? null;
 
@@ -88,6 +104,9 @@ export function AddonOptionForm({ opt, groupId, menuItems, updateAction, createR
         {isEdit && <input type="hidden" name="group_id" value={groupId} />}
         <input type="hidden" name="menu_item_id" value={pickedId} />
         <input type="hidden" name="sort_order" value={sortOrder} />
+        {isEdit && Array.from(revealIds).map((gid) => (
+          <input key={gid} type="hidden" name="reveal_group_ids[]" value={gid} />
+        ))}
 
         {/* picker row — only shown in create mode */}
         {!isEdit && (
@@ -131,6 +150,28 @@ export function AddonOptionForm({ opt, groupId, menuItems, updateAction, createR
             <PrimaryButton>{isEdit ? "Kaydet" : "+ Ekle"}</PrimaryButton>
           </div>
         </div>
+
+        {/* Existing sub-groups checklist — only in edit mode */}
+        {isEdit && availableSubGroups.length > 0 && (
+          <div>
+            <span className="font-ui font-extrabold text-[9px] tracking-[0.22em] uppercase text-orange/70">
+              Bu seçenek seçilince gösterilecek alt gruplar
+            </span>
+            <div className="mt-1.5 border border-orange/30 divide-y divide-orange/10 max-h-32 overflow-y-auto">
+              {availableSubGroups.map((sg) => (
+                <label key={sg.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-bg-deep transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={revealIds.has(sg.id)}
+                    onChange={() => toggleReveal(sg.id)}
+                    className="accent-orange w-3.5 h-3.5 shrink-0"
+                  />
+                  <span className="font-ui text-[11px] text-green">{sg.label_en}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
 
       {/* Sub-group creation — only available on existing options */}
