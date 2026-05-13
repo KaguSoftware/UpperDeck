@@ -5,52 +5,7 @@ import Image from "next/image";
 import type { ItemModalProps, AddonOption } from "./types";
 
 function HorizontalScroll({ children, className }: { children: React.ReactNode; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let startX = 0;
-    let startScroll = 0;
-    let latestDx = 0;
-    let active = false;
-    let rafId: number | null = null;
-
-    const flush = () => {
-      el.scrollLeft = startScroll - latestDx;
-      rafId = null;
-    };
-
-    const onStart = (e: TouchEvent) => {
-      startX = e.touches[0].clientX;
-      startScroll = el.scrollLeft;
-      latestDx = 0;
-      active = true;
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!active) return;
-      latestDx = e.touches[0].clientX - startX;
-      if (rafId === null) rafId = requestAnimationFrame(flush);
-    };
-    const onEnd = () => {
-      active = false;
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-    };
-    el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: true });
-    el.addEventListener("touchend", onEnd, { passive: true });
-    el.addEventListener("touchcancel", onEnd, { passive: true });
-    return () => {
-      el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchmove", onMove);
-      el.removeEventListener("touchend", onEnd);
-      el.removeEventListener("touchcancel", onEnd);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, []);
-  return <div ref={ref} className={className} style={{ touchAction: "pan-y" }}>{children}</div>;
+  return <div className={className}>{children}</div>;
 }
 
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
