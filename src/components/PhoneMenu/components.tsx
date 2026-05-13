@@ -19,8 +19,6 @@ import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries"
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
-const COLLAPSE_AT = 40;
-const EXPAND_AT = 0;
 const CART_STORAGE_KEY = "upperdeck-cart";
 
 type PersistedCart = {
@@ -65,9 +63,9 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const topbarRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
+  const heroSentinelRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -170,7 +168,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       setQrModalOpen(true);
       return;
     }
-    setHeroCollapsed(true);
     setCartOpen(true);
   }, [tableNumber]);
 
@@ -276,6 +273,18 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     }, 800);
   }, [featuredItem]);
 
+  // IntersectionObserver: collapse pills when hero scrolls out of view
+  useEffect(() => {
+    const sentinel = heroSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { setHeroCollapsed(!entry.isIntersecting); },
+      { root: stageWrapRef.current, threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScroll = useCallback(() => {
     const wrap = stageWrapRef.current;
     const stage = stageRef.current;
@@ -283,19 +292,6 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
     const scrollTop = wrap.scrollTop;
     const wrapHeight = wrap.clientHeight;
-
-    setHeroCollapsed((prev) => {
-      if (!prev && scrollTop > COLLAPSE_AT) {
-        // Compensate for the space the hero was occupying so content doesn't jump
-        const heroHeight = heroRef.current?.offsetHeight ?? 0;
-        if (heroHeight > 0) {
-          wrap.scrollTop = scrollTop - heroHeight;
-        }
-        return true;
-      }
-      if (prev && scrollTop === EXPAND_AT) return false;
-      return prev;
-    });
 
     if (footerRef.current) {
       setFooterVisible(footerRef.current.offsetTop < scrollTop + wrapHeight - 64);
@@ -329,38 +325,40 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           locale={locale}
         />
       </div>
-      <div ref={heroRef}>
-        <Hero
-          collapsed={heroCollapsed}
-          itemCount={items.length}
-          headline1={t.hero.headline1}
-          headline2={t.hero.headline2}
-          headline3={t.hero.headline3}
-          headline4={t.hero.headline4}
-          openHours={t.hero.openHours}
-          itemsLabel={t.hero.items}
-          heroMode={heroMode}
-          heroMediaUrl={heroMediaUrl}
-          featuredItem={featuredItem}
-          featuredLabel={featuredLabel}
-          featuredBadge={featuredBadge}
-          featuredDiscount={featuredDiscount}
-          onFeaturedClick={handleFeaturedClick}
-        />
-      </div>
-      <FilterPills
-        items={pillItems}
-        activeId={activeSlug}
-        onSelect={handlePillSelect}
-        navRef={pillsNavRef}
-        compact={heroCollapsed}
-      />
       <div className="relative flex-1 min-h-0">
         <div
           ref={stageWrapRef}
           onScroll={handleScroll}
           className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
+          <Hero
+            collapsed={false}
+            itemCount={items.length}
+            headline1={t.hero.headline1}
+            headline2={t.hero.headline2}
+            headline3={t.hero.headline3}
+            headline4={t.hero.headline4}
+            openHours={t.hero.openHours}
+            itemsLabel={t.hero.items}
+            heroMode={heroMode}
+            heroMediaUrl={heroMediaUrl}
+            featuredItem={featuredItem}
+            featuredLabel={featuredLabel}
+            featuredBadge={featuredBadge}
+            featuredDiscount={featuredDiscount}
+            onFeaturedClick={handleFeaturedClick}
+          />
+          {/* sentinel: when this exits the viewport the pills go compact */}
+          <div ref={heroSentinelRef} className="h-0" />
+          <div className="sticky top-0 z-10">
+            <FilterPills
+              items={pillItems}
+              activeId={activeSlug}
+              onSelect={handlePillSelect}
+              navRef={pillsNavRef}
+              compact={heroCollapsed}
+            />
+          </div>
           <MenuStage
             onOpen={setActiveItem}
             stageRef={stageRef}
