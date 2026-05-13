@@ -238,13 +238,19 @@ export function ItemModal({
     return () => clearTimeout(t);
   }, [item?.id, item?.sold_out]);
 
-  // Collect all revealed groups from currently selected options
+  // Collect all revealed groups from currently selected options — deduplicated by group id
   const revealedGroups = useMemo(() => {
+    const seen = new Set<string>();
     const result: { optionId: string; group: AddonOption["revealedGroups"][number] }[] = [];
     addonGroups.forEach((g) => {
       g.options.forEach((o) => {
         if (selected[o.id]) {
-          (o.revealedGroups ?? []).forEach((rg) => result.push({ optionId: o.id, group: rg }));
+          (o.revealedGroups ?? []).forEach((rg) => {
+            if (!seen.has(rg.id)) {
+              seen.add(rg.id);
+              result.push({ optionId: o.id, group: rg });
+            }
+          });
         }
       });
     });
@@ -516,14 +522,14 @@ export function ItemModal({
                       (opt.revealedGroups ?? []).map((rg) => {
                         const rgMissing = rg.required && !rg.options.some((ro) => selected[ro.id]);
                         return (
-                          <div key={rg.id} className="mt-2 pl-3 border-l-2 border-orange/40">
+                          <div key={rg.id} className="mt-2 pl-3 border-l-2 border-orange/40 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="font-extrabold text-[9px] tracking-[0.22em] text-orange uppercase">{rg.label}</span>
                               {rg.required && (
                                 <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", rgMissing ? "bg-orange text-white" : "bg-orange/20 text-orange"].join(" ")}>Zorunlu</span>
                               )}
                             </div>
-                            <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                            <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -ml-3 pl-3 pr-3">
                               {rg.options.map((ro) => {
                                 const roActive = !!selected[ro.id];
                                 const roHasMedia = !!(ro.image_url || ro.emoji);
