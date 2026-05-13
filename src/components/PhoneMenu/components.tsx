@@ -263,8 +263,11 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       const target = stageRef.current?.querySelector<HTMLElement>(
         `[data-cat="${CSS.escape(slug)}"]`
       );
-      if (target) {
-        stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
+      if (target && stageWrapRef.current) {
+        const wrap = stageWrapRef.current;
+        const targetTop = target.getBoundingClientRect().top;
+        const wrapTop = wrap.getBoundingClientRect().top;
+        wrap.scrollTo({ top: wrap.scrollTop + (targetTop - wrapTop), behavior: "smooth" });
       }
       scrollPillIntoView(slug);
       setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
@@ -285,9 +288,12 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     const target = stageRef.current?.querySelector<HTMLButtonElement>(
       `[data-item="${CSS.escape(featuredItem.id)}"]`
     );
-    if (!target) return;
+    if (!target || !stageWrapRef.current) return;
     isAutoScrollingRef.current = true;
-    stageWrapRef.current?.scrollTo({ top: target.offsetTop - 8, behavior: "smooth" });
+    const wrap = stageWrapRef.current;
+    const targetTop = target.getBoundingClientRect().top;
+    const wrapTop = wrap.getBoundingClientRect().top;
+    wrap.scrollTo({ top: wrap.scrollTop + (targetTop - wrapTop) - 8, behavior: "smooth" });
     setTimeout(() => {
       isAutoScrollingRef.current = false;
       target.click();
