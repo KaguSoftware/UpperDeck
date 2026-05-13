@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-const CREAM = "#FFF8EC";
+const CREAM = "#F6F6F6";
 
 export function Footer() {
     return (

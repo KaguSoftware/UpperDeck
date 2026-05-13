@@ -38,7 +38,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
       <span className="shrink-0 w-2.5" aria-hidden />
     </nav>
     {/* right-edge fade to hint at horizontal overflow */}
-    <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" style={{ background: "linear-gradient(to right, transparent, #FFF8EC)" }} aria-hidden />
+    <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none" style={{ background: "linear-gradient(to right, transparent, #F6F6F6)" }} aria-hidden />
     </div>
   );
 }

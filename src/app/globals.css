@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #FFF8EC;
-  --color-bg-deep: #F5EDDA;
+  --color-bg: #F6F6F6;
+  --color-bg-deep: #E8E8E8;
   --color-green: #395A66;
   --color-green-deep: #243845;
   --color-green-dark: #1f2e26;
@@ -17,7 +17,7 @@
 html,
 body {
   height: 100%;
-  background-color: #FFF8EC;
+  background-color: #F6F6F6;
   font-family: var(--font-inter-next), sans-serif;
   color: #1f2e26;
 }
@@ -157,9 +157,9 @@ a {
 .shimmer {
   background: linear-gradient(
     90deg,
-    #F5EDDA 25%,
-    #FFF8EC 50%,
-    #F5EDDA 75%
+    #E8E8E8 25%,
+    #F6F6F6 50%,
+    #E8E8E8 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
