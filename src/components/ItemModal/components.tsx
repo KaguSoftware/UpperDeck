@@ -20,7 +20,7 @@ function HorizontalScroll({ children, className }: { children: React.ReactNode; 
         const dx = Math.abs(e.touches[0].clientX - startX);
         const dy = Math.abs(e.touches[0].clientY - startY);
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 10) locked = dx > dy * 1.5;
+        if (dist > 6) locked = dx > dy;
       }
       if (locked === true) e.preventDefault();
     };
