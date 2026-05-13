@@ -9,7 +9,7 @@ const getAdminAddons = unstable_cache(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from("addon_groups")
-      .select("id, label_en, multi, sort_order, category_id, addon_options(count), categories(name_en), addon_group_items(menu_items(name_en))")
+      .select("id, label_en, multi, sort_order, category_id, addon_options!addon_group_id(count), categories(name_en), addon_group_items(menu_items(name_en))")
       .order("sort_order", { ascending: true });
     if (error) throw new Error((error as { message: string }).message);
     return data ?? [];

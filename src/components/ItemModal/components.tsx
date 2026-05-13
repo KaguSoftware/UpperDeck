@@ -4,6 +4,32 @@ import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import Image from "next/image";
 import type { ItemModalProps, AddonOption } from "./types";
 
+function HorizontalScroll({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let startX = 0, startY = 0, locked: boolean | null = null;
+    const onStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      locked = null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (locked === null) {
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        const dy = Math.abs(e.touches[0].clientY - startY);
+        if (dx > 6 || dy > 6) locked = dx > dy;
+      }
+      if (locked) e.preventDefault();
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => { el.removeEventListener("touchstart", onStart); el.removeEventListener("touchmove", onMove); };
+  }, []);
+  return <div ref={ref} className={className}>{children}</div>;
+}
+
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -449,7 +475,7 @@ export function ItemModal({
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
+                    <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {group.options.map((opt) => {
                         const active = !!selected[opt.id];
                         const hasMedia = !!(opt.image_url || opt.emoji);
@@ -484,7 +510,7 @@ export function ItemModal({
                           </button>
                         );
                       })}
-                    </div>
+                    </HorizontalScroll>
                     {/* Revealed groups — shown per-option when selected */}
                     {group.options.filter((o) => selected[o.id] && (o.revealedGroups ?? []).length > 0).map((opt) =>
                       (opt.revealedGroups ?? []).map((rg) => {
@@ -497,7 +523,7 @@ export function ItemModal({
                                 <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", rgMissing ? "bg-orange text-white" : "bg-orange/20 text-orange"].join(" ")}>Zorunlu</span>
                               )}
                             </div>
-                            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
+                            <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                               {rg.options.map((ro) => {
                                 const roActive = !!selected[ro.id];
                                 const roHasMedia = !!(ro.image_url || ro.emoji);
@@ -528,7 +554,7 @@ export function ItemModal({
                                   </button>
                                 );
                               })}
-                            </div>
+                            </HorizontalScroll>
                           </div>
                         );
                       })
@@ -559,7 +585,7 @@ export function ItemModal({
                 <div className="font-extrabold text-[9px] tracking-[0.22em] text-green uppercase mb-2">
                   {alsoTryLabel}
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]">
+                <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {suggestedItems.map((sug) => (
                     <button
                       key={sug.id}
@@ -584,7 +610,7 @@ export function ItemModal({
                       </div>
                     </button>
                   ))}
-                </div>
+                </HorizontalScroll>
               </div>
             )}
 

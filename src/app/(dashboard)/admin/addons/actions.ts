@@ -108,19 +108,10 @@ export async function deleteGroup(formData: FormData) {
 export async function createOption(groupId: string, formData: FormData) {
   const { supabase } = await requireRole(["admin", "owner"]);
   const data = parseOption(formData);
-  const { data: created, error } = await db(supabase)
+  const { error } = await db(supabase)
     .from("addon_options")
-    .insert({ ...data, addon_group_id: groupId })
-    .select("id")
-    .single();
+    .insert({ ...data, addon_group_id: groupId });
   if (error) throw new Error(error.message);
-  const optionId = (created as { id: string }).id;
-  const revealIds = formData.getAll("reveal_group_ids[]").map(String).filter(Boolean);
-  if (revealIds.length > 0) {
-    await db(supabase).from("addon_option_reveals").insert(
-      revealIds.map((addon_group_id, i) => ({ addon_option_id: optionId, addon_group_id, sort_order: i }))
-    );
-  }
   updateTag("menu");
   void broadcastMenuUpdate();
 }
@@ -130,13 +121,6 @@ export async function updateOption(id: string, _groupId: string, formData: FormD
   const data = parseOption(formData);
   const { error } = await db(supabase).from("addon_options").update(data).eq("id", id);
   if (error) throw new Error(error.message);
-  const revealIds = formData.getAll("reveal_group_ids[]").map(String).filter(Boolean);
-  await db(supabase).from("addon_option_reveals").delete().eq("addon_option_id", id);
-  if (revealIds.length > 0) {
-    await db(supabase).from("addon_option_reveals").insert(
-      revealIds.map((addon_group_id, i) => ({ addon_option_id: id, addon_group_id, sort_order: i }))
-    );
-  }
   updateTag("menu");
   void broadcastMenuUpdate();
 }
@@ -164,6 +148,33 @@ export async function reorderOption(formData: FormData) {
     db(supabase).from("addon_options").update({ sort_order: b.sort_order }).eq("id", a.id),
     db(supabase).from("addon_options").update({ sort_order: a.sort_order }).eq("id", b.id),
   ]);
+
+  updateTag("menu");
+  void broadcastMenuUpdate();
+}
+
+export async function createRevealedGroup(optionId: string, formData: FormData) {
+  const { supabase } = await requireRole(["admin", "owner"]);
+  const label_en = z.string().min(1).max(60).trim().parse(formData.get("label_en"));
+  const label_tr = z.string().min(1).max(60).trim().parse(formData.get("label_tr"));
+  const multi = formData.get("multi") === "on";
+  const required = formData.get("required") === "on";
+
+  // Create the group with no scope (internal — only accessible via reveals)
+  const { data: group, error: groupError } = await db(supabase)
+    .from("addon_groups")
+    .insert({ label_en, label_tr, multi, required, sort_order: 0, category_id: null })
+    .select("id")
+    .single();
+  if (groupError) throw new Error(groupError.message);
+
+  const groupId = (group as { id: string }).id;
+
+  // Link it as a revealed group for this option
+  const { error: revealError } = await db(supabase)
+    .from("addon_option_reveals")
+    .insert({ addon_option_id: optionId, addon_group_id: groupId, sort_order: 0 });
+  if (revealError) throw new Error(revealError.message);
 
   updateTag("menu");
   void broadcastMenuUpdate();

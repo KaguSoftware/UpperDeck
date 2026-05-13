@@ -15,12 +15,14 @@ export default async function EditItemPage({
   const { id } = await params;
   const supabase = await getServerClient();
 
-  const [itemRes, catRes, addonsRes] = await Promise.all([
+  const [itemRes, catRes] = await Promise.all([
     supabase.from("menu_items").select("*").eq("id", id).single(),
     supabase.from("categories").select("id, name_en, parent_id").order("sort_order"),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_groups").select("id, label_en, multi, addon_options(count)").eq("menu_item_id", id).order("sort_order"),
   ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const itemGroupIds = ((await (supabase as any).from("addon_group_items").select("addon_group_id").eq("menu_item_id", id)).data ?? []).map((r: { addon_group_id: string }) => r.addon_group_id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addonsRes = itemGroupIds.length > 0 ? await (supabase as any).from("addon_groups").select("id, label_en, multi, addon_options!addon_group_id(count)").in("id", itemGroupIds).order("sort_order") : { data: [] };
 
   if (itemRes.error || !itemRes.data) notFound();
 

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import { Field, Checkbox, PrimaryButton, GhostButton, DangerButton, PageHeader } from "../../../_components";
-import { updateGroup, deleteGroup, createOption, updateOption, deleteOption } from "../../actions";
+import { updateGroup, deleteGroup, createOption, updateOption, deleteOption, createRevealedGroup } from "../../actions";
 import { AddonOptionForm } from "./_option-form";
 import { ReorderButtons } from "./_reorder-buttons";
 import { EditGroupItemsForm } from "./_edit-items-form";
@@ -15,19 +15,14 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("addon_groups")
-      .select("*, categories(name_en), addon_options(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(name_en, image_url, emoji))")
+      .select("*, categories(name_en), addon_options!addon_group_id(id, label_en, label_tr, price, sort_order, menu_item_id, menu_items(name_en, image_url, emoji))")
       .eq("id", id)
       .single(),
     supabase.from("menu_items").select("id, name_en, image_url, emoji, price").order("name_en"),
   ]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [{ data: assignedRaw }, { data: allGroupsRaw }] = await Promise.all([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_group_items").select("menu_item_id").eq("addon_group_id", id).catch(() => ({ data: [] })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from("addon_groups").select("id, label_en").neq("id", id).order("label_en").catch(() => ({ data: [] })),
-  ]);
+  const assignedResult = await (supabase as any).from("addon_group_items").select("menu_item_id").eq("addon_group_id", id);
+  const assignedRaw = assignedResult.error ? [] : assignedResult.data;
 
   if (error || !groupRaw) notFound();
 
@@ -53,28 +48,12 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
 
   const menuItems = (allItems ?? []) as { id: string; name_en: string; image_url: string | null; emoji: string; price: number }[];
   const assignedItemIds = ((assignedRaw ?? []) as { menu_item_id: string }[]).map((r) => r.menu_item_id);
-  const allGroups = (allGroupsRaw ?? []) as { id: string; label_en: string }[];
 
   const options = ((group.addon_options ?? []) as {
     id: string; label_en: string; label_tr: string; price: number; sort_order: number;
     menu_item_id: string | null;
     menu_items: { name_en: string; image_url: string | null; emoji: string } | null;
   }[]).sort((a, b) => a.sort_order - b.sort_order);
-
-  // Fetch existing reveal assignments for all options in this group
-  const optionIds = options.map((o) => o.id);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: revealsRaw } = optionIds.length > 0
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? await (supabase as any).from("addon_option_reveals").select("addon_option_id, addon_group_id").in("addon_option_id", optionIds).catch(() => ({ data: [] }))
-    : { data: [] };
-
-  const revealsByOption = new Map<string, string[]>();
-  ((revealsRaw ?? []) as { addon_option_id: string; addon_group_id: string }[]).forEach((r) => {
-    const existing = revealsByOption.get(r.addon_option_id) ?? [];
-    existing.push(r.addon_group_id);
-    revealsByOption.set(r.addon_option_id, existing);
-  });
 
   const isItemScope = !group.category_id;
   const scopeLabel = group.category_id
@@ -146,8 +125,6 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
             menuItems={menuItems}
             defaultSortOrder={options.length}
             createAction={createOptionForGroup}
-            allGroups={allGroups}
-            assignedRevealGroupIds={[]}
           />
         </div>
 
@@ -156,6 +133,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
           <div className="border-2 border-green overflow-hidden">
             {options.map((opt, i) => {
               const updateThisOption = updateOption.bind(null, opt.id, id);
+              const createRevealedGroupForOption = createRevealedGroup.bind(null, opt.id);
               const isFirst = i === 0;
               const isLast = i === options.length - 1;
               return (
@@ -183,8 +161,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
                         groupId={id}
                         menuItems={menuItems}
                         updateAction={updateThisOption}
-                        allGroups={allGroups}
-                        assignedRevealGroupIds={revealsByOption.get(opt.id) ?? []}
+                        createRevealedGroupAction={createRevealedGroupForOption}
                       />
                     </div>
 

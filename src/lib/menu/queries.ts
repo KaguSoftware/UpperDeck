@@ -120,7 +120,7 @@ async function _getPublicMenu(locale: "en" | "tr"): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: addonRaw, error: addonError } = await (supabase as any)
     .from("addon_groups")
-    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_group_items(menu_item_id), addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji), addon_option_reveals(sort_order, addon_groups(id, label_${n}, multi, required, sort_order, addon_options(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)))))`)
+    .select(`id, category_id, label_${n}, multi, required, sort_order, addon_group_items(menu_item_id), addon_options!addon_group_id(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji), addon_option_reveals(sort_order, addon_groups(id, label_${n}, multi, required, sort_order, addon_options!addon_group_id(id, label_${n}, price, sort_order, menu_item_id, menu_items(image_url, emoji)))))`)
     .order("sort_order", { ascending: true });
   if (addonError) console.warn("[getPublicMenu] addon_groups query failed:", addonError.message);
 
