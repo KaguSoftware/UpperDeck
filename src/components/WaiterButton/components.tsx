@@ -65,7 +65,7 @@ function WaiterSheet({ heroCollapsed, onClose, isPending, children }: {
 }
 
 
-const COOLDOWNS_MS = [60_000, 300_000, 600_000];
+const COOLDOWNS_MS = [10_000];
 
 function cooldownLabel(secs: number): string {
   if (secs <= 0) return "";

@@ -20,7 +20,7 @@ import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
 const COLLAPSE_AT = 40;
-const EXPAND_AT = 8;
+const EXPAND_AT = 0;
 const CART_STORAGE_KEY = "upperdeck-cart";
 
 type PersistedCart = {
@@ -65,9 +65,9 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const stageRef = useRef<HTMLDivElement>(null);
   const pillsNavRef = useRef<HTMLElement>(null);
   const topbarRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
-  const heroTransitionRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,16 +174,11 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     setCartOpen(true);
   }, [tableNumber]);
 
-  const WAITER_COOLDOWNS_MS = [60_000, 300_000, 600_000];
-  const waiterCallCount = useRef(0);
-
   const handleCartCallWaiter = useCallback(async () => {
     if (waiterSecondsLeft > 0 || !tableNumber || tableNumber <= 0) return;
     const { callWaiter } = await import("@/lib/waiter/call");
     await callWaiter(tableNumber, "order");
-    const cooldownMs = WAITER_COOLDOWNS_MS[Math.min(waiterCallCount.current, WAITER_COOLDOWNS_MS.length - 1)];
-    waiterCallCount.current += 1;
-    handleWaiterCalled(cooldownMs);
+    handleWaiterCalled(10_000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiterSecondsLeft, tableNumber, handleWaiterCalled]);
 
@@ -289,18 +284,18 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     const scrollTop = wrap.scrollTop;
     const wrapHeight = wrap.clientHeight;
 
-    if (!heroTransitionRef.current) {
-      setHeroCollapsed((prev) => {
-        const next = (!prev && scrollTop > COLLAPSE_AT) ? true
-          : (prev && scrollTop < EXPAND_AT) ? false
-          : prev;
-        if (next !== prev) {
-          heroTransitionRef.current = true;
-          setTimeout(() => { heroTransitionRef.current = false; }, 550);
+    setHeroCollapsed((prev) => {
+      if (!prev && scrollTop > COLLAPSE_AT) {
+        // Compensate for the space the hero was occupying so content doesn't jump
+        const heroHeight = heroRef.current?.offsetHeight ?? 0;
+        if (heroHeight > 0) {
+          wrap.scrollTop = scrollTop - heroHeight;
         }
-        return next;
-      });
-    }
+        return true;
+      }
+      if (prev && scrollTop === EXPAND_AT) return false;
+      return prev;
+    });
 
     if (footerRef.current) {
       setFooterVisible(footerRef.current.offsetTop < scrollTop + wrapHeight - 64);
@@ -334,23 +329,25 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           locale={locale}
         />
       </div>
-      <Hero
-        collapsed={heroCollapsed}
-        itemCount={items.length}
-        headline1={t.hero.headline1}
-        headline2={t.hero.headline2}
-        headline3={t.hero.headline3}
-        headline4={t.hero.headline4}
-        openHours={t.hero.openHours}
-        itemsLabel={t.hero.items}
-        heroMode={heroMode}
-        heroMediaUrl={heroMediaUrl}
-        featuredItem={featuredItem}
-        featuredLabel={featuredLabel}
-        featuredBadge={featuredBadge}
-        featuredDiscount={featuredDiscount}
-        onFeaturedClick={handleFeaturedClick}
-      />
+      <div ref={heroRef}>
+        <Hero
+          collapsed={heroCollapsed}
+          itemCount={items.length}
+          headline1={t.hero.headline1}
+          headline2={t.hero.headline2}
+          headline3={t.hero.headline3}
+          headline4={t.hero.headline4}
+          openHours={t.hero.openHours}
+          itemsLabel={t.hero.items}
+          heroMode={heroMode}
+          heroMediaUrl={heroMediaUrl}
+          featuredItem={featuredItem}
+          featuredLabel={featuredLabel}
+          featuredBadge={featuredBadge}
+          featuredDiscount={featuredDiscount}
+          onFeaturedClick={handleFeaturedClick}
+        />
+      </div>
       <FilterPills
         items={pillItems}
         activeId={activeSlug}
