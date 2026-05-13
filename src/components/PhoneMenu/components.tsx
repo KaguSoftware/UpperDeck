@@ -328,18 +328,12 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           locale={locale}
         />
       </div>
-      <FilterPills
-        items={pillItems}
-        activeId={activeSlug}
-        onSelect={handlePillSelect}
-        navRef={pillsNavRef}
-        compact={heroCollapsed}
-      />
       <div className="relative flex-1 min-h-0">
         <div
           ref={stageWrapRef}
           onScroll={handleScroll}
           className="h-full overflow-y-auto bg-bg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ overflowAnchor: "none" }}
         >
           <Hero
             collapsed={false}
@@ -358,8 +352,16 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             featuredDiscount={featuredDiscount}
             onFeaturedClick={handleFeaturedClick}
           />
-          {/* sentinel: when this exits the viewport the pills go compact */}
-          <div ref={heroSentinelRef} className="h-0" />
+          <div ref={heroSentinelRef} className="h-0" style={{ overflowAnchor: "none" }} />
+          <div className="sticky top-0 z-10" style={{ overflowAnchor: "none" }}>
+            <FilterPills
+              items={pillItems}
+              activeId={activeSlug}
+              onSelect={handlePillSelect}
+              navRef={pillsNavRef}
+              compact={heroCollapsed}
+            />
+          </div>
           <MenuStage
             onOpen={setActiveItem}
             stageRef={stageRef}

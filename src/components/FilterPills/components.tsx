@@ -3,7 +3,7 @@ import type { FilterPillsProps } from "./types";
 
 export function FilterPills({ items, activeId, onSelect, navRef, compact }: FilterPillsProps) {
   return (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0" style={{ overflowAnchor: "none" }}>
     <nav ref={navRef} className="py-2 pl-2.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map(({ id, label, image_url, emoji }) => {
         const isActive = id === activeId;
