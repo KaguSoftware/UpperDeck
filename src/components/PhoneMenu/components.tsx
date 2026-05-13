@@ -67,6 +67,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const topbarRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef(false);
+  const heroTransitionRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -288,11 +289,18 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     const scrollTop = wrap.scrollTop;
     const wrapHeight = wrap.clientHeight;
 
-    setHeroCollapsed((prev) => {
-      if (!prev && scrollTop > COLLAPSE_AT) return true;
-      if (prev && scrollTop < EXPAND_AT) return false;
-      return prev;
-    });
+    if (!heroTransitionRef.current) {
+      setHeroCollapsed((prev) => {
+        const next = (!prev && scrollTop > COLLAPSE_AT) ? true
+          : (prev && scrollTop < EXPAND_AT) ? false
+          : prev;
+        if (next !== prev) {
+          heroTransitionRef.current = true;
+          setTimeout(() => { heroTransitionRef.current = false; }, 550);
+        }
+        return next;
+      });
+    }
 
     if (footerRef.current) {
       setFooterVisible(footerRef.current.offsetTop < scrollTop + wrapHeight - 64);
