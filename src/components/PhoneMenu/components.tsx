@@ -232,6 +232,17 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     });
   }, [items]);
 
+  const scrollPillIntoView = useCallback((slug: string) => {
+    const nav = pillsNavRef.current;
+    if (!nav) return;
+    const btn = nav.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(slug)}"]`);
+    if (!btn) return;
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const offset = btnRect.left - navRect.left - (navRect.width / 2) + (btnRect.width / 2);
+    nav.scrollBy({ left: offset, behavior: "smooth" });
+  }, []);
+
   const handlePillSelect = useCallback(
     (slug: string, btn: HTMLButtonElement) => {
       setActiveSlug(slug);
@@ -243,17 +254,14 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       if (target) {
         stageWrapRef.current?.scrollTo({ top: target.offsetTop, behavior: "smooth" });
       }
-      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      scrollPillIntoView(slug);
       setTimeout(() => { isAutoScrollingRef.current = false; }, 800);
     },
     []
   );
 
   useEffect(() => {
-    const nav = pillsNavRef.current;
-    if (!nav) return;
-    const btn = nav.querySelector<HTMLButtonElement>(`[data-cat="${CSS.escape(activeSlug)}"]`);
-    btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    scrollPillIntoView(activeSlug);
   }, [activeSlug]);
 
   const handleTopClick = useCallback(() => {
