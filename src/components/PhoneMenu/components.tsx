@@ -53,6 +53,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [activeSlug, setActiveSlug] = useState("");
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
+  const [scrolledDown, setScrolledDown] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastShow, setToastShow] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -293,6 +294,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     const scrollTop = wrap.scrollTop;
     const wrapHeight = wrap.clientHeight;
 
+    setScrolledDown(scrollTop > 80);
+
     if (footerRef.current) {
       setFooterVisible(footerRef.current.offsetTop < scrollTop + wrapHeight - 64);
     }
@@ -376,7 +379,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           aria-label="Scroll to top"
           className={[
             "absolute bottom-4 right-4 w-10 h-10 bg-green text-bg border-0 grid place-items-center cursor-pointer shadow-lg transition-all duration-300 z-9999",
-            heroCollapsed && !footerVisible && !activeItem ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
+            scrolledDown && !footerVisible && !activeItem ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
           ].join(" ")}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
