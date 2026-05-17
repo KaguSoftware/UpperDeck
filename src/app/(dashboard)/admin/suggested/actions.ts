@@ -5,6 +5,7 @@ import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { notifyOk } from "@/lib/admin/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,6 +53,7 @@ export async function updateGroup(id: string, formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
+  notifyOk(`/admin/suggested/${id}/edit`, "Kaydedildi");
 }
 
 export async function deleteGroup(formData: FormData) {
@@ -61,7 +63,7 @@ export async function deleteGroup(formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
-  redirect("/admin/suggested");
+  notifyOk("/admin/suggested", "Grup silindi");
 }
 
 export async function createItem(groupId: string, formData: FormData) {

@@ -4,6 +4,7 @@ import { updateTag } from "next/cache";
 import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { notifyOk } from "@/lib/admin/notify";
 
 const HeroSchema = z.object({
   hero_mode: z.enum(["none", "media", "featured"]),
@@ -47,4 +48,5 @@ export async function saveHeroSettings(formData: FormData) {
 
   updateTag("hero");
   void broadcastMenuUpdate();
+  notifyOk("/admin/settings", "Ayarlar kaydedildi");
 }

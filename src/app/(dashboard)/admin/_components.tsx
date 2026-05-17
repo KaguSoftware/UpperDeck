@@ -27,6 +27,7 @@ export function Field({
     <label className="flex flex-col gap-1.5">
       <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
         {label}
+        {required && <span className="text-orange ml-1" aria-hidden>*</span>}
       </span>
       <input
         name={name}
@@ -36,6 +37,7 @@ export function Field({
         step={step}
         min={min}
         placeholder={placeholder}
+        aria-required={required || undefined}
         className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
       />
     </label>
@@ -85,11 +87,13 @@ export function Select({
     <label className="flex flex-col gap-1.5">
       <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
         {label}
+        {required && <span className="text-orange ml-1" aria-hidden>*</span>}
       </span>
       <select
         name={name}
         defaultValue={defaultValue}
         required={required}
+        aria-required={required || undefined}
         className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
       >
         {options.map((o) => (

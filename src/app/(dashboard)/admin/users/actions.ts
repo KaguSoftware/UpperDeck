@@ -1,10 +1,10 @@
 "use server";
 
 import { updateTag } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { notifyOk } from "@/lib/admin/notify";
 
 const RoleSchema = z.enum(["admin", "owner"]);
 
@@ -37,7 +37,7 @@ export async function setRole(formData: FormData) {
   if (error) throw new Error(error.message);
 
   updateTag("settings");
-  redirect("/admin/users");
+  notifyOk("/admin/users", "Rol güncellendi");
 }
 
 export async function removeUser(formData: FormData) {
@@ -64,7 +64,7 @@ export async function removeUser(formData: FormData) {
   if (error) throw new Error(error.message);
 
   updateTag("settings");
-  redirect("/admin/users");
+  notifyOk("/admin/users", "Kullanıcı kaldırıldı");
 }
 
 const InviteSchema = z.object({

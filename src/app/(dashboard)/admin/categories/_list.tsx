@@ -2,8 +2,10 @@
 
 import React, { useState, useTransition, useRef } from "react";
 import Link from "next/link";
-import { GhostButton, DangerButton } from "../_components";
+import { GhostButton } from "../_components";
 import { deleteCategory, moveCategoryUp, moveCategoryDown } from "./actions";
+import { ConfirmDialog } from "@/components/ConfirmDialog/components";
+import { clientToast } from "@/lib/admin/client-notify";
 
 type Cat = {
   id: string;
@@ -21,6 +23,24 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
   const [, startTransition] = useTransition();
   const movingId = useRef<string | null>(null);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Cat | null>(null);
+
+  function performDelete(c: Cat) {
+    const snapshot = cats;
+    setConfirmDelete(null);
+    setCats((prev) => prev.filter((x) => x.id !== c.id));
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("id", c.id);
+        await deleteCategory(fd);
+        clientToast({ kind: "ok", label: "Kategori silindi" });
+      } catch (err) {
+        setCats(snapshot);
+        clientToast({ kind: "err", label: err instanceof Error ? err.message : "Silme başarısız" });
+      }
+    });
+  }
 
   const parents = cats.filter((c) => !c.parent_id).sort((a, b) => a.sort_order - b.sort_order);
   const childrenOf = (pid: string) => cats.filter((c) => c.parent_id === pid);
@@ -109,10 +129,13 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
             </Link>
           )}
           <GhostButton href={`/admin/categories/${c.id}/edit`}>Düzenle</GhostButton>
-          <form action={deleteCategory}>
-            <input type="hidden" name="id" value={c.id} />
-            <DangerButton>Sil</DangerButton>
-          </form>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(c)}
+            className="bg-green-dark text-bg border-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.2em] uppercase cursor-pointer"
+          >
+            Sil
+          </button>
         </div>
       </div>
     );
@@ -149,6 +172,17 @@ export function CategoriesList({ initial }: { initial: Cat[] }) {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Kategoriyi sil?"
+        body={confirmDelete ? `"${confirmDelete.name_en}" silinecek. Bu kategoriye bağlı ürünler etkilenebilir. Bu işlem geri alınamaz.` : undefined}
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        destructive
+        onConfirm={() => confirmDelete && performDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }

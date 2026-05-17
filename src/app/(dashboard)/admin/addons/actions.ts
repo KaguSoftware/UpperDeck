@@ -5,6 +5,7 @@ import { broadcastMenuUpdate } from "@/lib/broadcast";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { notifyOk } from "@/lib/admin/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // addon_groups and addon_options are not in the generated Database type yet
@@ -93,6 +94,7 @@ export async function updateGroup(id: string, formData: FormData) {
   }
   updateTag("menu");
   void broadcastMenuUpdate();
+  notifyOk(`/admin/addons/${id}/edit`, "Kaydedildi");
 }
 
 export async function deleteGroup(formData: FormData) {
@@ -102,7 +104,7 @@ export async function deleteGroup(formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
-  redirect("/admin/addons");
+  notifyOk("/admin/addons", "Grup silindi");
 }
 
 export async function createOption(groupId: string, formData: FormData) {
