@@ -16,16 +16,20 @@ function safeEqual(a: string, b: string): boolean {
   }
 }
 
+// Token version prefix — bumped when the ID scheme changes so old QR codes
+// (signed under a previous version) are rejected.
+const TOKEN_VERSION = "v2";
+
 // Returns { tok, w } — permanent tokens (w is always 0)
 export function generateToken(table: string): { tok: string; w: number } {
   const w = 0;
-  const tok = hmacHex(env.QR_SECRET, `table=${table}&w=${w}`).slice(0, 16);
+  const tok = hmacHex(env.QR_SECRET, `${TOKEN_VERSION}|table=${table}&w=${w}`).slice(0, 16);
   return { tok, w };
 }
 
 export function verifyToken(table: string, w: string, tok: string): boolean {
   if (w !== "0") return false;
-  const expected = hmacHex(env.QR_SECRET, `table=${table}&w=0`).slice(0, 16);
+  const expected = hmacHex(env.QR_SECRET, `${TOKEN_VERSION}|table=${table}&w=0`).slice(0, 16);
   return expected.length === tok.length && safeEqual(expected, tok);
 }
 
@@ -39,7 +43,7 @@ function base64urlDecode(str: string): string {
 
 export function signTableCookie(table: string): string {
   const exp = Math.floor(Date.now() / 1000) + WINDOW_SECS;
-  const payload = base64urlEncode(JSON.stringify({ table, exp }));
+  const payload = base64urlEncode(JSON.stringify({ v: TOKEN_VERSION, table, exp }));
   const sig = hmacHex(env.COOKIE_SECRET, payload);
   return `${payload}.${sig}`;
 }
@@ -52,7 +56,8 @@ export function verifyTableCookie(raw: string): string | null {
     const sig = raw.slice(dotIdx + 1);
     const expectedSig = hmacHex(env.COOKIE_SECRET, payload);
     if (sig.length !== expectedSig.length || !safeEqual(expectedSig, sig)) return null;
-    const data = JSON.parse(base64urlDecode(payload)) as { table: string; exp: number };
+    const data = JSON.parse(base64urlDecode(payload)) as { v?: string; table: string; exp: number };
+    if (data.v !== TOKEN_VERSION) return null;
     if (Math.floor(Date.now() / 1000) > data.exp) return null;
     if (typeof data.table !== "string" || data.table.length === 0 || data.table.length > 50) return null;
     return data.table;
