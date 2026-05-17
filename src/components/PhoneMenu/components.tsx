@@ -24,7 +24,9 @@ import { WAITER_COOLDOWN_MS } from "@/components/WaiterButton/constants";
 import { tap, buzz } from "@/lib/haptics";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
-const CART_STORAGE_KEY = "upperdeck-cart";
+import { isValidTableId } from "@/lib/tables";
+// v2: table IDs are strings, not numbers — bumped to drop stale legacy sessions
+const CART_STORAGE_KEY = "upperdeck-cart-v2";
 
 type PersistedCart = {
   cartItems: CartItem[];
