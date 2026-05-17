@@ -417,6 +417,7 @@ export function ItemModal({
                           textTransform: "uppercase",
                           lineHeight: 1,
                           display: "block",
+                          textShadow: "0 0 6px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.7)",
                         }}
                       >
                         SOLD OUT

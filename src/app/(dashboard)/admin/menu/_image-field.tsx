@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
 import { getBrowserClient } from "@/lib/supabase/client";
+import { Loader } from "@/components/Loader/components";
 
 export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
     const [url, setUrl] = useState<string | null>(defaultUrl ?? null);
@@ -88,9 +89,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                         onClick={() => inputRef.current?.click()}
                         className="bg-orange text-white border-0 px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 self-start"
                     >
-                        {uploading && (
-                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                        )}
+                        {uploading && <Loader size="xs" tone="onDark" />}
                         {uploading
                             ? "Yükleniyor…"
                             : url

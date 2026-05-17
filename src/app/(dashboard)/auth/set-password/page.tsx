@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserClient } from "@/lib/supabase/client";
+import { Loader } from "@/components/Loader/components";
 
 function SetPasswordForm() {
   const router = useRouter();
@@ -101,7 +102,7 @@ function SetPasswordForm() {
 
           {verifying && (
             <div className="flex items-center gap-2 text-green text-[12px] font-bold uppercase tracking-[0.12em]">
-              <span className="w-3 h-3 border-2 border-green border-t-transparent rounded-full animate-spin inline-block" />
+              <Loader size="xs" />
               Verifying invite…
             </div>
           )}
@@ -155,9 +156,7 @@ function SetPasswordForm() {
                 disabled={submitting}
                 className="bg-orange text-white px-4 py-3 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {submitting && (
-                  <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                )}
+                {submitting && <Loader size="xs" tone="onDark" />}
                 Set password &amp; sign in
               </button>
             </form>

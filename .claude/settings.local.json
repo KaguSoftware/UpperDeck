@@ -62,7 +62,9 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\" -Recurse -Directory)",
       "Bash(dir \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\components\\\\BellTutorial\\\\\")",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\components\" -Directory)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\MnS\\\\Kagu\\\\demo\\\\UpperDeckMenu\\\\src\\\\app\\\\\\(dashboard\\)\" -Recurse -Filter \"loading.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "additionalDirectories": [
       "c:\\Users\\MnS\\Kagu\\demo\\UpperDeckMenu\\src\\app\\(public)\\[locale]"

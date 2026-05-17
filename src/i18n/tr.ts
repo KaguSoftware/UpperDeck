@@ -39,6 +39,7 @@ const tr: Messages = {
     table_from_qr: "QR'dan",
     note_placeholder: "Özel istekler, alerjiler…",
     callWaiter: "Garson Çağır",
+    continueBrowsing: "Menüye dön",
     sending: "Gönderiliyor…",
     headed: "Garson siparişinizi almak için yola çıktı!",
     waiterCalled: "Garson çağrıldı — yolda!",
@@ -92,6 +93,9 @@ const tr: Messages = {
     eyebrow: "Bir şey ister misiniz?",
     title: "Çana dokun — hemen geliriz.",
     dismissHint: "devam etmek için dokun",
+  },
+  offline: {
+    banner: "Çevrimdışısınız — bağlantı dönene kadar işlemler kaydedilmez",
   },
   categories: {
     Breakfast: "Kahvaltı",

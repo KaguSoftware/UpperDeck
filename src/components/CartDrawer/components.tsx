@@ -19,6 +19,7 @@ export function CartDrawer({
     totalLabel,
     subtotalLabel,
     emptyLabel,
+    continueBrowsingLabel,
     tableLabel,
     tableFromQrLabel,
     notePlaceholder,
@@ -41,6 +42,7 @@ export function CartDrawer({
     const sheetRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const backdropRef = useRef<HTMLDivElement>(null);
 
     function onTouchStart(e: React.TouchEvent) {
         const scrolledDown = (scrollRef.current?.scrollTop ?? 0) > 0;
@@ -58,6 +60,9 @@ export function CartDrawer({
         const delta = Math.max(0, e.touches[0].clientY - startY.current);
         dragY.current = delta;
         if (sheetRef.current) sheetRef.current.style.transform = `translateY(${delta}px)`;
+        if (backdropRef.current) {
+            backdropRef.current.style.opacity = String(Math.max(0, 1 - delta / 300));
+        }
     }
     function onTouchEnd() {
         if (startY.current === null) return;
@@ -73,12 +78,17 @@ export function CartDrawer({
                 sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
                 sheetRef.current.style.transform = "translateY(0)";
             }
+            if (backdropRef.current) {
+                backdropRef.current.style.transition = "opacity 0.25s cubic-bezier(0.2,0.8,0.2,1)";
+                backdropRef.current.style.opacity = "1";
+            }
         }
         dragY.current = 0;
     }
 
     return (
         <div
+            ref={backdropRef}
             className={[
                 "fixed inset-x-0 bottom-0 bg-[rgba(31,46,38,0.78)] z-99999",
                 isOpen ? "flex items-end justify-center" : "hidden",
@@ -140,9 +150,19 @@ export function CartDrawer({
                 {/* list + note — all in one scrollable area */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto">
                     {items.length === 0 ? (
-                        <p className="px-4.5 py-6 text-green/60 font-ui text-[13px]">
-                            {emptyLabel}
-                        </p>
+                        <div className="flex flex-col items-center justify-center gap-4 px-4.5 py-10">
+                            <span className="text-[48px] leading-none" aria-hidden>🍽️</span>
+                            <p className="font-bowlby text-[18px] text-green uppercase tracking-[-0.3px] text-center">
+                                {emptyLabel}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="bg-orange text-white font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase px-5 py-2.5 border-0 cursor-pointer"
+                            >
+                                {continueBrowsingLabel}
+                            </button>
+                        </div>
                     ) : (
                         items.map((item) => (
                             <div

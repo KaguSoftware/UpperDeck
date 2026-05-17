@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { REALTIME_SUBSCRIBE_STATES } from "@supabase/realtime-js";
 import type { Order, OrderStatus } from "@/types/database";
+import { Loader } from "@/components/Loader/components";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -350,7 +351,11 @@ export function OrdersClient({ initialOrders }: { initialOrders: Order[] }) {
       {/* toolbar */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full inline-block ${connDot}`} />
+          {connectionState === "connecting" ? (
+            <Loader size="xs" />
+          ) : (
+            <span className={`w-2 h-2 rounded-full inline-block ${connDot}`} />
+          )}
           <span className="font-ui text-[11px] font-extrabold tracking-[0.15em] uppercase text-green/70">
             {connLabel}
           </span>

@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { setTableWaiterDisabled } from "./actions";
+import { Loader } from "@/components/Loader/components";
 
 export function TableWaiterToggle({
   tableNumber,
@@ -20,7 +21,7 @@ export function TableWaiterToggle({
     <div className="relative">
       {isPending && (
         <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-          <span className="w-3 h-3 border-2 border-green border-t-transparent rounded-full animate-spin inline-block" />
+          <Loader size="xs" />
         </div>
       )}
       <button

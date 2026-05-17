@@ -4,6 +4,8 @@ import { useState, useTransition, useRef } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
 import { Loader } from "@/components/Loader/components";
+import { WAITER_COOLDOWN_MS } from "./constants";
+import { buzz } from "@/lib/haptics";
 
 function WaiterSheet({ heroCollapsed, onClose, isPending, children }: {
   heroCollapsed: boolean;
@@ -66,7 +68,7 @@ function WaiterSheet({ heroCollapsed, onClose, isPending, children }: {
 }
 
 
-const COOLDOWNS_MS = [10_000];
+const COOLDOWNS_MS = [WAITER_COOLDOWN_MS];
 
 function cooldownLabel(secs: number): string {
   if (secs <= 0) return "";
@@ -113,6 +115,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
       const cooldownMs = COOLDOWNS_MS[Math.min(callCount.current, COOLDOWNS_MS.length - 1)];
       callCount.current += 1;
       onWaiterCalled(cooldownMs);
+      buzz();
       setPhase("done");
       setTimeout(() => setPhase("idle"), 2500);
     });

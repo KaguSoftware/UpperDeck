@@ -15,10 +15,13 @@ import { BellTutorial } from "@/components/BellTutorial/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
+import { OfflineBanner } from "@/components/OfflineBanner/components";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem } from "@/components/CartDrawer/types";
 import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
+import { WAITER_COOLDOWN_MS } from "@/components/WaiterButton/constants";
+import { tap, buzz } from "@/lib/haptics";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
 const CART_STORAGE_KEY = "upperdeck-cart";
@@ -192,7 +195,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     try {
       const { callWaiter } = await import("@/lib/waiter/call");
       await callWaiter(tableNumber, "order");
-      handleWaiterCalled(10_000);
+      handleWaiterCalled(WAITER_COOLDOWN_MS);
+      buzz();
       flashToast(t.cart.waiterCalled);
     } catch (err) {
       console.error("[handleCartCallWaiter] failed", err);
@@ -237,6 +241,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
     });
     setActiveItem(null);
+    tap();
     flashToast(`${t.toast.addedPrefix}${name}`);
   }, [activeItem, flashToast, t.toast]);
 
@@ -459,6 +464,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         totalLabel={t.cart.title}
         subtotalLabel={t.cart.subtotal}
         emptyLabel={t.toast.empty}
+        continueBrowsingLabel={t.cart.continueBrowsing}
         tableLabel={t.cart.table_number}
         tableFromQrLabel={t.cart.table_from_qr}
         notePlaceholder={t.cart.note_placeholder}
@@ -507,6 +513,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         body={t.qrRequired.body}
       />
       <Toast message={toastMsg} show={toastShow} />
+      <OfflineBanner message={t.offline.banner} />
       <Ticker tags={t.ticker} />
       {showBellTutorial
         && tableNumber != null

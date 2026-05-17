@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { reorderOption } from "../../actions";
+import { Loader } from "@/components/Loader/components";
 
 export function ReorderButtons({
   optId,
@@ -36,7 +37,7 @@ export function ReorderButtons({
         disabled={isFirst || upPending || downPending}
         className={btnBase}
       >
-        {upPending ? <Spinner /> : "▲"}
+        {upPending ? <Loader size="xs" /> : "▲"}
       </button>
       <button
         type="button"
@@ -44,14 +45,8 @@ export function ReorderButtons({
         disabled={isLast || upPending || downPending}
         className={btnBase}
       >
-        {downPending ? <Spinner /> : "▼"}
+        {downPending ? <Loader size="xs" /> : "▼"}
       </button>
     </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span className="w-3 h-3 border-2 border-green border-t-transparent rounded-full animate-spin inline-block" />
   );
 }

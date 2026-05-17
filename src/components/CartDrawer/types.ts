@@ -37,6 +37,7 @@ export type CartDrawerProps = {
   totalLabel: string;
   subtotalLabel: string;
   emptyLabel: string;
+  continueBrowsingLabel: string;
   tableLabel: string;
   tableFromQrLabel: string;
   notePlaceholder: string;

@@ -12,6 +12,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
             key={id}
             type="button"
             data-cat={id}
+            aria-current={isActive ? "true" : undefined}
             onClick={(e) => onSelect(id, e.currentTarget)}
             className={[
               "shrink-0 border-2 flex flex-col items-center gap-0 font-ui font-extrabold text-[9px] tracking-[0.16em] uppercase cursor-pointer overflow-hidden transition-all duration-300",

@@ -19,6 +19,7 @@ type EnShape = {
     table_from_qr: string;
     note_placeholder: string;
     callWaiter: string;
+    continueBrowsing: string;
     sending: string;
     headed: string;
     waiterCalled: string;
@@ -39,6 +40,7 @@ type EnShape = {
   waiter: { title: string; bill: string; call: string; cancel: string; notified: string };
   qrRequired: { title: string; body: string };
   bellTutorial: { eyebrow: string; title: string; dismissHint: string };
+  offline: { banner: string };
 };
 
 const en: EnShape = {
@@ -80,6 +82,7 @@ const en: EnShape = {
     table_from_qr: "from QR",
     note_placeholder: "Special requests, allergies…",
     callWaiter: "Call Waiter",
+    continueBrowsing: "Browse the menu",
     sending: "Sending…",
     headed: "A waiter is headed your way to place your order!",
     waiterCalled: "Waiter notified — on the way!",
@@ -133,6 +136,9 @@ const en: EnShape = {
     eyebrow: "Need anything?",
     title: "Tap the bell — we'll come right over.",
     dismissHint: "tap anywhere to continue",
+  },
+  offline: {
+    banner: "You're offline — actions won't go through until you reconnect",
   },
   categories: {
     Breakfast: "Breakfast",
