@@ -100,8 +100,11 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         if (parsed.cartItems) setCartItems(parsed.cartItems);
         // URL-provided table number always wins
         if (initialTableNumber === undefined && parsed.tableNumber != null) {
-          setTableNumber(parsed.tableNumber);
-          resolvedTable = parsed.tableNumber;
+          const t = typeof parsed.tableNumber === "string" ? parsed.tableNumber : "";
+          if (isValidTableId(t)) {
+            setTableNumber(t);
+            resolvedTable = t;
+          }
         }
         if (parsed.note != null) setNote(parsed.note);
       }
