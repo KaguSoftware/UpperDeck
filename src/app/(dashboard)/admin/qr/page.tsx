@@ -3,11 +3,10 @@ import Image from "next/image";
 import { generateToken } from "@/lib/table-auth";
 import { env } from "@/lib/env";
 import { getWaiterDisabledTables } from "@/lib/settings/queries";
+import { TABLE_IDS } from "@/lib/tables";
 import { PageHeader } from "../_components";
 import { PrintButton } from "./_print-button";
 import { TableWaiterToggle } from "./_table-toggles";
-
-const TABLE_COUNT = parseInt(process.env.TABLE_COUNT ?? "20", 10);
 
 export default async function QRPage() {
     const baseUrl = env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -15,15 +14,15 @@ export default async function QRPage() {
     const disabledTables = await getWaiterDisabledTables();
 
     const tables = await Promise.all(
-        Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {
-            const { tok, w } = generateToken(n);
-            const url = `${baseUrl}/tr/scan?t=${n}&w=${w}&tok=${tok}`;
+        TABLE_IDS.map(async (id) => {
+            const { tok, w } = generateToken(id);
+            const url = `${baseUrl}/tr/scan?t=${encodeURIComponent(id)}&w=${w}&tok=${tok}`;
             const dataUrl = await QRCode.toDataURL(url, {
                 width: 360,
                 margin: 2,
                 errorCorrectionLevel: "H",
             });
-            return { n, url, dataUrl };
+            return { id, url, dataUrl };
         })
     );
 
@@ -40,24 +39,24 @@ export default async function QRPage() {
 
             <PageHeader
                 title="Masa QR Kodları"
-                subtitle={`${TABLE_COUNT} masa`}
+                subtitle={`${TABLE_IDS.length} masa`}
                 action={<PrintButton />}
             />
 
             <div className="qr-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-2">
-                {tables.map(({ n, url, dataUrl }) => (
+                {tables.map(({ id, url, dataUrl }) => (
                     <div
-                        key={n}
+                        key={id}
                         className="qr-cell border-2 border-green flex flex-col items-center gap-2 p-4 bg-white"
                     >
                         <span className="font-bowlby text-[22px] uppercase text-green leading-none tracking-[-0.5px]">
-                            Masa {n}
+                            {id}
                         </span>
                         <div className="relative w-30 h-30">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={dataUrl}
-                                alt={`QR code for table ${n}`}
+                                alt={`QR code for table ${id}`}
                                 className="w-30 h-30"
                             />
                             <div className="absolute inset-0 grid place-items-center pointer-events-none">
@@ -79,8 +78,8 @@ export default async function QRPage() {
                         </span>
                         <div data-no-print className="w-full">
                             <TableWaiterToggle
-                                tableNumber={n}
-                                disabled={disabledTables.includes(n)}
+                                tableNumber={id}
+                                disabled={disabledTables.includes(id)}
                             />
                         </div>
                     </div>
