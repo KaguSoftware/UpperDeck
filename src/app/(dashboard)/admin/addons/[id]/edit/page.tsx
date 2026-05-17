@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { getServerClient } from "@/lib/supabase/server";
 import { Field, Checkbox, PrimaryButton, GhostButton, DangerButton, PageHeader } from "../../../_components";
-import { updateGroup, deleteGroup, createOption, updateOption, deleteOption, createRevealedGroup } from "../../actions";
+import { updateGroup, createOption, updateOption, deleteOption, createRevealedGroup } from "../../actions";
 import { AddonOptionForm } from "./_option-form";
 import { ReorderButtons } from "./_reorder-buttons";
 import { EditGroupItemsForm } from "./_edit-items-form";
+import { DeleteGroupButton } from "./_delete-group-button";
 
 type SubOption = {
   id: string; label_en: string; label_tr: string; price: number;
@@ -133,10 +134,7 @@ export default async function EditAddonPage({ params }: { params: Promise<{ id: 
           </div>
         </form>
 
-        <form action={deleteGroup} className="mt-4">
-          <input type="hidden" name="id" value={id} />
-          <DangerButton>Grubu ve Tüm Seçenekleri Sil</DangerButton>
-        </form>
+        <DeleteGroupButton groupId={id} groupLabel={group.label_en} />
       </section>
 
       {/* Section 2 — Options */}

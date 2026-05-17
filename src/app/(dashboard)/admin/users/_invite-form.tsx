@@ -1,19 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { Field, PrimaryButton } from "../_components";
 import { RoleToggle } from "./_role-toggle";
 import { inviteUser } from "./actions";
 
 export function InviteForm() {
   const [state, action] = useActionState(inviteUser, { error: null, success: false });
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state.success && formRef.current) {
+      formRef.current.reset();
+    }
+  }, [state.success]);
 
   return (
     <section className="mb-8">
       <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-green/70 mb-3">
         Yeni Personel Davet Et
       </div>
-      <form action={action} className="border-2 border-green bg-white p-5 max-w-2xl">
+      <form ref={formRef} action={action} className="border-2 border-green bg-white p-5 max-w-2xl">
         {state.error && (
           <div className="bg-orange text-white text-[11px] font-extrabold uppercase tracking-[0.12em] px-3 py-2 mb-4">
             {state.error}

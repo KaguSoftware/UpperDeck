@@ -63,20 +63,24 @@ export function AdminShell({
         </Link>
 
         <nav className="flex-1 py-3">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                "block px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase text-green border-l-4",
-                pathname === item.href
-                  ? "bg-bg border-orange"
-                  : "border-transparent hover:bg-bg hover:border-orange",
-              ].join(" ")}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {nav.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={[
+                  "block px-4 py-2.5 font-ui font-extrabold text-[11px] tracking-[0.22em] uppercase text-green border-l-4",
+                  isActive
+                    ? "bg-bg border-orange"
+                    : "border-transparent hover:bg-bg hover:border-orange",
+                ].join(" ")}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="border-t-2 border-green px-4 py-3">

@@ -2,9 +2,9 @@
 
 import { updateTag } from "next/cache";
 import { broadcastMenuUpdate } from "@/lib/broadcast";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { notifyOk } from "@/lib/admin/notify";
 
 const ItemSchema = z.object({
   category_id: z.string().uuid(),
@@ -52,7 +52,7 @@ export async function createItem(formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
-  redirect("/admin/menu");
+  notifyOk("/admin/menu", "Ürün eklendi");
 }
 
 export async function updateItem(id: string, formData: FormData) {
@@ -62,7 +62,7 @@ export async function updateItem(id: string, formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
-  redirect("/admin/menu");
+  notifyOk("/admin/menu", "Kaydedildi");
 }
 
 export async function toggleSoldOut(id: string, sold_out: boolean) {

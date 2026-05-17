@@ -2,9 +2,9 @@
 
 import { updateTag } from "next/cache";
 import { broadcastMenuUpdate } from "@/lib/broadcast";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
+import { notifyOk } from "@/lib/admin/notify";
 
 const CategorySchema = z.object({
   slug: z
@@ -55,7 +55,7 @@ export async function createCategory(formData: FormData) {
   updateTag("menu");
   void broadcastMenuUpdate();
 
-  redirect("/admin/categories");
+  notifyOk("/admin/categories", "Kategori eklendi");
 }
 
 export async function updateCategory(id: string, formData: FormData) {
@@ -65,7 +65,7 @@ export async function updateCategory(id: string, formData: FormData) {
   if (error) throw new Error(error.message);
   updateTag("menu");
   void broadcastMenuUpdate();
-  redirect("/admin/categories");
+  notifyOk("/admin/categories", "Kaydedildi");
 }
 
 export async function deleteCategory(formData: FormData) {

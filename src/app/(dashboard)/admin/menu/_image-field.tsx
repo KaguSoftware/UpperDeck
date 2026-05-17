@@ -5,6 +5,8 @@ import imageCompression from "browser-image-compression";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { Loader } from "@/components/Loader/components";
 
+const MAX_INPUT_SIZE_MB = 10;
+
 export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
     const [url, setUrl] = useState<string | null>(defaultUrl ?? null);
     const [uploading, setUploading] = useState(false);
@@ -13,6 +15,10 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
 
     async function handleFile(file: File) {
         setError(null);
+        if (file.size > MAX_INPUT_SIZE_MB * 1024 * 1024) {
+            setError(`Dosya çok büyük (maks ${MAX_INPUT_SIZE_MB} MB)`);
+            return;
+        }
         setUploading(true);
         try {
             const compressed = await imageCompression(file, {
@@ -114,7 +120,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                     )}
 
                     <p className="text-[10px] text-green/40">
-                        JPEG, PNG, WEBP veya GIF · otomatik olarak WebP&apos;ye sıkıştırılır
+                        JPEG, PNG, WEBP, GIF · maks {MAX_INPUT_SIZE_MB} MB · otomatik WebP&apos;ye sıkıştırılır
                     </p>
                 </div>
             </div>

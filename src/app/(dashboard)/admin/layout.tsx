@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/require-session";
 import { AdminShell } from "./_sidebar";
+import { AdminToast } from "./_toast";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireRole(["admin", "owner"]);
@@ -20,6 +22,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <AdminShell nav={nav} displayName={profile.display_name} role={profile.role}>
       {children}
+      <Suspense fallback={null}>
+        <AdminToast />
+      </Suspense>
     </AdminShell>
   );
 }

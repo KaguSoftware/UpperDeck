@@ -8,6 +8,8 @@ import { Loader } from "@/components/Loader/components";
 type HeroMode = "none" | "media" | "featured";
 type Item = { id: string; name: string; image_url: string | null; emoji: string };
 
+const MAX_INPUT_SIZE_MB = 10;
+
 function ModeButton({
   active,
   onClick,
@@ -62,6 +64,10 @@ export function HeroConstructor({
 
   async function handleFile(file: File) {
     setUploadError(null);
+    if (file.size > MAX_INPUT_SIZE_MB * 1024 * 1024) {
+      setUploadError(`Dosya çok büyük (maks ${MAX_INPUT_SIZE_MB} MB)`);
+      return;
+    }
     setUploading(true);
     try {
       const supabase = getBrowserClient();
@@ -160,7 +166,7 @@ export function HeroConstructor({
                 </button>
               )}
               {uploadError && <p className="text-[10px] font-bold text-orange">{uploadError}</p>}
-              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF · maks 5 MB</p>
+              <p className="text-[10px] text-green/40">JPEG, PNG, WEBP, GIF · maks {MAX_INPUT_SIZE_MB} MB · otomatik WebP&apos;ye sıkıştırılır</p>
             </div>
           </div>
       </div>
