@@ -76,6 +76,15 @@ a {
   to   { background-position: 200% 0; }
 }
 
+@keyframes logoPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+@keyframes spinRing {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes stampSlam {
   0%   { transform: rotate(-15deg) scale(4) translateY(-60px); opacity: 0; }
   70%  { transform: rotate(-15deg) scale(0.95) translateY(0); opacity: 1; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Image from "next/image";
+import { BrandImage } from "@/components/BrandImage/components";
 import { MenuCard } from "@/components/MenuCard/components";
 import type { Fill } from "@/components/MenuCard/types";
 import type { MenuItem, MenuStageProps } from "./types";
@@ -75,7 +75,14 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
                 {/* category image — full width, 2-card height (160px) */}
                 <div className="relative w-full h-28 overflow-hidden bg-bg-deep flex items-center justify-center">
                   {image_url ? (
-                    <Image src={image_url} alt="" fill quality={90} className="object-cover" />
+                    <BrandImage
+                      src={image_url}
+                      alt={name}
+                      fill
+                      className="object-cover"
+                      loaderSize="sm"
+                      fallback={<span className="text-[40px] leading-none">{emoji ?? "🍽"}</span>}
+                    />
                   ) : (
                     <span className="text-[40px] leading-none">{emoji ?? "🍽"}</span>
                   )}

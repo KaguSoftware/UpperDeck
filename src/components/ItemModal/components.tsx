@@ -2,6 +2,8 @@
 
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import Image from "next/image";
+import { BrandImage } from "@/components/BrandImage/components";
+import { Loader } from "@/components/Loader/components";
 import type { ItemModalProps, AddonOption } from "./types";
 
 function HorizontalScroll({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -177,6 +179,8 @@ export function ItemModal({
   addonGroups = [],
   suggestedItems = [],
   alsoTryLabel = "Also try this",
+  requiredLabel = "Required",
+  requiredMissingPrefix = "Required",
 }: ItemModalProps) {
   const isOpen = item !== null;
   const topBg = item?.fill === "orange-fill" ? "#FF5138" : "#395A66";
@@ -186,6 +190,7 @@ export function ItemModal({
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [itemNote, setItemNote] = useState("");
   const [atBottom, setAtBottom] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Reset selections, note, scroll state, and lightbox whenever a new item opens
@@ -194,6 +199,7 @@ export function ItemModal({
     setItemNote("");
     setAtBottom(false);
     setLightbox(false);
+    setImageLoaded(false);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [item?.id]);
 
@@ -368,17 +374,24 @@ export function ItemModal({
               <div className="relative w-full h-52 overflow-hidden cursor-zoom-in" onClick={() => setLightbox(true)}>
                 {/* blurred thumbnail placeholder — already cached from the menu card */}
                 <Image src={item.image_url} alt="" aria-hidden fill quality={90} className="object-cover scale-110 blur-sm" />
+                {/* branded loader sits over the blurred placeholder until the crisp image is ready */}
+                <div
+                  className="absolute inset-0 grid place-items-center transition-opacity duration-300 pointer-events-none"
+                  style={{ opacity: imageLoaded ? 0 : 1 }}
+                >
+                  <Loader size="md" tone="onDark" />
+                </div>
                 {/* full-res image fades in on load */}
                 <Image
                   src={item.image_url}
-                  alt=""
+                  alt={item.name}
                   width={390}
                   height={208}
                   quality={90}
                   priority
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
-                  style={{ opacity: 0 }}
-                  onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "1"; }}
+                  style={{ opacity: imageLoaded ? 1 : 0 }}
+                  onLoad={() => setImageLoaded(true)}
                 />
                 <div className="absolute bottom-2 right-2 bg-black/30 rounded-full w-7 h-7 grid place-items-center pointer-events-none">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -455,7 +468,7 @@ export function ItemModal({
                       </span>
                       {group.required && (
                         <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", isMissing ? "bg-orange text-white" : "bg-green/20 text-green"].join(" ")}>
-                          Zorunlu
+                          {requiredLabel}
                         </span>
                       )}
                     </div>
@@ -470,9 +483,9 @@ export function ItemModal({
                             onClick={() => toggleAddon(gi, opt, group.multi)}
                             className={["flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden", active ? "border-green" : "border-green/30"].join(" ")}
                           >
-                            <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
+                            <div className="relative w-full h-16 flex items-center justify-center bg-bg-deep">
                               {opt.image_url ? (
-                                <Image src={opt.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" />
+                                <BrandImage src={opt.image_url} alt={opt.label} width={80} height={64} className="w-full h-full object-cover" loaderSize="xs" fallback={<span className="text-[28px] leading-none">{opt.emoji}</span>} />
                               ) : (
                                 <span className="text-[28px] leading-none">{opt.emoji}</span>
                               )}
@@ -504,7 +517,7 @@ export function ItemModal({
                             <div className="flex items-center gap-2 mb-2">
                               <span className="font-extrabold text-[9px] tracking-[0.22em] text-orange uppercase">{rg.label}</span>
                               {rg.required && (
-                                <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", rgMissing ? "bg-orange text-white" : "bg-orange/20 text-orange"].join(" ")}>Zorunlu</span>
+                                <span className={["font-extrabold text-[8px] tracking-[0.18em] uppercase px-1.5 py-0.5", rgMissing ? "bg-orange text-white" : "bg-orange/20 text-orange"].join(" ")}>{requiredLabel}</span>
                               )}
                             </div>
                             <HorizontalScroll className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -ml-3 pl-3 pr-3">
@@ -518,8 +531,8 @@ export function ItemModal({
                                     onClick={() => toggleAddon(gi, ro, rg.multi, true, rg.options)}
                                     className={["flex flex-col shrink-0 w-20 border-2 cursor-pointer transition-colors overflow-hidden", roActive ? "border-green" : "border-green/30"].join(" ")}
                                   >
-                                    <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
-                                      {ro.image_url ? <Image src={ro.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" /> : <span className="text-[28px] leading-none">{ro.emoji}</span>}
+                                    <div className="relative w-full h-16 flex items-center justify-center bg-bg-deep">
+                                      {ro.image_url ? <BrandImage src={ro.image_url} alt={ro.label} width={80} height={64} className="w-full h-full object-cover" loaderSize="xs" fallback={<span className="text-[28px] leading-none">{ro.emoji}</span>} /> : <span className="text-[28px] leading-none">{ro.emoji}</span>}
                                     </div>
                                     <div className={["px-1 py-1.5 text-center flex-1", roActive ? "bg-green" : "bg-transparent"].join(" ")}>
                                       <div className={["font-ui font-extrabold text-[9px] tracking-wide uppercase leading-tight", roActive ? "text-bg" : "text-green"].join(" ")}>{ro.label}</div>
@@ -577,9 +590,9 @@ export function ItemModal({
                       onClick={() => { onClose(); onSuggestedClick(sug); }}
                       className="flex flex-col shrink-0 w-20 border-2 border-green/30 cursor-pointer transition-colors overflow-hidden hover:border-green"
                     >
-                      <div className="w-full h-16 flex items-center justify-center bg-bg-deep">
+                      <div className="relative w-full h-16 flex items-center justify-center bg-bg-deep">
                         {sug.image_url ? (
-                          <Image src={sug.image_url} alt="" width={80} height={64} quality={90} className="w-full h-full object-cover" />
+                          <BrandImage src={sug.image_url} alt={sug.name} width={80} height={64} className="w-full h-full object-cover" loaderSize="xs" fallback={<span className="text-[28px] leading-none">{sug.emoji}</span>} />
                         ) : (
                           <span className="text-[28px] leading-none">{sug.emoji}</span>
                         )}
@@ -611,7 +624,7 @@ export function ItemModal({
             </div>
             {missingRequired.length > 0 && (
               <p className="text-[10px] font-bold text-orange mb-2">
-                Zorunlu: {missingRequired.map((g) => g.label).join(", ")}
+                {requiredMissingPrefix}: {missingRequired.map((g) => g.label).join(", ")}
               </p>
             )}
             <button

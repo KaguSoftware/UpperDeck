@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { CouponSection } from "./CouponSection";
+import { Loader } from "@/components/Loader/components";
 import type { CartDrawerProps } from "./types";
 
 export function CartDrawer({
@@ -22,9 +23,12 @@ export function CartDrawer({
     tableFromQrLabel,
     notePlaceholder,
     callWaiterLabel,
+    callWaiterSendingLabel,
+    callWaiterHeadedLabel,
     onCallWaiter,
     waiterCooldownSeconds,
     waiterCooldownLabel,
+    submitting = false,
     tableFromQr = false,
     topOffset = 0,
     coupon,
@@ -90,7 +94,7 @@ export function CartDrawer({
                 role="dialog"
                 aria-modal="true"
                 aria-label={totalLabel}
-                className="w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col"
+                className="relative w-full bg-bg border-t-4 border-green animate-[slideUp_0.25s_cubic-bezier(0.2,0.8,0.2,1)] max-h-full flex flex-col"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -221,6 +225,12 @@ export function CartDrawer({
                     </div>
                 </div>
 
+                {submitting && (
+                    <div className="absolute inset-0 bg-bg/80 z-10 grid place-items-center pointer-events-none">
+                        <Loader size="md" label={callWaiterSendingLabel} />
+                    </div>
+                )}
+
                 {/* subtotal + call waiter */}
                 {items.length > 0 && (
                     <div className="shrink-0 border-t-2 border-green">
@@ -236,16 +246,23 @@ export function CartDrawer({
                         <div className="px-4.5 pb-4 flex flex-col gap-2">
                             {waiterCalled ? (
                                 <div className="w-full bg-green text-bg font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 text-center">
-                                    A waiter is headed your way to place your order!
+                                    {callWaiterHeadedLabel}
                                 </div>
                             ) : (
                                 <button
                                     type="button"
                                     onClick={onCallWaiter}
-                                    disabled={items.length === 0}
-                                    className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                    disabled={items.length === 0 || submitting}
+                                    className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                                 >
-                                    {callWaiterLabel}
+                                    {submitting ? (
+                                        <>
+                                            <Loader size="xs" tone="onDark" />
+                                            <span>{callWaiterSendingLabel}</span>
+                                        </>
+                                    ) : (
+                                        callWaiterLabel
+                                    )}
                                 </button>
                             )}
                             {waiterCalled && (

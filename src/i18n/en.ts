@@ -11,7 +11,7 @@ type EnShape = {
   topbar: { order: string };
   filter: { all: string };
   stage: { item: string; items: string };
-  modal: { spicy: string; price: string; addToOrder: string; specialInstructions: string; specialInstructionsPlaceholder: string; alsoTry: string };
+  modal: { spicy: string; price: string; addToOrder: string; specialInstructions: string; specialInstructionsPlaceholder: string; alsoTry: string; required: string; requiredMissing: string };
   coupon: { label: string; placeholder: string; apply: string; noOfferTitle: string; noOfferBody: string; emailPlaceholder: string; subscribe: string; subscribed: string; noCouponPrefix: string; noCouponLink: string };
   cart: {
     title: string;
@@ -19,6 +19,10 @@ type EnShape = {
     table_from_qr: string;
     note_placeholder: string;
     callWaiter: string;
+    sending: string;
+    headed: string;
+    waiterCalled: string;
+    error_send: string;
     subtotal: string;
     error_validation: string;
     error_no_table: string;
@@ -67,6 +71,8 @@ const en: EnShape = {
     specialInstructions: "Special Instructions",
     specialInstructionsPlaceholder: "e.g. no onions, extra sauce…",
     alsoTry: "Also try this",
+    required: "Required",
+    requiredMissing: "Required",
   },
   cart: {
     title: "Your Order",
@@ -74,6 +80,10 @@ const en: EnShape = {
     table_from_qr: "from QR",
     note_placeholder: "Special requests, allergies…",
     callWaiter: "Call Waiter",
+    sending: "Sending…",
+    headed: "A waiter is headed your way to place your order!",
+    waiterCalled: "Waiter notified — on the way!",
+    error_send: "Couldn't reach the staff. Please try again.",
     subtotal: "Subtotal",
     error_validation: "Something looks wrong with your order. Please check and try again.",
     error_no_table: "Scan your table QR code or enter a table number to place your order.",

@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
+import { Loader } from "@/components/Loader/components";
 
 function WaiterSheet({ heroCollapsed, onClose, isPending, children }: {
   heroCollapsed: boolean;
@@ -165,18 +166,18 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
                   type="button"
                   onClick={() => handle("bill")}
                   disabled={phase === "sending" || secondsLeft > 0}
-                  className="w-full bg-orange text-white font-ui font-extrabold text-[15px] tracking-widest uppercase py-5 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full bg-orange text-white font-ui font-extrabold text-[15px] tracking-widest uppercase py-5 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                 >
-                  {phase === "sending" ? "…" : secondsLeft > 0 ? cooldownLabel(secondsLeft) : labelBill}
+                  {phase === "sending" ? <Loader size="xs" tone="onDark" /> : secondsLeft > 0 ? cooldownLabel(secondsLeft) : labelBill}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handle("waiter")}
                   disabled={phase === "sending" || secondsLeft > 0}
-                  className="w-full border-2 border-green text-green font-ui font-extrabold text-[15px] tracking-widest uppercase py-5 bg-transparent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green hover:text-bg transition-colors"
+                  className="w-full border-2 border-green text-green font-ui font-extrabold text-[15px] tracking-widest uppercase py-5 bg-transparent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green hover:text-bg transition-colors inline-flex items-center justify-center gap-2"
                 >
-                  {phase === "sending" ? "…" : secondsLeft > 0 ? cooldownLabel(secondsLeft) : labelWaiter}
+                  {phase === "sending" ? <Loader size="xs" /> : secondsLeft > 0 ? cooldownLabel(secondsLeft) : labelWaiter}
                 </button>
               </div>
             </>

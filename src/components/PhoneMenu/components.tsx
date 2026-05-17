@@ -62,6 +62,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [showBellTutorial, setShowBellTutorial] = useState(false);
   const [waiterSecondsLeft, setWaiterSecondsLeft] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const waiterCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -186,12 +187,21 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, [tableNumber]);
 
   const handleCartCallWaiter = useCallback(async () => {
-    if (waiterSecondsLeft > 0 || !tableNumber || tableNumber <= 0) return;
-    const { callWaiter } = await import("@/lib/waiter/call");
-    await callWaiter(tableNumber, "order");
-    handleWaiterCalled(10_000);
+    if (submitting || waiterSecondsLeft > 0 || !tableNumber || tableNumber <= 0) return;
+    setSubmitting(true);
+    try {
+      const { callWaiter } = await import("@/lib/waiter/call");
+      await callWaiter(tableNumber, "order");
+      handleWaiterCalled(10_000);
+      flashToast(t.cart.waiterCalled);
+    } catch (err) {
+      console.error("[handleCartCallWaiter] failed", err);
+      flashToast(t.cart.error_send);
+    } finally {
+      setSubmitting(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiterSecondsLeft, tableNumber, handleWaiterCalled]);
+  }, [submitting, waiterSecondsLeft, tableNumber, handleWaiterCalled, flashToast, t.cart.waiterCalled, t.cart.error_send]);
 
   const handleRemove = useCallback((id: string) => {
     setCartItems((prev) => prev.filter((i) => i.id !== id));
@@ -453,6 +463,9 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         tableFromQrLabel={t.cart.table_from_qr}
         notePlaceholder={t.cart.note_placeholder}
         callWaiterLabel={t.cart.callWaiter}
+        callWaiterSendingLabel={t.cart.sending}
+        callWaiterHeadedLabel={t.cart.headed}
+        submitting={submitting}
         onCallWaiter={() => { void handleCartCallWaiter(); }}
         waiterCooldownSeconds={waiterSecondsLeft}
         waiterCooldownLabel={waiterSecondsLeft > 0 ? `You can send another request in ${Math.floor(waiterSecondsLeft / 60)}:${String(waiterSecondsLeft % 60).padStart(2, "0")}` : ""}
@@ -482,6 +495,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         specialInstructionsLabel={t.modal.specialInstructions}
         specialInstructionsPlaceholder={t.modal.specialInstructionsPlaceholder}
         alsoTryLabel={t.modal.alsoTry}
+        requiredLabel={t.modal.required}
+        requiredMissingPrefix={t.modal.requiredMissing}
         addonGroups={activeItem?.addonGroups ?? []}
         suggestedItems={activeItem?.suggestedItems ?? []}
       />

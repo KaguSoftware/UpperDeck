@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { BrandImage } from "@/components/BrandImage/components";
 import type { MenuCardProps } from "./types";
 
 function preloadModalImage(url: string | null) {
@@ -39,13 +39,18 @@ export function MenuCard({ card, onOpen }: MenuCardProps) {
             {/* square image/emoji thumbnail */}
             <div className="relative shrink-0 w-32 h-32 grid place-items-center overflow-hidden bg-bg-deep">
                 {card.image_url ? (
-                    <Image
+                    <BrandImage
                         src={card.image_url}
-                        alt=""
+                        alt={card.name}
                         width={128}
                         height={128}
-                        quality={90}
                         className="w-full h-full object-cover"
+                        loaderSize="sm"
+                        fallback={
+                            <span className="text-[28px] leading-none">
+                                {card.emoji}
+                            </span>
+                        }
                     />
                 ) : (
                     <span className="text-[28px] leading-none">

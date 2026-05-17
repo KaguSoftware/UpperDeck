@@ -17,4 +17,6 @@ export type ItemModalProps = {
   addonGroups?: AddonGroupPublic[];
   suggestedItems?: SuggestedItemPublic[];
   alsoTryLabel?: string;
+  requiredLabel?: string;
+  requiredMissingPrefix?: string;
 };

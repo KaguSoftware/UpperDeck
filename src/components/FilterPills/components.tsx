@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { BrandImage } from "@/components/BrandImage/components";
 import type { FilterPillsProps } from "./types";
 
 export function FilterPills({ items, activeId, onSelect, navRef, compact }: FilterPillsProps) {
@@ -22,11 +22,19 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
           >
             {/* thumbnail — collapses to 0 height when compact */}
             <div
-              className="w-24 overflow-hidden flex items-center justify-center bg-bg-deep transition-all duration-300"
+              className="relative w-24 overflow-hidden flex items-center justify-center bg-bg-deep transition-all duration-300"
               style={{ height: compact ? 0 : 56 }}
             >
               {image_url ? (
-                <Image src={image_url} alt="" width={96} height={56} quality={90} className="w-full h-full object-cover" />
+                <BrandImage
+                  src={image_url}
+                  alt={label}
+                  width={96}
+                  height={56}
+                  className="w-full h-full object-cover"
+                  loaderSize="xs"
+                  fallback={<span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>}
+                />
               ) : (
                 <span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>
               )}

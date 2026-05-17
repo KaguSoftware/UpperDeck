@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { subscribeNewsletter } from "@/lib/newsletter/subscribe";
+import { Loader } from "@/components/Loader/components";
 
 type Props = {
   couponLabel: string;
@@ -128,9 +129,9 @@ export function CouponSection({
                   type="button"
                   onClick={handleSubscribe}
                   disabled={isPending}
-                  className="bg-orange text-white border-0 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase px-3 py-1.5 cursor-pointer disabled:opacity-50"
+                  className="bg-orange text-white border-0 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase px-3 py-1.5 cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-1.5 min-w-15"
                 >
-                  {isPending ? "…" : subscribeLabel}
+                  {isPending ? <Loader size="xs" tone="onDark" /> : subscribeLabel}
                 </button>
               </div>
               {subscribeError && (
