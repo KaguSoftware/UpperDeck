@@ -40,6 +40,9 @@ export default async function Home({
   // Cookie wins (verified via /scan); URL param is fallback for dev/staff
   const initialTableNumber = cookieTable ?? urlTable;
 
+  const openHoursOverride =
+    (lang === "tr" ? heroSettings.openHoursTr : heroSettings.openHoursEn) || null;
+
   return (
     <PhoneMenu
       messages={messages}
@@ -55,6 +58,7 @@ export default async function Home({
       featuredLabel={heroSettings.featuredLabel}
       featuredBadge={heroSettings.featuredBadge}
       featuredDiscount={heroSettings.featuredDiscount}
+      openHoursOverride={openHoursOverride}
     />
   );
 }

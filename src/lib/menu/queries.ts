@@ -18,6 +18,8 @@ export type HeroSettings = {
   featuredBadge: string | null;
   featuredDiscount: number | null;
   featuredItem: FeaturedItem | null;
+  openHoursTr: string | null;
+  openHoursEn: string | null;
 };
 
 async function _getHeroSettings(): Promise<HeroSettings> {
@@ -25,7 +27,7 @@ async function _getHeroSettings(): Promise<HeroSettings> {
   const { data } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", ["hero_mode", "hero_media_url", "featured_item_id", "featured_label", "featured_badge", "featured_discount"]);
+    .in("key", ["hero_mode", "hero_media_url", "featured_item_id", "featured_label", "featured_badge", "featured_discount", "open_hours_tr", "open_hours_en"]);
 
   const rows = (data ?? []) as { key: string; value: string | null }[];
   const get = (key: string) => rows.find((r) => r.key === key)?.value ?? null;
@@ -37,6 +39,8 @@ async function _getHeroSettings(): Promise<HeroSettings> {
   const featuredBadge = get("featured_badge") || null;
   const rawDiscount = get("featured_discount");
   const featuredDiscount = rawDiscount ? parseInt(rawDiscount, 10) || null : null;
+  const openHoursTr = get("open_hours_tr") || null;
+  const openHoursEn = get("open_hours_en") || null;
 
   let featuredItem: FeaturedItem | null = null;
   if (heroMode === "featured" && featuredItemId) {
@@ -50,7 +54,7 @@ async function _getHeroSettings(): Promise<HeroSettings> {
     }
   }
 
-  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem };
+  return { heroMode, heroMediaUrl: heroMode === "media" ? url : null, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, featuredItem, openHoursTr, openHoursEn };
 }
 
 export const getHeroSettings = unstable_cache(

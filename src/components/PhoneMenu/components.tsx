@@ -46,9 +46,10 @@ type PhoneMenuProps = {
   featuredLabel?: string | null;
   featuredBadge?: string | null;
   featuredDiscount?: number | null;
+  openHoursOverride?: string | null;
 };
 
-export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, openHoursOverride }: PhoneMenuProps) {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
@@ -385,7 +386,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             headline2={t.hero.headline2}
             headline3={t.hero.headline3}
             headline4={t.hero.headline4}
-            openHours={t.hero.openHours}
+            openHours={openHoursOverride || t.hero.openHours}
             itemsLabel={t.hero.items}
             heroMode={heroMode}
             heroMediaUrl={heroMediaUrl}

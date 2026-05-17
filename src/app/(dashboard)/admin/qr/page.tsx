@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import Image from "next/image";
 import { generateToken } from "@/lib/table-auth";
 import { env } from "@/lib/env";
 import { getWaiterDisabledTables } from "@/lib/settings/queries";
@@ -18,7 +19,11 @@ export default async function QRPage() {
     Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).map(async (n) => {
       const { tok, w } = generateToken(n);
       const url = `${baseUrl}/tr/scan?t=${n}&w=${w}&tok=${tok}`;
-      const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 3 });
+      const dataUrl = await QRCode.toDataURL(url, {
+        width: 360,
+        margin: 2,
+        errorCorrectionLevel: "H",
+      });
       return { n, url, dataUrl };
     })
   );
@@ -49,8 +54,21 @@ export default async function QRPage() {
             <span className="font-bowlby text-[22px] uppercase text-green leading-none tracking-[-0.5px]">
               Masa {n}
             </span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={dataUrl} alt={`QR code for table ${n}`} className="w-30 h-30" />
+            <div className="relative w-30 h-30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={dataUrl} alt={`QR code for table ${n}`} className="w-30 h-30" />
+              <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                <div className="bg-white p-0.5 rounded-full">
+                  <Image
+                    src="/Upperdeck_logo_black_white_transparent1.png"
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="w-12 h-12 object-contain rounded-full"
+                  />
+                </div>
+              </div>
+            </div>
             <span className="font-ui text-[7px] text-warm-gray break-all text-center leading-tight opacity-60">
               {url}
             </span>

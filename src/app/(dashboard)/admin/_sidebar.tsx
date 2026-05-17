@@ -41,7 +41,7 @@ export function AdminShell({
         className={[
           "fixed inset-y-0 left-0 z-30 w-60 shrink-0 border-r-2 border-green bg-bg-deep flex flex-col",
           "transition-transform duration-200",
-          "lg:static lg:translate-x-0",
+          "lg:sticky lg:top-0 lg:h-screen lg:self-start lg:inset-y-auto lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
@@ -62,7 +62,7 @@ export function AdminShell({
           </div>
         </Link>
 
-        <nav className="flex-1 py-3">
+        <nav className="flex-1 py-3 overflow-y-auto">
           {nav.map((item) => {
             const isActive = pathname === item.href;
             return (

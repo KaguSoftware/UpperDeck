@@ -46,7 +46,7 @@ export function Footer() {
                         Contact
                     </p>
                     <a
-                        href="mailto:hello@upperdiih.com"
+                        href="mailto:hello@upperdeckk.com"
                         className="font-bowlby text-[18px] uppercase tracking-[-0.5px] opacity-90"
                     >
                         upperdeck.help@gmail.com

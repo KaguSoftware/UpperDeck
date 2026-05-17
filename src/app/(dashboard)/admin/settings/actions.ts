@@ -13,6 +13,8 @@ const HeroSchema = z.object({
   featured_label: z.string().max(200).nullable().optional(),
   featured_badge: z.string().max(60).nullable().optional(),
   featured_discount: z.coerce.number().int().min(0).max(99).nullable().optional(),
+  open_hours_tr: z.string().max(80).nullable().optional(),
+  open_hours_en: z.string().max(80).nullable().optional(),
 });
 
 export async function saveHeroSettings(formData: FormData) {
@@ -27,6 +29,8 @@ export async function saveHeroSettings(formData: FormData) {
     featured_label: raw("featured_label"),
     featured_badge: raw("featured_badge"),
     featured_discount: raw("featured_discount"),
+    open_hours_tr: raw("open_hours_tr"),
+    open_hours_en: raw("open_hours_en"),
   });
 
   const rows = [
@@ -36,6 +40,8 @@ export async function saveHeroSettings(formData: FormData) {
     { key: "featured_label", value: parsed.featured_label ?? "" },
     { key: "featured_badge", value: parsed.featured_badge ?? "" },
     { key: "featured_discount", value: parsed.featured_discount != null ? String(parsed.featured_discount) : "" },
+    { key: "open_hours_tr", value: parsed.open_hours_tr ?? "" },
+    { key: "open_hours_en", value: parsed.open_hours_en ?? "" },
   ];
 
   // The `settings` table is not in the generated Database type yet, so the

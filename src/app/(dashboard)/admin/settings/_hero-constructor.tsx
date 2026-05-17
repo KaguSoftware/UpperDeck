@@ -43,6 +43,8 @@ export function HeroConstructor({
   defaultLabel,
   defaultBadge,
   defaultDiscount,
+  defaultOpenHoursTr,
+  defaultOpenHoursEn,
 }: {
   defaultMode: HeroMode;
   defaultMediaUrl?: string | null;
@@ -51,6 +53,8 @@ export function HeroConstructor({
   defaultLabel?: string | null;
   defaultBadge?: string | null;
   defaultDiscount?: number | null;
+  defaultOpenHoursTr?: string | null;
+  defaultOpenHoursEn?: string | null;
 }) {
   const [mode, setMode] = useState<HeroMode>(defaultMode);
 
@@ -96,6 +100,42 @@ export function HeroConstructor({
       {/* hidden inputs always submitted */}
       <input type="hidden" name="hero_mode" value={mode} />
       <input type="hidden" name="hero_media_url" value={mediaUrl ?? ""} />
+
+      {/* open hours */}
+      <div className="flex flex-col gap-3 border-2 border-green/20 p-4">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green">
+          Açılış Saatleri
+        </span>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/70">
+            Türkçe
+          </span>
+          <input
+            type="text"
+            name="open_hours_tr"
+            defaultValue={defaultOpenHoursTr ?? ""}
+            maxLength={80}
+            placeholder="Açık · 09:00 — 23:30"
+            className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-green/70">
+            English
+          </span>
+          <input
+            type="text"
+            name="open_hours_en"
+            defaultValue={defaultOpenHoursEn ?? ""}
+            maxLength={80}
+            placeholder="Open · 09:00 — 23:30"
+            className="border-2 border-green bg-bg px-3 py-2.5 font-ui text-[14px] text-ink focus:outline-none focus:bg-white"
+          />
+        </label>
+        <p className="text-[10px] text-green/40">
+          Hero üzerinde küçük başlıkta gösterilir. Boş bırakılırsa varsayılan metin kullanılır.
+        </p>
+      </div>
 
       {/* mode toggle */}
       <div className="flex flex-col gap-2">

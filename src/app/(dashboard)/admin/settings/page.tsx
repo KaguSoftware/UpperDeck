@@ -15,6 +15,8 @@ const getSettingsPageData = unstable_cache(
         "featured_label",
         "featured_badge",
         "featured_discount",
+        "open_hours_tr",
+        "open_hours_en",
       ]),
       supabase
         .from("menu_items")
@@ -41,6 +43,8 @@ export default async function SettingsPage() {
   const featuredBadge = get("featured_badge") || null;
   const rawDiscount = get("featured_discount");
   const featuredDiscount = rawDiscount ? parseInt(rawDiscount, 10) || null : null;
+  const openHoursTr = get("open_hours_tr") || null;
+  const openHoursEn = get("open_hours_en") || null;
 
   const items = menuItems.map((i) => ({
     id: i.id,
@@ -69,6 +73,8 @@ export default async function SettingsPage() {
           defaultLabel={featuredLabel}
           defaultBadge={featuredBadge}
           defaultDiscount={featuredDiscount}
+          defaultOpenHoursTr={openHoursTr}
+          defaultOpenHoursEn={openHoursEn}
         />
 
         <div className="pt-2 border-t-2 border-green/20">
