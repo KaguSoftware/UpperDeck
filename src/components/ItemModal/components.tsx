@@ -50,9 +50,28 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
     };
   }
 
+  const clampPan = useCallback(() => {
+    if (!imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const maxX = (rect.width * (scale.current - 1)) / 2;
+    const maxY = (rect.height * (scale.current - 1)) / 2;
+    translate.current.x = Math.min(Math.max(translate.current.x, -maxX), maxX);
+    translate.current.y = Math.min(Math.max(translate.current.y, -maxY), maxY);
+  }, []);
+
   const onTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
+      // commit any in-progress single-finger pan baseline before pinching
+      lastTranslate.current = { ...translate.current };
+      lastScale.current = scale.current;
+      // cancel any in-progress drag-to-close
       dragStartY.current = null;
+      dragY.current = 0;
+      if (wrapperRef.current) {
+        wrapperRef.current.style.transition = "transform 0.2s cubic-bezier(0.2,0.8,0.2,1)";
+        wrapperRef.current.style.transform = "translateY(0)";
+      }
+      if (backdropRef.current) backdropRef.current.style.opacity = "1";
       lastPinchDist.current = pinchDist(e.touches);
       origin.current = pinchMid(e.touches);
     } else if (e.touches.length === 1) {
@@ -96,6 +115,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
         const dx = e.touches[0].clientX - origin.current.x;
         const dy = e.touches[0].clientY - origin.current.y;
         translate.current = { x: lastTranslate.current.x + dx, y: lastTranslate.current.y + dy };
+        clampPan();
         applyTransform();
       } else if (dragStartY.current !== null) {
         const dy = e.touches[0].clientY - dragStartY.current;
@@ -107,6 +127,15 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
+    // 2 → 1 finger transition: re-seed pan baseline so the remaining finger
+    // doesn't snap relative to the now-gone pinch midpoint
+    if (e.touches.length === 1 && lastPinchDist.current !== null) {
+      lastScale.current = scale.current;
+      lastTranslate.current = { ...translate.current };
+      origin.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDist.current = null;
+      return;
+    }
     if (e.touches.length === 0) {
       lastScale.current = scale.current;
       lastTranslate.current = { ...translate.current };
@@ -300,29 +329,55 @@ export function ItemModal({
   const sheetRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
+  const dragStartX = useRef<number | null>(null);
   const dragCurrentY = useRef(0);
+  const dragIntent = useRef<"unknown" | "vertical" | "horizontal">("unknown");
+  const headerDragged = useRef(false);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    const scrolledDown = (scrollRef.current?.scrollTop ?? 0) > 0;
+    headerDragged.current = false;
     const touchInHeader = headerRef.current?.contains(e.target as Node) ?? false;
-    if (scrolledDown && !touchInHeader) {
+    // Only arm drag-to-close from the header (drag handle + image area).
+    // Body touches must never trigger close — they belong to horizontal scrolls,
+    // buttons, textareas, etc.
+    if (!touchInHeader) {
       dragStartY.current = null;
+      dragStartX.current = null;
       return;
     }
     dragStartY.current = e.touches[0].clientY;
+    dragStartX.current = e.touches[0].clientX;
     dragCurrentY.current = 0;
+    dragIntent.current = "unknown";
     if (sheetRef.current) sheetRef.current.style.transition = "none";
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    if (dragStartY.current === null) return;
-    const delta = e.touches[0].clientY - dragStartY.current;
-    if (delta < 0) return;
-    dragCurrentY.current = delta;
-    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${delta}px)`;
+    if (dragStartY.current === null || dragStartX.current === null) return;
+    const dy = e.touches[0].clientY - dragStartY.current;
+    const dx = e.touches[0].clientX - dragStartX.current;
+    if (dragIntent.current === "unknown") {
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+      if (absX > 8 || absY > 8) {
+        dragIntent.current = absY >= absX ? "vertical" : "horizontal";
+        if (dragIntent.current === "horizontal") {
+          dragStartY.current = null;
+          dragStartX.current = null;
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+    if (dy < 0) return;
+    dragCurrentY.current = dy;
+    if (dy > 6) headerDragged.current = true;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${dy}px)`;
   };
 
   const onTouchEnd = () => {
+    dragStartX.current = null;
     if (dragStartY.current === null) return;
     dragStartY.current = null;
     if (dragCurrentY.current > 80) {
@@ -371,7 +426,10 @@ export function ItemModal({
               <div className={["w-10 h-[3px] rounded-full", item.fill === "orange-fill" ? "bg-green" : "bg-orange"].join(" ")} />
             </div>
             {item.image_url ? (
-              <div className="relative w-full h-52 overflow-hidden cursor-zoom-in" onClick={() => setLightbox(true)}>
+              <div
+                className="relative w-full h-52 overflow-hidden cursor-zoom-in"
+                onClick={() => { if (!headerDragged.current) setLightbox(true); }}
+              >
                 {/* blurred thumbnail placeholder — already cached from the menu card */}
                 <Image src={item.image_url} alt="" aria-hidden fill quality={90} className="object-cover scale-110 blur-sm" />
                 {/* branded loader sits over the blurred placeholder until the crisp image is ready */}
