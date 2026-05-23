@@ -24,11 +24,13 @@ import { WAITER_COOLDOWN_MS } from "@/components/WaiterButton/constants";
 import { tap, buzz } from "@/lib/haptics";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
-const CART_STORAGE_KEY = "upperdeck-cart";
+import { isValidTableId } from "@/lib/tables";
+// v2: table IDs are strings, not numbers — bumped to drop stale legacy sessions
+const CART_STORAGE_KEY = "upperdeck-cart-v2";
 
 type PersistedCart = {
   cartItems: CartItem[];
-  tableNumber: number | null;
+  tableNumber: string | null;
   note: string;
 };
 
@@ -37,8 +39,8 @@ type PhoneMenuProps = {
   locale: import("@/i18n/config").Locale;
   categories: PublicCategory[];
   items: PublicMenuItem[];
-  initialTableNumber?: number;
-  disabledTables?: number[];
+  initialTableNumber?: string;
+  disabledTables?: string[];
   heroMode?: "none" | "media" | "featured";
   heroMediaUrl?: string | null;
   featuredItem?: { id: string; name: string; image_url: string | null; emoji: string } | null;
@@ -52,7 +54,7 @@ type PhoneMenuProps = {
 export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, openHoursOverride }: PhoneMenuProps) {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [tableNumber, setTableNumber] = useState<number | null>(initialTableNumber ?? null);
+  const [tableNumber, setTableNumber] = useState<string | null>(initialTableNumber ?? null);
   const [tableLocked] = useState(initialTableNumber !== undefined);
   const [note, setNote] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
@@ -90,7 +92,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   // Hydrate from sessionStorage on mount (client-only). URL table number wins over session.
   useEffect(() => {
-    let resolvedTable: number | null = initialTableNumber ?? null;
+    let resolvedTable: string | null = initialTableNumber ?? null;
     try {
       const raw = sessionStorage.getItem(CART_STORAGE_KEY);
       if (raw) {
@@ -98,8 +100,11 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         if (parsed.cartItems) setCartItems(parsed.cartItems);
         // URL-provided table number always wins
         if (initialTableNumber === undefined && parsed.tableNumber != null) {
-          setTableNumber(parsed.tableNumber);
-          resolvedTable = parsed.tableNumber;
+          const t = typeof parsed.tableNumber === "string" ? parsed.tableNumber : "";
+          if (isValidTableId(t)) {
+            setTableNumber(t);
+            resolvedTable = t;
+          }
         }
         if (parsed.note != null) setNote(parsed.note);
       }
@@ -109,7 +114,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     // First-scan bell tutorial: show once per session when a valid, enabled table is present.
     try {
       const seen = sessionStorage.getItem("bellTutorial_seen") === "true";
-      const hasTable = resolvedTable != null && resolvedTable > 0;
+      const hasTable = !!resolvedTable;
       const tableEnabled = hasTable && !disabledTables.includes(resolvedTable!);
       if (!seen && tableEnabled) setShowBellTutorial(true);
     } catch {
@@ -183,7 +188,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
 
   const handleCartClick = useCallback(() => {
-    if (!tableNumber || tableNumber <= 0) {
+    if (!tableNumber) {
       setQrModalOpen(true);
       return;
     }
@@ -191,7 +196,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, [tableNumber]);
 
   const handleCartCallWaiter = useCallback(async () => {
-    if (submitting || waiterSecondsLeft > 0 || !tableNumber || tableNumber <= 0) return;
+    if (submitting || waiterSecondsLeft > 0 || !tableNumber) return;
     setSubmitting(true);
     try {
       const { callWaiter } = await import("@/lib/waiter/call");
@@ -431,17 +436,17 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           </svg>
         </button>
         <WaiterButton
-          tableNumber={tableNumber ?? 0}
+          tableNumber={tableNumber ?? ""}
           labelTitle={t.waiter.title}
           labelBill={t.waiter.bill}
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
           labelNotified={t.waiter.notified}
-          hidden={footerVisible || !!activeItem || (tableNumber != null && tableNumber > 0 && disabledTables.includes(tableNumber))}
+          hidden={footerVisible || !!activeItem || (!!tableNumber && disabledTables.includes(tableNumber))}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}
           onBeforeOpen={() => {
-            if (!tableNumber || tableNumber <= 0) {
+            if (!tableNumber) {
               setQrModalOpen(true);
               return false;
             }
@@ -517,8 +522,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       <OfflineBanner message={t.offline.banner} />
       <Ticker tags={t.ticker} />
       {showBellTutorial
-        && tableNumber != null
-        && tableNumber > 0
+        && !!tableNumber
         && !disabledTables.includes(tableNumber)
         && !activeItem
         && !cartOpen

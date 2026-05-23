@@ -6,6 +6,7 @@ import { getPublicMenu, getHeroSettings } from "@/lib/menu/queries";
 import { getWaiterDisabledTables } from "@/lib/settings/queries";
 import { cookies } from "next/headers";
 import { verifyTableCookie } from "@/lib/table-auth";
+import { isValidTableId } from "@/lib/tables";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,8 @@ export default async function Home({
     getWaiterDisabledTables(),
   ]);
 
-  const rawT = typeof sp.t === "string" ? parseInt(sp.t, 10) : NaN;
-  const urlTable = Number.isInteger(rawT) && rawT >= 1 && rawT <= 999 ? rawT : undefined;
+  const rawT = typeof sp.t === "string" ? sp.t : "";
+  const urlTable = isValidTableId(rawT) ? rawT : undefined;
 
   const cookieStore = await cookies();
   const rawCookie = cookieStore.get("table_session")?.value;

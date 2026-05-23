@@ -79,7 +79,7 @@ function cooldownLabel(secs: number): string {
 }
 
 type WaiterButtonProps = {
-  tableNumber: number;
+  tableNumber: string;
   labelBill: string;
   labelWaiter: string;
   labelTitle: string;

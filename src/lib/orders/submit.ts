@@ -13,7 +13,7 @@ const ItemSchema = z.object({
 });
 
 const OrderSchema = z.object({
-  table_number: z.int().min(0).max(999),
+  table_number: z.string().max(50),
   items: z.array(ItemSchema).min(1),
   note: z.string().max(200).default(""),
   total: z.number().nonnegative(),
@@ -73,7 +73,7 @@ export async function submitOrder(payload: SubmitOrderPayload): Promise<SubmitOr
       .map((i) => `  • ${i.qty}× ${i.name_en} — ${(i.price * i.qty).toLocaleString()} ₺`)
       .join("\n");
     const noteLine = note?.trim() ? `\n📝 <i>${note.trim()}</i>` : "";
-    const tableLabel = table_number > 0 ? `Table ${table_number}` : "Unknown Table";
+    const tableLabel = table_number ? `Table ${table_number}` : "Unknown Table";
     await sendTelegramMessage(
       `🛎 <b>New Order — ${tableLabel}</b>\n\n${itemLines}${noteLine}\n\n💰 <b>Total: ${serverTotal.toLocaleString()} ₺</b>`
     );

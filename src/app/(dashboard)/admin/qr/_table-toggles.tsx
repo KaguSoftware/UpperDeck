@@ -8,7 +8,7 @@ export function TableWaiterToggle({
   tableNumber,
   disabled,
 }: {
-  tableNumber: number;
+  tableNumber: string;
   disabled: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
