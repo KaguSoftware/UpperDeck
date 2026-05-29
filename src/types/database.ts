@@ -12,7 +12,7 @@ export type OrderItem = {
 
 export type Order = {
   id: string;
-  table_number: number;
+  table_number: string;
   items: OrderItem[];
   total: number;
   status: OrderStatus;
@@ -24,7 +24,7 @@ export type Order = {
 };
 
 export type OrderInsert = {
-  table_number: number;
+  table_number: string;
   items: OrderItem[];
   total: number;
   note?: string;

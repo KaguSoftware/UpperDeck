@@ -30,9 +30,9 @@ export type CartDrawerProps = {
   onRemove: (id: string) => void;
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
-  onTableChange: (n: number | null) => void;
+  onTableChange: (n: string | null) => void;
   onNoteChange: (s: string) => void;
-  tableNumber: number | null;
+  tableNumber: string | null;
   note: string;
   totalLabel: string;
   subtotalLabel: string;

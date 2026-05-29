@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (!m) return NextResponse.json({ error: "no items" });
 
   const payload = {
-    table_number: 1,
+    table_number: "S1",
     items: [
       { menu_item_id: m.id, name_en: m.name_en, name_tr: m.name_en, price: m.price, qty: 1 },
     ],

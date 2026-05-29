@@ -3,7 +3,7 @@
 import { updateTag } from "next/cache";
 import { requireRole } from "@/lib/auth/require-session";
 
-export async function setTableWaiterDisabled(tableNumber: number, disabled: boolean) {
+export async function setTableWaiterDisabled(tableNumber: string, disabled: boolean) {
   const { supabase } = await requireRole(["admin", "owner"]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,7 +14,8 @@ export async function setTableWaiterDisabled(tableNumber: number, disabled: bool
     .eq("key", "waiter_disabled_tables")
     .maybeSingle();
 
-  const current: number[] = data?.value ? (JSON.parse(data.value) as number[]) : [];
+  const rawCurrent = data?.value ? (JSON.parse(data.value) as unknown[]) : [];
+  const current: string[] = rawCurrent.map((v) => String(v));
   const updated = disabled
     ? [...new Set([...current, tableNumber])]
     : current.filter((n) => n !== tableNumber);

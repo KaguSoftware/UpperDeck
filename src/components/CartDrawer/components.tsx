@@ -131,7 +131,7 @@ export function CartDrawer({
                 </div>{/* /headerRef */}
 
                 {/* table number — only shown when set via QR */}
-                {tableNumber !== null && tableNumber > 0 && (
+                {tableNumber !== null && tableNumber !== "" && (
                     <div className="shrink-0 flex items-center gap-3 px-4.5 py-3 border-b border-green/20">
                         <label className="font-extrabold text-[9px] tracking-[0.28em] text-green uppercase whitespace-nowrap">
                             {tableLabel}

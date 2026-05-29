@@ -13,7 +13,7 @@ interface OrderItem {
 
 interface OrderRecord {
   id: string;
-  table_number: number;
+  table_number: string;
   items: OrderItem[];
   total: number;
   note: string;
@@ -72,7 +72,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ? `\n📝 ${order.note.trim()}`
     : "";
 
-  const tableLabel = order.table_number > 0 ? `Table ${order.table_number}` : "Unknown Table";
+  const tableLabel = order.table_number ? `Table ${order.table_number}` : "Unknown Table";
   const text =
     `🔔 <b>NEW ORDER</b> · #${shortId}\n` +
     `<b>${tableLabel}</b> · ₺${Number(order.total).toFixed(2)}\n` +

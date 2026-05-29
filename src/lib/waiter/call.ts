@@ -4,8 +4,8 @@ import { sendTelegramMessage } from "@/lib/telegram";
 
 export type CallReason = "bill" | "waiter" | "order";
 
-export async function callWaiter(tableNumber: number, reason: CallReason): Promise<boolean> {
-  const table = tableNumber > 0 ? `Masa ${tableNumber}` : "Bilinmeyen Masa";
+export async function callWaiter(tableNumber: string, reason: CallReason): Promise<boolean> {
+  const table = tableNumber ? `Masa ${tableNumber}` : "Bilinmeyen Masa";
   const msg =
     reason === "bill"
       ? `💳 <b>Hesap İsteniyor — ${table}</b>`
