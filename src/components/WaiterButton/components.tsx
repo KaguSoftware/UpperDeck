@@ -112,12 +112,12 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
     if (secondsLeft > 0) return;
     setPhase("sending");
     startTransition(async () => {
-      await callWaiter(tableNumber, reason);
+      const ok = await callWaiter(tableNumber, reason);
       const cooldownMs = COOLDOWNS_MS[Math.min(callCount.current, COOLDOWNS_MS.length - 1)];
       callCount.current += 1;
       onWaiterCalled(cooldownMs);
       buzz();
-      setPhase("done");
+      setPhase(ok ? "done" : "failed");
       setTimeout(() => setPhase("idle"), 2500);
     });
   };
@@ -147,6 +147,13 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
               <div className="font-bowlby text-[32px] text-green leading-none mb-2">✓</div>
               <div className="font-ui font-extrabold text-[13px] tracking-[0.18em] uppercase text-green">
                 {labelNotified}
+              </div>
+            </div>
+          ) : phase === "failed" ? (
+            <div className="px-6 py-10 text-center">
+              <div className="font-bowlby text-[32px] text-orange leading-none mb-2">✗</div>
+              <div className="font-ui font-extrabold text-[13px] tracking-[0.18em] uppercase text-orange">
+                {labelFailed}
               </div>
             </div>
           ) : (

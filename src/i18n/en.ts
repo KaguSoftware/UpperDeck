@@ -37,7 +37,7 @@ type EnShape = {
   };
   ticker: string[];
   categories: Record<string, string>;
-  waiter: { title: string; bill: string; call: string; cancel: string; notified: string };
+  waiter: { title: string; bill: string; call: string; cancel: string; notified: string; failed: string };
   qrRequired: { title: string; body: string };
   bellTutorial: { eyebrow: string; title: string; dismissHint: string };
   offline: { banner: string };

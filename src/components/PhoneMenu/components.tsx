@@ -200,10 +200,10 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     setSubmitting(true);
     try {
       const { callWaiter } = await import("@/lib/waiter/call");
-      await callWaiter(tableNumber, "order");
+      const ok = await callWaiter(tableNumber, "order");
       handleWaiterCalled(WAITER_COOLDOWN_MS);
       buzz();
-      flashToast(t.cart.waiterCalled);
+      flashToast(ok ? t.cart.waiterCalled : t.cart.error_send);
     } catch (err) {
       console.error("[handleCartCallWaiter] failed", err);
       flashToast(t.cart.error_send);
@@ -442,6 +442,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
           labelWaiter={t.waiter.call}
           labelCancel={t.waiter.cancel}
           labelNotified={t.waiter.notified}
+          labelFailed={t.waiter.failed}
           hidden={footerVisible || !!activeItem || (!!tableNumber && disabledTables.includes(tableNumber))}
           scrollRef={stageWrapRef}
           heroCollapsed={heroCollapsed}
