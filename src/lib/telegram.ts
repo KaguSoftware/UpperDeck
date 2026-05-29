@@ -2,10 +2,10 @@ import { env } from "./env";
 
 const API = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
-export async function sendTelegramMessage(text: string): Promise<void> {
+export async function sendTelegramMessage(text: string): Promise<boolean> {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
     console.warn("[telegram] skipped — TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
-    return;
+    return false;
   }
 
   try {
@@ -21,8 +21,11 @@ export async function sendTelegramMessage(text: string): Promise<void> {
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       console.error("[telegram] sendMessage failed", res.status, body);
+      return false;
     }
+    return true;
   } catch (err) {
     console.error("[telegram] fetch threw", err);
+    return false;
   }
 }

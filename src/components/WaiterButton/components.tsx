@@ -85,6 +85,7 @@ type WaiterButtonProps = {
   labelTitle: string;
   labelCancel: string;
   labelNotified: string;
+  labelFailed: string;
   hidden?: boolean;
   scrollRef?: React.RefObject<HTMLElement | null>;
   heroCollapsed?: boolean;
@@ -94,9 +95,9 @@ type WaiterButtonProps = {
   onWaiterCalled: (cooldownMs: number) => void;
 };
 
-type Phase = "idle" | "open" | "sending" | "done";
+type Phase = "idle" | "open" | "sending" | "done" | "failed";
 
-export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, hidden, scrollRef, heroCollapsed, onBeforeOpen, secondsLeft, onWaiterCalled }: WaiterButtonProps) {
+export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, labelCancel, labelNotified, labelFailed, hidden, scrollRef, heroCollapsed, onBeforeOpen, secondsLeft, onWaiterCalled }: WaiterButtonProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [isPending, startTransition] = useTransition();
   const callCount = useRef(0);

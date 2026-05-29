@@ -127,6 +127,7 @@ const en: EnShape = {
     call: "Call Waiter",
     cancel: "Cancel",
     notified: "Waiter notified",
+    failed: "Couldn't reach staff — please flag someone down.",
   },
   qrRequired: {
     title: "Please scan QR code",

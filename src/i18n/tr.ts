@@ -84,6 +84,7 @@ const tr: Messages = {
     call: "Garson Çağır",
     cancel: "İptal",
     notified: "Garson çağrıldı",
+    failed: "Personele ulaşılamadı — lütfen birini çağırın.",
   },
   qrRequired: {
     title: "Lütfen QR kodu okutun",
