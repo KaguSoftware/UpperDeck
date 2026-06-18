@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Alfa_Slab_One, Teko, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "../../globals.css";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
@@ -44,7 +45,10 @@ export default async function LocaleLayout({
 
   return (
     <html lang="en" data-locale={lang} className={`${alfaSlabOne.variable} ${teko.variable} ${inter.variable}`} suppressHydrationWarning>
-      <body className="no-scroll">{children}</body>
+      <body className="no-scroll">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
