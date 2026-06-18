@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   typedRoutes: false,
   images: {
     qualities: [75, 90],
+    minimumCacheTTL: 2592000, // 30 days — floor for /_next/image cache-control (Supabase objects send no TTL)
     remotePatterns: [
       {
         protocol: "https",

@@ -84,7 +84,11 @@ export function HeroConstructor({
       const path = `hero/${crypto.randomUUID()}.webp`;
       const { error: upErr } = await supabase.storage
         .from("menu-images")
-        .upload(path, compressed, { upsert: false, contentType: "image/webp" });
+        .upload(path, compressed, {
+          upsert: false,
+          contentType: "image/webp",
+          cacheControl: "2592000", // 30 days — let the origin advertise a long TTL
+        });
       if (upErr) throw new Error(upErr.message);
       const { data } = supabase.storage.from("menu-images").getPublicUrl(path);
       setMediaUrl(data.publicUrl);

@@ -34,6 +34,7 @@ export function ImageField({ defaultUrl }: { defaultUrl?: string | null }) {
                 .upload(path, compressed, {
                     upsert: false,
                     contentType: "image/webp",
+                    cacheControl: "2592000", // 30 days — let the origin advertise a long TTL
                 });
             if (upErr) throw new Error(upErr.message);
             const { data } = supabase.storage
