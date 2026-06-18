@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Teko, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "../globals.css";
 
 const teko = Teko({
@@ -23,7 +24,10 @@ export const metadata: Metadata = {
 export default function DashboardRoot({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${teko.variable} ${inter.variable}`} suppressHydrationWarning>
-      <body className="min-h-screen bg-bg text-ink font-ui">{children}</body>
+      <body className="min-h-screen bg-bg text-ink font-ui">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
