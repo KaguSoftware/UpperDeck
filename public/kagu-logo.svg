@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1079" height="486" viewBox="0 0 1079 486" role="img" aria-label="Kagu geometric logo">
+  <title>Kagu geometric logo</title>
+  <!-- Geometry measured pixel-exact from the 2026 brand PNG (Kagu logo enhanced.png).
+       Two paths on purpose: the 3D sculpture (LogoSculpture.tsx) extrudes each
+       path into a slab and reads opacity < 0.5 as the ghosted layer. The 2D
+       head-fold tone lives only in the inline marks (KaguMark.tsx). -->
+  <path d="M 1078 0 L 778 0 Q 741 0 719 19 L 459 262 L 340 146 L 104 146 L 0 256 L 218 256 L 345 368 L 564 369 L 663 463 L 911 486 L 733 317 Z" fill="#000000" opacity="0.17"/>
+  <path d="M 1078 0 L 778 0 Q 741 0 719 19 L 345 368 L 677 368 Z" fill="#000000" opacity="0.85"/>
+</svg>

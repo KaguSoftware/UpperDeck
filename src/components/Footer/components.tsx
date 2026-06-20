@@ -7,22 +7,20 @@ export function Footer() {
         <footer className="relative bg-green text-bg w-full pt-12 pb-10 px-8 mt-4 border-t-2 border-green">
             {/* KAGU — absolutely positioned, doesn't affect layout */}
             <a
-                href="/"
+                href="https://kagusoftware.com"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="absolute top-22 right-6 flex flex-col items-center gap-0.5 opacity-90 hover:opacity-100 transition-opacity"
             >
                 <Image
-                    src="/kagulogoNoBg.png"
+                    src="/kagu-logo.svg"
                     alt="KAGU"
                     width={100}
-                    height={100}
+                    height={45}
                     className="object-contain"
                     style={{
                         filter: "brightness(0) invert(1)",
                         opacity: 0.85,
-                        width: 100,
-                        height: "auto",
                     }}
                 />
                 <span
