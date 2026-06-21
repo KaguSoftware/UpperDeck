@@ -47,7 +47,7 @@ export function Footer() {
                         href="mailto:hello@upperdeckk.com"
                         className="font-bowlby text-[18px] uppercase tracking-[-0.5px] opacity-90"
                     >
-                        upperdeck.help@gmail.com
+                        upperdeck.besiktas@gmail.com
                     </a>
                     <a
                         href="tel:+905015886575"
