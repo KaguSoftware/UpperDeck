@@ -72,6 +72,9 @@ export function CartDrawer({
                 sheetRef.current.style.transition = "transform 0.25s cubic-bezier(0.2,0.8,0.2,1)";
                 sheetRef.current.style.transform = "";
             }
+            // Restore the backdrop opacity dimmed during the drag, otherwise the
+            // stale low value persists and the drawer reopens semi-transparent.
+            if (backdropRef.current) backdropRef.current.style.opacity = "";
             onClose();
         } else {
             if (sheetRef.current) {
