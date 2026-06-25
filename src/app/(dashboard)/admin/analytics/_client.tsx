@@ -72,6 +72,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       q.delete("from");
       q.delete("to");
       router.push(`/admin/analytics?${q.toString()}`);
+      // Next 16 client router cache serves the cached segment on a query-only
+      // change, so force the server component to re-run with the new range.
+      router.refresh();
     },
     [params, router]
   );
@@ -80,18 +83,34 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     (from: string, to: string) => {
       if (!from || !to) return;
       router.push(`/admin/analytics?range=custom&from=${from}&to=${to}`);
+      router.refresh();
     },
     [router]
   );
 
+  // Derive the active preset from the live URL (not the possibly-cached server
+  // prop) so the highlight tracks clicks immediately.
+  const urlRange = params.get("range");
+  const activePreset =
+    urlRange === "custom" && params.get("from") && params.get("to")
+      ? "custom"
+      : ["today", "7d", "30d", "90d"].includes(urlRange ?? "")
+        ? (urlRange as string)
+        : data.preset;
+
   const { kpis } = data;
+
+  // Distinguish "not configured" from "configured but no events yet".
+  const engagementNote = data.posthogConfigured
+    ? "Bu dönemde menü etkileşimi kaydedilmedi."
+    : "Etkileşim verisi yok (PostHog gerekli).";
 
   return (
     <div className="flex flex-col gap-6">
       {/* Date range switcher */}
       <div className="flex flex-wrap items-center gap-2">
         {PRESETS.map((p) => {
-          const active = data.preset === p.key;
+          const active = activePreset === p.key;
           return (
             <button
               key={p.key}
@@ -129,7 +148,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             }}
             className={[
               "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer",
-              data.preset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
+              activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
             ].join(" ")}
           >
             Uygula
@@ -163,19 +182,19 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           <RevenueAreaChart data={data.revenueOverTime} />
         </ChartCard>
         <ChartCard title="En Çok Görüntülenen Ürünler">
-          <HBarChart data={data.topViewed} note="Etkileşim verisi yok (PostHog gerekli)." />
+          <HBarChart data={data.topViewed} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Etkileşim Hunisi">
-          <FunnelBars data={data.funnel} />
+          <FunnelBars data={data.funnel} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Yoğun Saatler">
-          <PeakHoursChart data={data.peakHours} />
+          <PeakHoursChart data={data.peakHours} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Kategori Popülerliği">
-          <HBarChart data={data.categoryPopularity} color="#243845" note="Etkileşim verisi yok (PostHog gerekli)." />
+          <HBarChart data={data.categoryPopularity} color="#243845" note={engagementNote} />
         </ChartCard>
         <ChartCard title="Dil Dağılımı (en / tr)">
-          <HBarChart data={data.localeSplit} note="Etkileşim verisi yok (PostHog gerekli)." />
+          <HBarChart data={data.localeSplit} note={engagementNote} />
         </ChartCard>
       </div>
 

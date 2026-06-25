@@ -121,9 +121,9 @@ export function HBarChart({
   );
 }
 
-export function FunnelBars({ data }: { data: { step: string; count: number }[] }) {
+export function FunnelBars({ data, note }: { data: { step: string; count: number }[]; note?: string }) {
   const max = Math.max(...data.map((d) => d.count), 1);
-  if (!data.some((d) => d.count > 0)) return <Empty note="Etkileşim verisi yok (PostHog gerekli)." />;
+  if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
   return (
     <div className="flex flex-col gap-3 py-2">
       {data.map((d, i) => {
@@ -151,8 +151,8 @@ export function FunnelBars({ data }: { data: { step: string; count: number }[] }
   );
 }
 
-export function PeakHoursChart({ data }: { data: { hour: number; count: number }[] }) {
-  if (!data.some((d) => d.count > 0)) return <Empty note="Etkileşim verisi yok (PostHog gerekli)." />;
+export function PeakHoursChart({ data, note }: { data: { hour: number; count: number }[]; note?: string }) {
+  if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
