@@ -84,6 +84,66 @@ export async function getTopViewedItems(range: DateRange, limit = 10): Promise<N
   return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
 }
 
+/**
+ * Most added-to-cart items by distinct diners (item_added_to_cart). A stronger
+ * purchase-intent signal than views: the diner picked it to show the waiter.
+ * Comparing this against real best-sellers reveals "wanted but not sold" gaps.
+ */
+export async function getTopCartedItems(range: DateRange, limit = 10): Promise<NamedCount[]> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT properties.item_name AS name, count(DISTINCT $session_id) AS c
+    FROM events
+    WHERE event = 'item_added_to_cart'
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+      AND name != ''
+    GROUP BY name ORDER BY c DESC LIMIT ${limit}
+  `);
+  return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
+}
+
+/**
+ * Waiter-call volume by table (table_number super-property). The one true
+ * order-intent signal in a waiter-served flow — shows which tables are busiest.
+ */
+export async function getTableActivity(range: DateRange, limit = 15): Promise<NamedCount[]> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT properties.table_number AS name, count() AS c
+    FROM events
+    WHERE event = 'waiter_called'
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+      AND name != '' AND name IS NOT NULL
+    GROUP BY name ORDER BY c DESC LIMIT ${limit}
+  `);
+  return rows.map((r) => ({ name: `Masa ${String(r[0])}`, count: Number(r[1]) }));
+}
+
+/**
+ * Cart→call conversion: of the sessions that opened the cart, how many went on
+ * to call the waiter. A quality-of-engagement rate (0–100) for the range.
+ */
+export async function getCartConversion(range: DateRange): Promise<number> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT
+      countIf(has(events, 'cart_opened')) AS carts,
+      countIf(has(events, 'cart_opened') AND has(events, 'waiter_called')) AS converted
+    FROM (
+      SELECT $session_id AS sid, groupArray(event) AS events
+      FROM events
+      WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+        AND $session_id IS NOT NULL
+        AND event IN ('cart_opened','waiter_called')
+      GROUP BY sid
+    )
+  `);
+  const r = rows[0];
+  const carts = r ? Number(r[0]) : 0;
+  const converted = r ? Number(r[1]) : 0;
+  return carts > 0 ? Math.round((converted / carts) * 100) : 0;
+}
+
 /** Category navigation popularity (category_selected events). */
 export async function getCategoryPopularity(range: DateRange, limit = 12): Promise<NamedCount[]> {
   const b = bounds(range);

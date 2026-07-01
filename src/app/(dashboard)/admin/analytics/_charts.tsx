@@ -77,9 +77,11 @@ export function SalesVsEngagementChart({
         <YAxis yAxisId="right" orientation="right" {...axisProps} width={32} allowDecimals={false} />
         <Tooltip {...tooltipStyle} />
         <Legend wrapperStyle={legendStyle} iconType="plainline" />
+        {/* connectNulls + visible dots so sparse days (a single sales entry or a
+            lone active day) still render instead of showing an empty plot. */}
         <Bar yAxisId="left" dataKey="revenue" name="Gerçek Satış (₺)" fill={GREEN} barSize={18} />
-        <Line yAxisId="right" type="monotone" dataKey="views" name="Görüntüleme" stroke={ORANGE} strokeWidth={2} dot={false} />
-        <Line yAxisId="right" type="monotone" dataKey="waiterCalls" name="Garson Çağrısı" stroke={GREEN_DEEP} strokeWidth={2} strokeDasharray="4 3" dot={false} />
+        <Line yAxisId="right" type="monotone" dataKey="views" name="Görüntüleme" stroke={ORANGE} strokeWidth={2} dot={{ r: 2 }} connectNulls />
+        <Line yAxisId="right" type="monotone" dataKey="waiterCalls" name="Garson Çağrısı" stroke={GREEN_DEEP} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} connectNulls />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -100,7 +102,18 @@ export function RevenueAreaChart({ data }: { data: { date: string; revenue: numb
         <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} minTickGap={16} />
         <YAxis {...axisProps} width={44} tickFormatter={(v) => compact.format(v)} />
         <Tooltip {...tooltipStyle} formatter={(v) => tl.format(Number(v))} />
-        <Area type="monotone" dataKey="revenue" name="Satış (₺)" stroke={GREEN} strokeWidth={2} fill="url(#rev)" />
+        {/* dot enabled so a single day's entry is still visible (a lone point
+            would otherwise draw a zero-length, invisible line). */}
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          name="Satış (₺)"
+          stroke={GREEN}
+          strokeWidth={2}
+          fill="url(#rev)"
+          dot={{ r: 3, fill: GREEN }}
+          activeDot={{ r: 5 }}
+        />
       </AreaChart>
     </ResponsiveContainer>
   );

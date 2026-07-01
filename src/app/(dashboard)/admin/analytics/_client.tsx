@@ -24,10 +24,13 @@ export type AnalyticsData = {
     avgSeconds: number;
     waiterCalls: number;
     views: number;
+    cartConversion: number;
   };
   comparison: { date: string; revenue: number | null; covers: number | null; views: number; waiterCalls: number }[];
   revenueOverTime: { date: string; revenue: number; covers: number }[];
   topViewed: NamedCount[];
+  topCarted: NamedCount[];
+  tableActivity: NamedCount[];
   funnel: { step: string; count: number }[];
   peakHours: { hour: number; count: number }[];
   categoryPopularity: NamedCount[];
@@ -53,13 +56,15 @@ function duration(sec: number): string {
 }
 
 function Kpi({ label, value }: { label: string; value: string }) {
-  // Long currency values (e.g. "₺1.234.567") overflow the narrow mobile cards at
-  // 40px, so step the size down as the string grows.
-  const size = value.length > 10 ? "text-[26px]" : value.length > 7 ? "text-[32px]" : "text-[40px]";
+  // The Bowlby display font is very wide, so long currency values (e.g.
+  // "₺1.234.567") overrun the narrow 6-up cards. Step the size down as the
+  // string grows and let it scale-to-fit within the card as a safety net.
+  const size =
+    value.length > 11 ? "text-[20px]" : value.length > 9 ? "text-[26px]" : value.length > 6 ? "text-[32px]" : "text-[40px]";
   return (
-    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0">
+    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden">
       <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
-      <div className={`font-bowlby ${size} leading-none text-green mt-1.5 tabular-nums`}>{value}</div>
+      <div className={`font-bowlby ${size} leading-none text-green mt-1.5 whitespace-nowrap`}>{value}</div>
     </div>
   );
 }
@@ -168,13 +173,14 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
         <Kpi label="Gerçek Satış" value={lira.format(kpis.totalSales)} />
         <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} />
         <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? lira.format(kpis.avgSpendPerCover) : "—"} />
         <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} />
         <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} />
         <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} />
+        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? `%${kpis.cartConversion}` : "—"} />
       </div>
 
       {/* Headline comparison */}
@@ -188,6 +194,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         </ChartCard>
         <ChartCard title="En Çok İncelenen Ürünler">
           <HBarChart data={data.topViewed} note={engagementNote} />
+        </ChartCard>
+        <ChartCard title="En Çok Sepete Eklenen">
+          <HBarChart data={data.topCarted} color="#243845" note={engagementNote} />
+        </ChartCard>
+        <ChartCard title="Masa Aktivitesi (Garson Çağrısı)">
+          <HBarChart data={data.tableActivity} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Etkileşim Hunisi">
           <FunnelBars data={data.funnel} note={engagementNote} />
