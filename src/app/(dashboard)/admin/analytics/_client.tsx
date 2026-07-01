@@ -168,7 +168,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} />
         <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? lira.format(kpis.avgSpendPerCover) : "—"} />
         <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} />
-        <Kpi label="Ort. Süre" value={duration(kpis.avgSeconds)} />
+        <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} />
         <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} />
       </div>
 
@@ -181,7 +181,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <ChartCard title="Satış (Zaman İçinde)">
           <RevenueAreaChart data={data.revenueOverTime} />
         </ChartCard>
-        <ChartCard title="En Çok Görüntülenen Ürünler">
+        <ChartCard title="En Çok İncelenen Ürünler">
           <HBarChart data={data.topViewed} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Etkileşim Hunisi">

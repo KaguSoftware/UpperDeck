@@ -46,7 +46,17 @@ async function hogql(query: string): Promise<unknown[][]> {
   }
 }
 
-// HogQL date bounds (inclusive). `to` is end-of-day.
+// Restaurant-local timezone. All date/hour math is done in local time so
+// "today", daily buckets, and peak hours line up with the real business day
+// (event timestamps are stored in UTC). `sales_entries.entry_date` is already
+// local, so this keeps the two data sources on the same timeline.
+const TZ = "Europe/Istanbul";
+
+// Local timestamp for the current row, in TZ. Every query filters and buckets
+// on this so a 21:00 Istanbul event isn't counted as an 18:00 UTC event.
+const LOCAL_TS = `toTimeZone(timestamp, '${TZ}')`;
+
+// HogQL date bounds (inclusive), interpreted in local time. `to` is end-of-day.
 function bounds(range: DateRange) {
   return {
     from: `'${range.from} 00:00:00'`,
@@ -56,14 +66,18 @@ function bounds(range: DateRange) {
 
 export type NamedCount = { name: string; count: number };
 
-/** Most-viewed menu items (item_viewed events). */
+/**
+ * Most-viewed menu items by distinct diners. `item_viewed` fires on every modal
+ * open, so counting raw events lets one curious diner inflate an item; counting
+ * distinct sessions measures "how many diners looked" — a truer popularity signal.
+ */
 export async function getTopViewedItems(range: DateRange, limit = 10): Promise<NamedCount[]> {
   const b = bounds(range);
   const rows = await hogql(`
-    SELECT properties.item_name AS name, count() AS c
+    SELECT properties.item_name AS name, count(DISTINCT $session_id) AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND timestamp >= ${b.from} AND timestamp <= ${b.to}
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${limit}
   `);
@@ -77,7 +91,7 @@ export async function getCategoryPopularity(range: DateRange, limit = 12): Promi
     SELECT properties.category AS name, count() AS c
     FROM events
     WHERE event = 'category_selected'
-      AND timestamp >= ${b.from} AND timestamp <= ${b.to}
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${limit}
   `);
@@ -90,7 +104,7 @@ export async function getLocaleSplit(range: DateRange): Promise<NamedCount[]> {
   const rows = await hogql(`
     SELECT properties.locale AS name, count() AS c
     FROM events
-    WHERE timestamp >= ${b.from} AND timestamp <= ${b.to}
+    WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
       AND name != ''
     GROUP BY name ORDER BY c DESC
   `);
@@ -104,7 +118,7 @@ export async function getEngagementFunnel(range: DateRange) {
     SELECT event, count() AS c
     FROM events
     WHERE event IN ('item_viewed','item_added_to_cart','waiter_called')
-      AND timestamp >= ${b.from} AND timestamp <= ${b.to}
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
     GROUP BY event
   `);
   const m = new Map(rows.map((r) => [String(r[0]), Number(r[1])]));
@@ -115,18 +129,26 @@ export async function getEngagementFunnel(range: DateRange) {
   ];
 }
 
-/** Session count + average duration (seconds) over the range. */
+/**
+ * Session count + median duration (seconds) over the range.
+ *
+ * Single-event sessions (scan → one view → leave, very common for a QR menu)
+ * have min == max, i.e. a 0s duration, so they're excluded via `count() >= 2` —
+ * a lone ping isn't a measurable dwell. We report the median rather than the
+ * mean so one left-open tab doesn't skew the headline number.
+ */
 export async function getSessionStats(range: DateRange) {
   const b = bounds(range);
   const rows = await hogql(`
-    SELECT count() AS sessions, avg(duration) AS avg_seconds
+    SELECT count() AS sessions, median(duration) AS median_seconds
     FROM (
       SELECT $session_id AS sid,
              dateDiff('second', min(timestamp), max(timestamp)) AS duration
       FROM events
-      WHERE timestamp >= ${b.from} AND timestamp <= ${b.to}
+      WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
         AND $session_id IS NOT NULL
       GROUP BY sid
+      HAVING count() >= 2
     )
   `);
   const r = rows[0];
@@ -140,11 +162,11 @@ export async function getSessionStats(range: DateRange) {
 export async function getDailyEngagement(range: DateRange) {
   const b = bounds(range);
   const rows = await hogql(`
-    SELECT toDate(timestamp) AS d,
+    SELECT toDate(${LOCAL_TS}) AS d,
            countIf(event = 'item_viewed') AS views,
            countIf(event = 'waiter_called') AS waiter_calls
     FROM events
-    WHERE timestamp >= ${b.from} AND timestamp <= ${b.to}
+    WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
     GROUP BY d ORDER BY d
   `);
   return rows.map((r) => ({
@@ -158,10 +180,10 @@ export async function getDailyEngagement(range: DateRange) {
 export async function getPeakHours(range: DateRange) {
   const b = bounds(range);
   const rows = await hogql(`
-    SELECT toHour(timestamp) AS h, count() AS c
+    SELECT toHour(${LOCAL_TS}) AS h, count() AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND timestamp >= ${b.from} AND timestamp <= ${b.to}
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
     GROUP BY h ORDER BY h
   `);
   const byHour = new Map(rows.map((r) => [Number(r[0]), Number(r[1])]));
