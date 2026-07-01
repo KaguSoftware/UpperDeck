@@ -53,10 +53,13 @@ function duration(sec: number): string {
 }
 
 function Kpi({ label, value }: { label: string; value: string }) {
+  // Long currency values (e.g. "₺1.234.567") overflow the narrow mobile cards at
+  // 40px, so step the size down as the string grows.
+  const size = value.length > 10 ? "text-[26px]" : value.length > 7 ? "text-[32px]" : "text-[40px]";
   return (
-    <div className="border-2 border-green bg-white p-5">
-      <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase">{label}</div>
-      <div className="font-bowlby text-[40px] leading-none text-green mt-1 break-words">{value}</div>
+    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0">
+      <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
+      <div className={`font-bowlby ${size} leading-none text-green mt-1.5 tabular-nums`}>{value}</div>
     </div>
   );
 }
@@ -108,36 +111,38 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Date range switcher */}
-      <div className="flex flex-wrap items-center gap-2">
-        {PRESETS.map((p) => {
-          const active = activePreset === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setRange(p.key)}
-              className={[
-                "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
-                active ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
-              ].join(" ")}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-        <div className="flex items-center gap-1.5 ml-auto">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {PRESETS.map((p) => {
+            const active = activePreset === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setRange(p.key)}
+                className={[
+                  "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
+                  active ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
+                ].join(" ")}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1.5 sm:ml-auto min-w-0">
           <input
             type="date"
             defaultValue={data.range.from}
             id="range-from"
-            className="border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
+            className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
           />
-          <span className="text-green/60 text-[12px]">→</span>
+          <span className="text-green/60 text-[12px] shrink-0">→</span>
           <input
             type="date"
             defaultValue={data.range.to}
             id="range-to"
-            className="border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
+            className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
           />
           <button
             type="button"
@@ -147,7 +152,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               onCustom(f, t);
             }}
             className={[
-              "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer",
+              "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer",
               activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
             ].join(" ")}
           >
@@ -158,12 +163,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
       {!data.posthogConfigured && (
         <div className="bg-bg-deep border-2 border-green/30 text-green text-[11px] font-bold uppercase tracking-[0.1em] px-4 py-3">
-          PostHog yapılandırılmadı — etkileşim grafikleri için <code className="text-orange">.env.local</code> içine anahtarları ekleyin.
+          Menü etkileşim takibi henüz bağlı değil — etkileşim grafikleri şimdilik boş görünecek.
         </div>
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <Kpi label="Gerçek Satış" value={lira.format(kpis.totalSales)} />
         <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} />
         <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? lira.format(kpis.avgSpendPerCover) : "—"} />
@@ -199,7 +204,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       </div>
 
       {data.bestSellers.length > 0 && (
-        <ChartCard title="Gerçekte En Çok Satanlar (Excel)">
+        <ChartCard title="Gerçekte En Çok Satanlar">
           <HBarChart data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))} />
         </ChartCard>
       )}

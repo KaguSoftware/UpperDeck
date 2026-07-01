@@ -12,6 +12,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   Cell,
 } from "recharts";
 
@@ -39,6 +40,12 @@ const tooltipStyle = {
 
 const tl = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
+// Compact axis ticks (1500 → "1,5B", 1200000 → "1,2Mn") so long revenue numbers
+// don't overflow the axis gutter.
+const compact = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
+
+const legendStyle = { fontSize: 11, fontWeight: 700, color: GREEN } as const;
+
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-2 border-green bg-white p-5">
@@ -60,15 +67,16 @@ export function SalesVsEngagementChart({
 }: {
   data: { date: string; revenue: number | null; views: number; waiterCalls: number }[];
 }) {
-  if (!data.length) return <Empty note="Veri yok — gerçek satış girin ve menü etkileşimini bekleyin." />;
+  if (!data.length) return <Empty note="Menü etkileşimi biriktikçe ve gerçek satış girdikçe burada karşılaştırılır." />;
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={320}>
+      <ComposedChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} />
-        <YAxis yAxisId="left" {...axisProps} tickFormatter={(v) => tl.format(v)} />
-        <YAxis yAxisId="right" orientation="right" {...axisProps} />
+        <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} minTickGap={16} />
+        <YAxis yAxisId="left" {...axisProps} width={44} tickFormatter={(v) => compact.format(v)} />
+        <YAxis yAxisId="right" orientation="right" {...axisProps} width={32} allowDecimals={false} />
         <Tooltip {...tooltipStyle} />
+        <Legend wrapperStyle={legendStyle} iconType="plainline" />
         <Bar yAxisId="left" dataKey="revenue" name="Gerçek Satış (₺)" fill={GREEN} barSize={18} />
         <Line yAxisId="right" type="monotone" dataKey="views" name="Görüntüleme" stroke={ORANGE} strokeWidth={2} dot={false} />
         <Line yAxisId="right" type="monotone" dataKey="waiterCalls" name="Garson Çağrısı" stroke={GREEN_DEEP} strokeWidth={2} strokeDasharray="4 3" dot={false} />
@@ -78,10 +86,10 @@ export function SalesVsEngagementChart({
 }
 
 export function RevenueAreaChart({ data }: { data: { date: string; revenue: number }[] }) {
-  if (!data.length) return <Empty note="Henüz satış girilmedi." />;
+  if (!data.length) return <Empty note="Bu dönem için satış girilmedi. Sağ üstten “Gerçek Satış Gir”." />;
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={GREEN} stopOpacity={0.35} />
@@ -89,9 +97,9 @@ export function RevenueAreaChart({ data }: { data: { date: string; revenue: numb
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} />
-        <YAxis {...axisProps} tickFormatter={(v) => tl.format(v)} />
-        <Tooltip {...tooltipStyle} />
+        <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} minTickGap={16} />
+        <YAxis {...axisProps} width={44} tickFormatter={(v) => compact.format(v)} />
+        <Tooltip {...tooltipStyle} formatter={(v) => tl.format(Number(v))} />
         <Area type="monotone" dataKey="revenue" name="Satış (₺)" stroke={GREEN} strokeWidth={2} fill="url(#rev)" />
       </AreaChart>
     </ResponsiveContainer>
@@ -108,12 +116,21 @@ export function HBarChart({
   note?: string;
 }) {
   if (!data.length) return <Empty note={note ?? "Veri yok."} />;
+  // Widen the label gutter for long item/category names, but cap it so the bars
+  // still have room; overflowing names get an ellipsis instead of being clipped.
+  const labelWidth = Math.min(180, Math.max(96, ...data.map((d) => d.name.length * 7)));
   return (
     <ResponsiveContainer width="100%" height={Math.max(180, data.length * 34)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
         <CartesianGrid stroke={GRID} horizontal={false} />
-        <XAxis type="number" {...axisProps} />
-        <YAxis type="category" dataKey="name" width={120} {...axisProps} />
+        <XAxis type="number" {...axisProps} allowDecimals={false} />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={labelWidth}
+          {...axisProps}
+          tickFormatter={(n) => (String(n).length > 24 ? `${String(n).slice(0, 23)}…` : String(n))}
+        />
         <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} />
         <Bar dataKey="count" name="Adet" fill={color} barSize={16} />
       </BarChart>
@@ -153,16 +170,18 @@ export function FunnelBars({ data, note }: { data: { step: string; count: number
 
 export function PeakHoursChart({ data, note }: { data: { hour: number; count: number }[]; note?: string }) {
   if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
+  // Compute the peak once (not per-cell) so only the busiest hour is highlighted.
+  const peak = Math.max(...data.map((d) => d.count));
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="hour" {...axisProps} tickFormatter={(h) => `${h}:00`} interval={2} />
-        <YAxis {...axisProps} />
-        <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} labelFormatter={(h) => `${h}:00`} />
+        <XAxis dataKey="hour" {...axisProps} tickFormatter={(h) => `${String(h).padStart(2, "0")}`} interval={2} />
+        <YAxis {...axisProps} width={28} allowDecimals={false} />
+        <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} labelFormatter={(h) => `${String(h).padStart(2, "0")}:00`} />
         <Bar dataKey="count" name="Görüntüleme" barSize={10}>
           {data.map((d) => (
-            <Cell key={d.hour} fill={d.count === Math.max(...data.map((x) => x.count)) ? ORANGE : GREEN} />
+            <Cell key={d.hour} fill={d.count === peak ? ORANGE : GREEN} />
           ))}
         </Bar>
       </BarChart>
