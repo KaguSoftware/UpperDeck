@@ -46,7 +46,9 @@ const PRESETS: { key: string; label: string }[] = [
 ];
 
 const tl = new Intl.NumberFormat("tr-TR");
-const lira = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 });
+// Plain number (no currency style): the Bowlby display font has no ₺ glyph, so
+// we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
+const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
 function duration(sec: number): string {
   if (!sec) return "—";
@@ -55,16 +57,19 @@ function duration(sec: number): string {
   return m > 0 ? `${m}d ${s}s` : `${s}s`;
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
-  // The Bowlby display font is very wide, so long currency values (e.g.
-  // "₺1.234.567") overrun the narrow 6-up cards. Step the size down as the
-  // string grows and let it scale-to-fit within the card as a safety net.
+function Kpi({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  // The Bowlby display font is very wide, so long values (e.g. "1.234.567")
+  // overrun the narrow cards. Step the size down as the string grows.
   const size =
     value.length > 11 ? "text-[20px]" : value.length > 9 ? "text-[26px]" : value.length > 6 ? "text-[32px]" : "text-[40px]";
   return (
     <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden">
       <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
-      <div className={`font-bowlby ${size} leading-none text-green mt-1.5 whitespace-nowrap`}>{value}</div>
+      <div className="flex items-baseline gap-1 mt-1.5 whitespace-nowrap">
+        {/* ₺ (and %) live outside the display font, which lacks those glyphs. */}
+        {unit && <span className="font-ui font-extrabold text-[16px] text-green/70">{unit}</span>}
+        <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
+      </div>
     </div>
   );
 }
@@ -174,13 +179,13 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
-        <Kpi label="Gerçek Satış" value={lira.format(kpis.totalSales)} />
+        <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" />
         <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} />
-        <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? lira.format(kpis.avgSpendPerCover) : "—"} />
+        <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? money.format(kpis.avgSpendPerCover) : "—"} unit={kpis.avgSpendPerCover ? "₺" : undefined} />
         <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} />
         <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} />
         <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} />
-        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? `%${kpis.cartConversion}` : "—"} />
+        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} />
       </div>
 
       {/* Headline comparison */}
