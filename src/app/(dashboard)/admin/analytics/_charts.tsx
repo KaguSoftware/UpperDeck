@@ -151,6 +151,49 @@ export function HBarChart({
   );
 }
 
+/**
+ * "Watched but not bought" — per item, stacked by dwell bucket. Each bucket
+ * suggests a different fix: 5–10 s = photo isn't selling it, 10–20 s = the
+ * description loses them, +20 s = they read everything and still passed
+ * (content/price). Mistake taps (<5 s) never reach this data.
+ */
+export function AbandonedViewsChart({
+  data,
+  note,
+}: {
+  data: { name: string; b5to10: number; b10to20: number; b20plus: number }[];
+  note?: string;
+}) {
+  if (!data.length) return <Empty note={note ?? "Veri yok."} />;
+  const labelWidth = Math.min(180, Math.max(96, ...data.map((d) => d.name.length * 7)));
+  return (
+    <>
+      <ResponsiveContainer width="100%" height={Math.max(180, data.length * 34)}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+          <CartesianGrid stroke={GRID} horizontal={false} />
+          <XAxis type="number" {...axisProps} allowDecimals={false} />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={labelWidth}
+            {...axisProps}
+            tickFormatter={(n) => (String(n).length > 24 ? `${String(n).slice(0, 23)}…` : String(n))}
+          />
+          <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} />
+          <Legend wrapperStyle={legendStyle} />
+          <Bar dataKey="b5to10" name="5–10 sn" stackId="d" fill={GREEN} barSize={16} />
+          <Bar dataKey="b10to20" name="10–20 sn" stackId="d" fill={GREEN_DEEP} barSize={16} />
+          <Bar dataKey="b20plus" name="+20 sn" stackId="d" fill={ORANGE} barSize={16} />
+        </BarChart>
+      </ResponsiveContainer>
+      <p className="mt-3 text-[11px] leading-relaxed text-green/60 font-bold">
+        5–10 sn · görsel ilgi çekmiyor &nbsp;·&nbsp; 10–20 sn · açıklama ikna etmiyor &nbsp;·&nbsp; +20 sn · okudu ama
+        almadı (içerik/fiyat)
+      </p>
+    </>
+  );
+}
+
 export function FunnelBars({ data, note }: { data: { step: string; count: number }[]; note?: string }) {
   const max = Math.max(...data.map((d) => d.count), 1);
   if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;

@@ -14,7 +14,9 @@ import {
   getEngagementFunnel,
   getSessionStats,
   getPeakHours,
+  getAbandonedViews,
 } from "@/lib/analytics/posthog";
+import { insightsConfigured } from "@/lib/analytics/insights";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +45,7 @@ export default async function AnalyticsPage({
     funnel,
     sessions,
     peakHours,
+    abandonedViews,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealSalesOverTime(range),
@@ -57,6 +60,7 @@ export default async function AnalyticsPage({
     getEngagementFunnel(range),
     getSessionStats(range),
     getPeakHours(range),
+    getAbandonedViews(range),
   ]);
 
   const views = funnel.find((f) => f.step.startsWith("Görüntü"))?.count ?? 0;
@@ -66,6 +70,7 @@ export default async function AnalyticsPage({
     preset,
     range,
     posthogConfigured: posthogConfigured(),
+    insightsConfigured: insightsConfigured(),
     kpis: {
       totalSales: summary.totalSales,
       totalCovers: summary.totalCovers,
@@ -86,6 +91,7 @@ export default async function AnalyticsPage({
     categoryPopularity,
     localeSplit,
     bestSellers,
+    abandonedViews,
   };
 
   return (
