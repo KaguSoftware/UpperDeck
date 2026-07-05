@@ -12,6 +12,7 @@ import {
   AbandonedViewsChart,
 } from "./_charts";
 import { generateInsightsAction } from "./actions";
+import { Loader } from "@/components/Loader/components";
 import type { NamedCount, AbandonedView } from "@/lib/analytics/posthog";
 
 export type AnalyticsData = {
@@ -145,6 +146,9 @@ function AiInsights({ configured }: { configured: boolean }) {
 export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const router = useRouter();
   const params = useSearchParams();
+  // Pending while the server component re-fetches the new range — drives the
+  // loading overlay so a range click gives immediate feedback.
+  const [switching, startSwitching] = useTransition();
 
   const setRange = useCallback(
     (preset: string) => {
@@ -152,10 +156,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       q.set("range", preset);
       q.delete("from");
       q.delete("to");
-      router.push(`/admin/analytics?${q.toString()}`);
-      // Next 16 client router cache serves the cached segment on a query-only
-      // change, so force the server component to re-run with the new range.
-      router.refresh();
+      startSwitching(() => {
+        router.push(`/admin/analytics?${q.toString()}`);
+        // Next 16 client router cache serves the cached segment on a query-only
+        // change, so force the server component to re-run with the new range.
+        router.refresh();
+      });
     },
     [params, router]
   );
@@ -163,8 +169,10 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const onCustom = useCallback(
     (from: string, to: string) => {
       if (!from || !to) return;
-      router.push(`/admin/analytics?range=custom&from=${from}&to=${to}`);
-      router.refresh();
+      startSwitching(() => {
+        router.push(`/admin/analytics?range=custom&from=${from}&to=${to}`);
+        router.refresh();
+      });
     },
     [router]
   );
@@ -187,7 +195,16 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     : "Etkileşim verisi yok (PostHog gerekli).";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="relative flex flex-col gap-6" aria-busy={switching}>
+      {/* Range-switch feedback: dim the dashboard and pin a loader while the
+          server re-fetches. sticky keeps it visible however far down you are. */}
+      {switching && (
+        <div className="absolute inset-0 z-20 bg-bg/70">
+          <div className="sticky top-0 h-screen grid place-items-center">
+            <Loader size="md" label="Yükleniyor" />
+          </div>
+        </div>
+      )}
       {/* Date range switcher */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -198,8 +215,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 key={p.key}
                 type="button"
                 onClick={() => setRange(p.key)}
+                disabled={switching}
                 className={[
-                  "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
+                  "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
                   active ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
                 ].join(" ")}
               >
@@ -229,8 +247,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               const t = (document.getElementById("range-to") as HTMLInputElement)?.value;
               onCustom(f, t);
             }}
+            disabled={switching}
             className={[
-              "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer",
+              "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait",
               activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
             ].join(" ")}
           >
