@@ -15,7 +15,7 @@ import {
 } from "./_charts";
 import { generateInsightsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
-import type { NamedCount, AbandonedView, PriceBand, DiscountSplit } from "@/lib/analytics/posthog";
+import type { NamedCount, AbandonedView, PriceBand } from "@/lib/analytics/posthog";
 import type { ItemConversion } from "@/lib/analytics/compare";
 
 export type AnalyticsData = {
@@ -57,7 +57,6 @@ export type AnalyticsData = {
   abandonedViews: AbandonedView[];
   itemConversion: ItemConversion[];
   priceBands: PriceBand[];
-  discountSplit: DiscountSplit[];
   weekHeatmap: { day: number; hour: number; count: number }[];
   insightsHistory: { date: string; rangeFrom: string; rangeTo: string; insights: string[] }[];
 };
@@ -509,16 +508,6 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
           <ConversionBars
             data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
-            note={engagementNote}
-          />
-        </ChartCard>
-        <ChartCard title="İndirim Etkisi">
-          <ConversionBars
-            data={data.discountSplit.map((d) => ({
-              label: d.group === "discounted" ? "İndirimli ürünler" : "Normal fiyatlı ürünler",
-              views: d.views,
-              carts: d.carts,
-            }))}
             note={engagementNote}
           />
         </ChartCard>

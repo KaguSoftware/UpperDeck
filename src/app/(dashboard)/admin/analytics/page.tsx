@@ -16,7 +16,6 @@ import {
   getPeakHours,
   getAbandonedViews,
   getPriceBands,
-  getDiscountSplit,
   getWeekHeatmap,
 } from "@/lib/analytics/posthog";
 import { insightsConfigured } from "@/lib/analytics/insights";
@@ -58,7 +57,6 @@ export default async function AnalyticsPage({
     abandonedViews,
     itemConversion,
     priceBands,
-    discountSplit,
     weekHeatmap,
     prevSummary,
     prevFunnel,
@@ -81,7 +79,6 @@ export default async function AnalyticsPage({
     getAbandonedViews(range),
     getItemConversion(range),
     getPriceBands(range),
-    getDiscountSplit(range),
     getWeekHeatmap(range),
     // Previous period of equal length, for the KPI deltas.
     getRealSalesSummary(prev),
@@ -141,7 +138,6 @@ export default async function AnalyticsPage({
     abandonedViews,
     itemConversion,
     priceBands,
-    discountSplit,
     weekHeatmap,
     insightsHistory: ((historyRows ?? []) as {
       created_at: string;
