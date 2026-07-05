@@ -276,7 +276,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <ChartCard title="Bakıp Almayanlar">
           <AbandonedViewsChart data={data.abandonedViews} note={engagementNote} />
         </ChartCard>
-        <ChartCard title="Masa Aktivitesi (Garson Çağrısı)">
+        <ChartCard title="Masa Aktivitesi (Garson + Hesap Çağrısı)">
           <HBarChart data={data.tableActivity} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Etkileşim Hunisi">

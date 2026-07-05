@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { Bell } from "lucide-react";
 import { callWaiter } from "@/lib/waiter/call";
+import { track } from "@/lib/analytics/track";
 import { Loader } from "@/components/Loader/components";
 import { WAITER_COOLDOWN_MS } from "./constants";
 import { buzz } from "@/lib/haptics";
@@ -112,6 +113,7 @@ export function WaiterButton({ tableNumber, labelBill, labelWaiter, labelTitle, 
     if (secondsLeft > 0) return;
     setPhase("sending");
     startTransition(async () => {
+      track.waiterCalled(reason);
       const ok = await callWaiter(tableNumber, reason);
       const cooldownMs = COOLDOWNS_MS[Math.min(callCount.current, COOLDOWNS_MS.length - 1)];
       callCount.current += 1;

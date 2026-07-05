@@ -52,7 +52,10 @@ export const track = {
 
   cartOpened: () => capture("cart_opened"),
 
-  waiterCalled: (kind: "order" | "bill" = "order") => capture("waiter_called", { kind }),
+  // One event for every staff call regardless of entry point: cart "call
+  // waiter" (order), bell sheet "call waiter" (waiter) and "ask for bill"
+  // (bill). Analytics treats them as one metric; `kind` keeps the breakdown.
+  waiterCalled: (kind: "order" | "bill" | "waiter" = "order") => capture("waiter_called", { kind }),
 
   orderSubmitted: (o: { total: number; item_count: number }) =>
     capture("order_submitted", { total: o.total, item_count: o.item_count }),
