@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   ChartCard,
   SalesVsEngagementChart,
@@ -54,6 +54,90 @@ const tl = new Intl.NumberFormat("tr-TR");
 // Plain number (no currency style): the Bowlby display font has no ₺ glyph, so
 // we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+
+// Auto-refresh intervals. Server-side query results are cached for 60s
+// (posthog.ts revalidate), so anything faster would re-serve identical data.
+const REFRESH_OPTIONS: { seconds: number; label: string }[] = [
+  { seconds: 0, label: "Kapalı" },
+  { seconds: 60, label: "1 dk" },
+  { seconds: 120, label: "2 dk" },
+  { seconds: 300, label: "5 dk" },
+];
+const REFRESH_STORAGE_KEY = "analytics-auto-refresh";
+
+/**
+ * Metabase-style auto-refresh: pick an interval, a countdown ticks in the
+ * pill, and the dashboard silently re-fetches when it hits zero. The choice
+ * persists in localStorage. Refreshes are skipped while the tab is hidden —
+ * they'd be wasted work the user never sees.
+ */
+function AutoRefresh() {
+  const router = useRouter();
+  const [seconds, setSeconds] = useState(0);
+  const [left, setLeft] = useState(0);
+  const [refreshing, startRefreshing] = useTransition();
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(REFRESH_STORAGE_KEY));
+    if (REFRESH_OPTIONS.some((o) => o.seconds === saved && saved > 0)) {
+      setSeconds(saved);
+      setLeft(saved);
+    }
+  }, []);
+
+  const pick = (s: number) => {
+    setSeconds(s);
+    setLeft(s);
+    localStorage.setItem(REFRESH_STORAGE_KEY, String(s));
+  };
+
+  useEffect(() => {
+    if (seconds === 0) return;
+    const id = setInterval(() => {
+      setLeft((prev) => {
+        if (prev > 1) return prev - 1;
+        if (document.visibilityState === "visible") {
+          startRefreshing(() => router.refresh());
+        }
+        return seconds;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [seconds, router]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Oto Yenile</span>
+      <div className="flex items-center">
+        {REFRESH_OPTIONS.map((o) => {
+          const active = seconds === o.seconds;
+          return (
+            <button
+              key={o.seconds}
+              type="button"
+              onClick={() => pick(o.seconds)}
+              className={[
+                "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors",
+                active ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
+              ].join(" ")}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      {seconds > 0 && (
+        <span className="text-[10px] font-extrabold text-green/60 tabular-nums w-8">
+          {refreshing ? (
+            <span className="text-orange animate-pulse">●</span>
+          ) : (
+            `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function duration(sec: number): string {
   if (!sec) return "—";
@@ -205,6 +289,11 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           </div>
         </div>
       )}
+      {/* Auto-refresh bar — stays pinned as an overlay while scrolling */}
+      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg/90 backdrop-blur-sm flex justify-end">
+        <AutoRefresh />
+      </div>
+
       {/* Date range switcher */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex flex-wrap items-center gap-2">
