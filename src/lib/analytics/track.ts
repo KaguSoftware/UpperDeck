@@ -28,16 +28,23 @@ function capture(event: string, props?: Record<string, unknown>) {
 }
 
 export const track = {
-  itemViewed: (item: { id: string; name: string; price?: number; category?: string }) =>
-    capture("item_viewed", { item_id: item.id, item_name: item.name, price: item.price, category: item.category }),
+  itemViewed: (item: { id: string; name: string; price?: number; category?: string; discountPct?: number | null }) =>
+    capture("item_viewed", {
+      item_id: item.id,
+      item_name: item.name,
+      price: item.price,
+      category: item.category,
+      discount_pct: item.discountPct ?? 0,
+    }),
 
-  itemAddedToCart: (item: { id: string; name: string; price: number; qty: number; extras?: number }) =>
+  itemAddedToCart: (item: { id: string; name: string; price: number; qty: number; extras?: number; discountPct?: number | null }) =>
     capture("item_added_to_cart", {
       item_id: item.id,
       item_name: item.name,
       price: item.price,
       qty: item.qty,
       extras_count: item.extras ?? 0,
+      discount_pct: item.discountPct ?? 0,
     }),
 
   // Fired when a diner closes an item modal without adding to cart. Dwell <5s

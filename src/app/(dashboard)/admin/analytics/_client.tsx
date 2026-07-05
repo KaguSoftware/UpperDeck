@@ -10,10 +10,13 @@ import {
   FunnelBars,
   PeakHoursChart,
   AbandonedViewsChart,
+  ConversionBars,
+  WeekHeatmapChart,
 } from "./_charts";
 import { generateInsightsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
-import type { NamedCount, AbandonedView } from "@/lib/analytics/posthog";
+import type { NamedCount, AbandonedView, PriceBand, DiscountSplit } from "@/lib/analytics/posthog";
+import type { ItemConversion } from "@/lib/analytics/compare";
 
 export type AnalyticsData = {
   preset: string;
@@ -30,6 +33,17 @@ export type AnalyticsData = {
     views: number;
     cartConversion: number;
   };
+  /** % change vs the previous period of equal length; null = no baseline. */
+  deltas: {
+    totalSales: number | null;
+    totalCovers: number | null;
+    avgSpendPerCover: number | null;
+    views: number | null;
+    avgSeconds: number | null;
+    waiterCalls: number | null;
+    cartConversion: number | null;
+    sessions: number | null;
+  };
   comparison: { date: string; revenue: number | null; covers: number | null; views: number; waiterCalls: number }[];
   revenueOverTime: { date: string; revenue: number; covers: number }[];
   topViewed: NamedCount[];
@@ -41,6 +55,11 @@ export type AnalyticsData = {
   localeSplit: NamedCount[];
   bestSellers: { item_name: string; qty: number; revenue: number }[];
   abandonedViews: AbandonedView[];
+  itemConversion: ItemConversion[];
+  priceBands: PriceBand[];
+  discountSplit: DiscountSplit[];
+  weekHeatmap: { day: number; hour: number; count: number }[];
+  insightsHistory: { date: string; rangeFrom: string; rangeTo: string; insights: string[] }[];
 };
 
 const PRESETS: { key: string; label: string }[] = [
@@ -157,7 +176,7 @@ function duration(sec: number): string {
   return m > 0 ? `${m}d ${s}s` : `${s}s`;
 }
 
-function Kpi({ label, value, unit }: { label: string; value: string; unit?: string }) {
+function Kpi({ label, value, unit, delta }: { label: string; value: string; unit?: string; delta?: number | null }) {
   // The Bowlby display font is very wide, so long values (e.g. "1.234.567")
   // overrun the narrow cards. Step the size down as the string grows.
   const size =
@@ -170,11 +189,65 @@ function Kpi({ label, value, unit }: { label: string; value: string; unit?: stri
         {unit && <span className="font-ui font-extrabold text-[16px] text-green/70">{unit}</span>}
         <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
       </div>
+      {/* vs previous period of equal length; hidden when there's no baseline */}
+      {delta != null && (
+        <div
+          className={`mt-1.5 text-[11px] font-extrabold ${delta > 0 ? "text-green" : delta < 0 ? "text-orange" : "text-green/50"}`}
+          title="Önceki döneme göre"
+        >
+          {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
+          {delta}%
+        </div>
+      )}
     </div>
   );
 }
 
-function AiInsights({ configured }: { configured: boolean }) {
+/**
+ * The whole funnel per item in one place: viewed → carted → actually sold.
+ * "Looked at a lot, never bought" cases stand out without cross-referencing
+ * three separate charts.
+ */
+function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string }) {
+  if (!rows.length) {
+    return <div className="h-30 grid place-items-center text-[12px] text-green/50 text-center px-4">{note}</div>;
+  }
+  const th = "text-[10px] tracking-[0.14em] font-extrabold text-green/60 uppercase text-right py-2 px-3";
+  const td = "text-[13px] font-bold text-ink text-right py-2 px-3 tabular-nums";
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b-2 border-green">
+            <th className={`${th} text-left`}>Ürün</th>
+            <th className={th}>Görüntüleme</th>
+            <th className={th}>Sepet</th>
+            <th className={th}>Satılan</th>
+            <th className={th}>Görünt.→Sepet</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name} className="border-b border-green/15">
+              <td className={`${td} text-left whitespace-nowrap max-w-45 truncate`} title={r.name}>{r.name}</td>
+              <td className={td}>{tl.format(r.views)}</td>
+              <td className={td}>{tl.format(r.carts)}</td>
+              <td className={td}>{r.sold ? tl.format(r.sold) : "—"}</td>
+              <td className={`${td} ${r.views >= 5 && r.convPct === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 text-[10px] text-green/50 font-bold">
+        Satılan = girilen gerçek satışlardan · turuncu %0 = çok bakılıp hiç sepete eklenmeyen
+      </p>
+    </div>
+  );
+}
+
+type InsightsHistoryEntry = { date: string; rangeFrom: string; rangeTo: string; insights: string[] };
+
+function AiInsights({ configured, history }: { configured: boolean; history: InsightsHistoryEntry[] }) {
   const params = useSearchParams();
   const [insights, setInsights] = useState<string[] | null>(null);
   const [error, setError] = useState(false);
@@ -231,8 +304,32 @@ function AiInsights({ configured }: { configured: boolean }) {
       ) : (
         <p className="text-[12px] text-green/50 py-3">
           Seçili dönemin verilerini birkaç maddelik Türkçe yoruma çevirir: en çok/az satanlar, bakılıp alınmayanlar,
-          içerik sorunları.
+          içerik sorunları. Önceki analizleri hatırlar ve takip eder.
         </p>
+      )}
+      {history.length > 0 && (
+        <details className="mt-3 border-t-2 border-green/15 pt-3">
+          <summary className="cursor-pointer text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase select-none">
+            Önceki analizler ({history.length})
+          </summary>
+          <div className="flex flex-col gap-4 pt-3">
+            {history.map((h, i) => (
+              <div key={`${h.date}-${i}`}>
+                <div className="text-[10px] font-extrabold text-green/60 uppercase tracking-[0.14em] mb-1.5">
+                  {h.date} · dönem {h.rangeFrom} → {h.rangeTo}
+                </div>
+                <ul className="flex flex-col gap-1.5">
+                  {h.insights.map((s, j) => (
+                    <li key={j} className="flex gap-2 text-[12px] leading-relaxed text-ink/80">
+                      <span className="text-green/40 font-extrabold shrink-0">→</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );
@@ -366,16 +463,21 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
-        <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" />
-        <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} />
-        <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? money.format(kpis.avgSpendPerCover) : "—"} unit={kpis.avgSpendPerCover ? "₺" : undefined} />
-        <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} />
-        <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} />
-        <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} />
-        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} />
+        <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
+        <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} delta={data.deltas.totalCovers} />
+        <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? money.format(kpis.avgSpendPerCover) : "—"} unit={kpis.avgSpendPerCover ? "₺" : undefined} delta={data.deltas.avgSpendPerCover} />
+        <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} />
+        <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} />
+        <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} />
+        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} />
       </div>
 
-      <AiInsights configured={data.insightsConfigured} />
+      <AiInsights configured={data.insightsConfigured} history={data.insightsHistory} />
+
+      {/* Item funnel table — the strongest single view for menu decisions */}
+      <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
+        <ConversionTable rows={data.itemConversion} note={engagementNote} />
+      </ChartCard>
 
       {/* Headline comparison */}
       <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
@@ -404,6 +506,22 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <ChartCard title="Yoğun Saatler">
           <PeakHoursChart data={data.peakHours} note={engagementNote} />
         </ChartCard>
+        <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
+          <ConversionBars
+            data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
+            note={engagementNote}
+          />
+        </ChartCard>
+        <ChartCard title="İndirim Etkisi">
+          <ConversionBars
+            data={data.discountSplit.map((d) => ({
+              label: d.group === "discounted" ? "İndirimli ürünler" : "Normal fiyatlı ürünler",
+              views: d.views,
+              carts: d.carts,
+            }))}
+            note={engagementNote}
+          />
+        </ChartCard>
         <ChartCard title="Kategori Popülerliği">
           <HBarChart data={data.categoryPopularity} color="#243845" note={engagementNote} />
         </ChartCard>
@@ -411,6 +529,10 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           <HBarChart data={data.localeSplit} note={engagementNote} />
         </ChartCard>
       </div>
+
+      <ChartCard title="Haftalık Yoğunluk Haritası (Gün × Saat)">
+        <WeekHeatmapChart data={data.weekHeatmap} note={engagementNote} />
+      </ChartCard>
 
       {data.bestSellers.length > 0 && (
         <ChartCard title="Gerçekte En Çok Satanlar">

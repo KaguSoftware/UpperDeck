@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -220,6 +221,106 @@ export function FunnelBars({ data, note }: { data: { step: string; count: number
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * View→cart conversion per group (price bands, discount split). Rows of
+ * "label — conversion bar — % + raw counts"; a plain HBar would hide the
+ * conversion rate, which is the point of these charts.
+ */
+export function ConversionBars({
+  data,
+  note,
+}: {
+  data: { label: string; views: number; carts: number }[];
+  note?: string;
+}) {
+  if (!data.some((d) => d.views > 0)) return <Empty note={note ?? "Veri yok."} />;
+  const maxPct = Math.max(...data.map((d) => (d.views > 0 ? d.carts / d.views : 0)), 0.01);
+  return (
+    <div className="flex flex-col gap-3 py-2">
+      {data.map((d) => {
+        const pct = d.views > 0 ? (d.carts / d.views) * 100 : 0;
+        return (
+          <div key={d.label}>
+            <div className="flex justify-between text-[11px] font-bold text-green mb-1">
+              <span>{d.label}</span>
+              <span>
+                <span className="text-orange">{Math.round(pct)}%</span>
+                <span className="text-green/50 ml-2">{tl.format(d.carts)}/{tl.format(d.views)}</span>
+              </span>
+            </div>
+            <div className="h-5 bg-bg-deep">
+              <div className="h-full bg-green" style={{ width: `${(pct / (maxPct * 100)) * 100}%` }} />
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-green/50 font-bold">Görüntüleme → sepete ekleme oranı</p>
+    </div>
+  );
+}
+
+const DAY_LABELS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]; // ISO: 1 = Monday
+
+/**
+ * Weekday × hour heatmap of menu views. Cell shading is a sequential ramp of
+ * the brand green; the single busiest cell flips to orange like PeakHours.
+ */
+export function WeekHeatmapChart({
+  data,
+  note,
+}: {
+  data: { day: number; hour: number; count: number }[];
+  note?: string;
+}) {
+  if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
+  const byCell = new Map(data.map((d) => [`${d.day}-${d.hour}`, d.count]));
+  const peak = Math.max(...data.map((d) => d.count));
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[560px]">
+        <div className="grid gap-[3px]" style={{ gridTemplateColumns: "36px repeat(24, 1fr)" }}>
+          {/* hour header */}
+          <div />
+          {Array.from({ length: 24 }, (_, h) => (
+            <div key={h} className="text-center text-[9px] font-bold text-green/50">
+              {h % 3 === 0 ? String(h).padStart(2, "0") : ""}
+            </div>
+          ))}
+          {DAY_LABELS.map((label, i) => {
+            const day = i + 1;
+            return (
+              <Fragment key={day}>
+                <div className="text-[10px] font-extrabold text-green/70 leading-4">{label}</div>
+                {Array.from({ length: 24 }, (_, h) => {
+                  const count = byCell.get(`${day}-${h}`) ?? 0;
+                  const isPeak = count === peak && count > 0;
+                  return (
+                    <div
+                      key={`${day}-${h}`}
+                      title={`${label} ${String(h).padStart(2, "0")}:00 — ${tl.format(count)}`}
+                      className="h-4"
+                      style={{
+                        background: isPeak
+                          ? ORANGE
+                          : count > 0
+                            ? `rgba(57, 90, 102, ${0.15 + 0.85 * (count / peak)})`
+                            : "#39556611",
+                      }}
+                    />
+                  );
+                })}
+              </Fragment>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-[10px] text-green/50 font-bold">
+          Koyu = daha çok görüntüleme · turuncu = en yoğun saat
+        </p>
+      </div>
     </div>
   );
 }

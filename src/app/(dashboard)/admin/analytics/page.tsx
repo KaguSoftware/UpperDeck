@@ -1,8 +1,8 @@
 import { PageHeader, GhostButton } from "../_components";
 import { requireRole } from "@/lib/auth/require-session";
-import { resolveRange } from "@/lib/analytics/range";
+import { resolveRange, previousRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
-import { getSalesVsEngagement } from "@/lib/analytics/compare";
+import { getSalesVsEngagement, getItemConversion } from "@/lib/analytics/compare";
 import {
   posthogConfigured,
   getTopViewedItems,
@@ -15,21 +15,31 @@ import {
   getSessionStats,
   getPeakHours,
   getAbandonedViews,
+  getPriceBands,
+  getDiscountSplit,
+  getWeekHeatmap,
 } from "@/lib/analytics/posthog";
 import { insightsConfigured } from "@/lib/analytics/insights";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
 
+/** Percent change vs previous period; null when there's no baseline. */
+function pctDelta(cur: number, prev: number): number | null {
+  if (!prev) return null;
+  return Math.round(((cur - prev) / prev) * 100);
+}
+
 export default async function AnalyticsPage({
   searchParams,
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
-  await requireRole("dev");
+  const { supabase } = await requireRole("dev");
 
   const sp = await searchParams;
   const { preset, range } = resolveRange(sp);
+  const prev = previousRange(range);
 
   const [
     summary,
@@ -46,6 +56,14 @@ export default async function AnalyticsPage({
     sessions,
     peakHours,
     abandonedViews,
+    itemConversion,
+    priceBands,
+    discountSplit,
+    weekHeatmap,
+    prevSummary,
+    prevFunnel,
+    prevSessions,
+    prevCartConversion,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealSalesOverTime(range),
@@ -61,10 +79,29 @@ export default async function AnalyticsPage({
     getSessionStats(range),
     getPeakHours(range),
     getAbandonedViews(range),
+    getItemConversion(range),
+    getPriceBands(range),
+    getDiscountSplit(range),
+    getWeekHeatmap(range),
+    // Previous period of equal length, for the KPI deltas.
+    getRealSalesSummary(prev),
+    getEngagementFunnel(prev),
+    getSessionStats(prev),
+    getCartConversion(prev),
   ]);
 
-  const views = funnel.find((f) => f.step.startsWith("Görüntü"))?.count ?? 0;
-  const waiterCalls = funnel.find((f) => f.step.startsWith("Garson"))?.count ?? 0;
+  const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
+    f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
+  const views = funnelCount(funnel, "Görüntü");
+  const waiterCalls = funnelCount(funnel, "Garson");
+
+  // Recent AI analyses for the history list. Non-fatal if the table is missing.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: historyRows } = await (supabase as any)
+    .from("analytics_insights")
+    .select("created_at, range_from, range_to, insights")
+    .order("created_at", { ascending: false })
+    .limit(3);
 
   const data: AnalyticsData = {
     preset,
@@ -81,6 +118,16 @@ export default async function AnalyticsPage({
       views,
       cartConversion,
     },
+    deltas: {
+      totalSales: pctDelta(summary.totalSales, prevSummary.totalSales),
+      totalCovers: pctDelta(summary.totalCovers, prevSummary.totalCovers),
+      avgSpendPerCover: pctDelta(summary.avgSpendPerCover, prevSummary.avgSpendPerCover),
+      views: pctDelta(views, funnelCount(prevFunnel, "Görüntü")),
+      avgSeconds: pctDelta(sessions.avgSeconds, prevSessions.avgSeconds),
+      waiterCalls: pctDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
+      cartConversion: pctDelta(cartConversion, prevCartConversion),
+      sessions: pctDelta(sessions.sessions, prevSessions.sessions),
+    },
     comparison,
     revenueOverTime,
     topViewed,
@@ -92,6 +139,21 @@ export default async function AnalyticsPage({
     localeSplit,
     bestSellers,
     abandonedViews,
+    itemConversion,
+    priceBands,
+    discountSplit,
+    weekHeatmap,
+    insightsHistory: ((historyRows ?? []) as {
+      created_at: string;
+      range_from: string;
+      range_to: string;
+      insights: string[];
+    }[]).map((r) => ({
+      date: r.created_at.slice(0, 10),
+      rangeFrom: r.range_from,
+      rangeTo: r.range_to,
+      insights: r.insights,
+    })),
   };
 
   return (

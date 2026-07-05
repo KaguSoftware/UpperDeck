@@ -205,7 +205,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const openItem = useCallback((item: PlacedCard | null) => {
     flushDwell();
     if (item) {
-      track.itemViewed({ id: item.id, name: item.name, price: item.price });
+      track.itemViewed({ id: item.id, name: item.name, price: item.price, discountPct: item.discountPct });
       viewStartRef.current = { id: item.id, name: item.name, start: Date.now() };
     }
     setActiveItem(item);
@@ -291,7 +291,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       if (existing) return prev.map((i) => i.id === cartId ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
     });
-    track.itemAddedToCart({ id: menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length });
+    track.itemAddedToCart({ id: menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length, discountPct });
     viewStartRef.current = null; // added to cart — not an abandoned view
     setActiveItem(null);
     tap();
@@ -302,6 +302,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     const fullItem = items.find((i) => i.id === sug.id);
     if (!fullItem) return;
     track.suggestedItemClicked(sug.id);
+    // Suggested items carry no featured discount, so none is reported.
     track.itemViewed({ id: fullItem.id, name: fullItem.name, price: fullItem.price });
     flushDwell();
     viewStartRef.current = { id: fullItem.id, name: fullItem.name, start: Date.now() };

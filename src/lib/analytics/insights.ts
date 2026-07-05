@@ -35,6 +35,13 @@ export type InsightsInput = {
   funnel: { step: string; count: number }[];
   abandonedViews: { name: string; b5to10: number; b10to20: number; b20plus: number; total: number }[];
   categoryPopularity: { name: string; count: number }[];
+  itemConversion: { name: string; views: number; carts: number; sold: number; convPct: number }[];
+  priceBands: { band: string; views: number; carts: number }[];
+  discountSplit: { group: string; views: number; carts: number }[];
+  /** KPI deltas vs the previous period of equal length, in percent (null = no baseline). */
+  deltas: Record<string, number | null>;
+  /** Earlier generated insight sets, newest first — lets the model follow up on past advice. */
+  previousInsights: { date: string; insights: string[] }[];
 };
 
 const SYSTEM_PROMPT = `You are a restaurant menu analytics advisor for a QR-code menu.
@@ -43,11 +50,18 @@ plus an "abandonedViews" table: items whose detail page was opened and closed WI
 bucketed by how long the diner looked — 5-10s (photo/appeal likely weak), 10-20s (description not convincing),
 20s+ (read everything and still didn't buy: content or price problem).
 
+You also receive: "itemConversion" (per item: views → cart adds → actually sold),
+"priceBands" (view→cart conversion by price range), "discountSplit" (discounted vs
+full-price conversion), "deltas" (percent change of each KPI vs the previous period
+of equal length), and "previousInsights" (your earlier analyses, newest first).
+
 Produce 4-7 short, concrete, actionable insights IN TURKISH. Focus on:
 - best and worst sellers, and shared traits between them (ingredients, category, price band)
 - items viewed a lot but rarely added to cart or sold
 - dwell-time patterns per the bucket meanings above, with the suggested fix
-- conversion through the funnel
+- meaningful period-over-period movement (deltas) — what improved, what declined
+- whether discounts and price bands actually change behavior
+- follow-ups on previousInsights: if something was flagged before, say whether it improved
 Every bullet must contain a takeaway or action, never just restate a number. No greetings, no fluff.
 
 Respond with ONLY a JSON array of strings, e.g. ["insight 1","insight 2"].`;

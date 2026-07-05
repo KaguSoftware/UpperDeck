@@ -21,6 +21,19 @@ function isoDaysAgo(todayISO: string, days: number): string {
 }
 
 /**
+ * The window of equal length immediately before `range` (for period-over-period
+ * deltas): last 7 days → the 7 days before those, today → yesterday.
+ */
+export function previousRange(range: DateRange): DateRange {
+  const lengthDays =
+    Math.round((Date.parse(`${range.to}T12:00:00Z`) - Date.parse(`${range.from}T12:00:00Z`)) / 86_400_000) + 1;
+  return {
+    from: isoDaysAgo(range.from, lengthDays),
+    to: isoDaysAgo(range.from, 1),
+  };
+}
+
+/**
  * Resolve a date range from URL search params. Supports presets and an explicit
  * `from`/`to` custom range (used to match an uploaded sheet's period).
  * Defaults to the last 30 days. All dates are in the restaurant's local timezone.

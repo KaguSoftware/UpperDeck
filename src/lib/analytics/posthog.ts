@@ -299,6 +299,81 @@ export async function getDailyEngagement(range: DateRange) {
   }));
 }
 
+export type PriceBand = { band: string; views: number; carts: number };
+
+// Band edges in ₺. Labels are built client-side from the same constant.
+const PRICE_BANDS = [200, 400];
+
+/**
+ * View→cart conversion by price band — answers "are diners bouncing off
+ * expensive items specifically?". Uses the `price` property carried on both
+ * item_viewed and item_added_to_cart.
+ */
+export async function getPriceBands(range: DateRange): Promise<PriceBand[]> {
+  const b = bounds(range);
+  const [lo, hi] = PRICE_BANDS;
+  const rows = await hogql(`
+    SELECT multiIf(toFloat(properties.price) < ${lo}, '0–${lo} ₺',
+                   toFloat(properties.price) < ${hi}, '${lo}–${hi} ₺',
+                   '${hi}+ ₺') AS band,
+           countIf(event = 'item_viewed') AS views,
+           countIf(event = 'item_added_to_cart') AS carts
+    FROM events
+    WHERE event IN ('item_viewed','item_added_to_cart')
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+      AND properties.price IS NOT NULL
+    GROUP BY band
+  `);
+  const byBand = new Map(rows.map((r) => [String(r[0]), { views: Number(r[1]), carts: Number(r[2]) }]));
+  // Fixed order regardless of which bands have data.
+  return [`0–${lo} ₺`, `${lo}–${hi} ₺`, `${hi}+ ₺`].map((band) => ({
+    band,
+    views: byBand.get(band)?.views ?? 0,
+    carts: byBand.get(band)?.carts ?? 0,
+  }));
+}
+
+export type DiscountSplit = { group: "discounted" | "regular"; views: number; carts: number };
+
+/**
+ * Do discounts actually move behavior? Compares view→cart conversion of
+ * discounted vs full-price items. Relies on the `discount_pct` event property
+ * (added 2026-07-05), so it only covers data from then on.
+ */
+export async function getDiscountSplit(range: DateRange): Promise<DiscountSplit[]> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT if(toFloat(coalesce(properties.discount_pct, '0')) > 0, 'discounted', 'regular') AS grp,
+           countIf(event = 'item_viewed') AS views,
+           countIf(event = 'item_added_to_cart') AS carts
+    FROM events
+    WHERE event IN ('item_viewed','item_added_to_cart')
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+    GROUP BY grp
+  `);
+  const byGroup = new Map(rows.map((r) => [String(r[0]), { views: Number(r[1]), carts: Number(r[2]) }]));
+  return (["discounted", "regular"] as const).map((group) => ({
+    group,
+    views: byGroup.get(group)?.views ?? 0,
+    carts: byGroup.get(group)?.carts ?? 0,
+  }));
+}
+
+/**
+ * Menu views by weekday × hour (heatmap). toDayOfWeek is ISO: 1 = Monday.
+ */
+export async function getWeekHeatmap(range: DateRange): Promise<{ day: number; hour: number; count: number }[]> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT toDayOfWeek(${LOCAL_TS}) AS d, toHour(${LOCAL_TS}) AS h, count() AS c
+    FROM events
+    WHERE event = 'item_viewed'
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+    GROUP BY d, h
+  `);
+  return rows.map((r) => ({ day: Number(r[0]), hour: Number(r[1]), count: Number(r[2]) }));
+}
+
 /** Orders/views by hour-of-day (peak hours, from item_viewed). */
 export async function getPeakHours(range: DateRange) {
   const b = bounds(range);
