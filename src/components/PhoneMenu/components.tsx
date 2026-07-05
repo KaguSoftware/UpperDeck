@@ -189,11 +189,42 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
 
+  // Dwell tracking: measures how long an item modal stayed open before being
+  // closed without an add-to-cart. <5s is treated as a mistake tap and dropped.
+  const viewStartRef = useRef<{ id: string; name: string; start: number } | null>(null);
+
+  const flushDwell = useCallback(() => {
+    const v = viewStartRef.current;
+    viewStartRef.current = null;
+    if (!v) return;
+    const dwellMs = Date.now() - v.start;
+    if (dwellMs >= 5000) track.itemViewAbandoned({ id: v.id, name: v.name, dwellMs });
+  }, []);
+
   // Opening an item modal — wraps setActiveItem so every open is tracked.
   const openItem = useCallback((item: PlacedCard | null) => {
-    if (item) track.itemViewed({ id: item.id, name: item.name, price: item.price });
+    flushDwell();
+    if (item) {
+      track.itemViewed({ id: item.id, name: item.name, price: item.price });
+      viewStartRef.current = { id: item.id, name: item.name, start: Date.now() };
+    }
     setActiveItem(item);
-  }, []);
+  }, [flushDwell]);
+
+  const closeItem = useCallback(() => {
+    flushDwell();
+    setActiveItem(null);
+  }, [flushDwell]);
+
+  // Tab hidden / phone locked mid-view counts as an abandoned view; posthog-js
+  // flushes its queue via sendBeacon on pagehide so the event survives.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flushDwell();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [flushDwell]);
 
   const handleCartClick = useCallback(() => {
     if (!tableNumber) {
@@ -261,6 +292,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
     });
     track.itemAddedToCart({ id: menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length });
+    viewStartRef.current = null; // added to cart — not an abandoned view
     setActiveItem(null);
     tap();
     flashToast(`${t.toast.addedPrefix}${name}`);
@@ -271,6 +303,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     if (!fullItem) return;
     track.suggestedItemClicked(sug.id);
     track.itemViewed({ id: fullItem.id, name: fullItem.name, price: fullItem.price });
+    flushDwell();
+    viewStartRef.current = { id: fullItem.id, name: fullItem.name, start: Date.now() };
     setActiveItem({
       ...fullItem,
       sz: "size-m",
@@ -281,7 +315,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       x: 0,
       y: 0,
     });
-  }, [items]);
+  }, [items, flushDwell]);
 
   const scrollPillIntoView = useCallback((slug: string) => {
     const nav = pillsNavRef.current;
@@ -519,7 +553,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       />
       <ItemModal
         item={activeItem}
-        onClose={() => setActiveItem(null)}
+        onClose={closeItem}
         onAdd={handleAdd}
         onSuggestedClick={handleSuggestedClick}
         spicyLabel={t.modal.spicy}

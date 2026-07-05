@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState, useTransition } from "react";
 import {
   ChartCard,
   SalesVsEngagementChart,
@@ -9,13 +9,16 @@ import {
   HBarChart,
   FunnelBars,
   PeakHoursChart,
+  AbandonedViewsChart,
 } from "./_charts";
-import type { NamedCount } from "@/lib/analytics/posthog";
+import { generateInsightsAction } from "./actions";
+import type { NamedCount, AbandonedView } from "@/lib/analytics/posthog";
 
 export type AnalyticsData = {
   preset: string;
   range: { from: string; to: string };
   posthogConfigured: boolean;
+  insightsConfigured: boolean;
   kpis: {
     totalSales: number;
     totalCovers: number;
@@ -36,6 +39,7 @@ export type AnalyticsData = {
   categoryPopularity: NamedCount[];
   localeSplit: NamedCount[];
   bestSellers: { item_name: string; qty: number; revenue: number }[];
+  abandonedViews: AbandonedView[];
 };
 
 const PRESETS: { key: string; label: string }[] = [
@@ -71,6 +75,70 @@ function Kpi({ label, value, unit }: { label: string; value: string; unit?: stri
         <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
       </div>
     </div>
+  );
+}
+
+function AiInsights({ configured }: { configured: boolean }) {
+  const params = useSearchParams();
+  const [insights, setInsights] = useState<string[] | null>(null);
+  const [error, setError] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const generate = useCallback(() => {
+    setError(false);
+    startTransition(async () => {
+      const res = await generateInsightsAction({
+        range: params.get("range") ?? undefined,
+        from: params.get("from") ?? undefined,
+        to: params.get("to") ?? undefined,
+      });
+      if (res.ok) setInsights(res.insights);
+      else setError(true);
+    });
+  }, [params]);
+
+  return (
+    <section className="border-2 border-green bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase">Yapay Zekâ Yorumu</h3>
+        {configured && (
+          <button
+            type="button"
+            onClick={generate}
+            disabled={pending}
+            className={[
+              "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
+              pending
+                ? "bg-bg-deep text-green/50 border-green/30 cursor-wait"
+                : "bg-orange text-white border-orange hover:bg-orange/90",
+            ].join(" ")}
+          >
+            {pending ? "Oluşturuluyor…" : insights ? "Yeniden Oluştur" : "Yorum Oluştur"}
+          </button>
+        )}
+      </div>
+      {!configured ? (
+        <p className="text-[12px] text-green/50 py-3">
+          Yapay zekâ yorumu için XAI_API_KEY ortam değişkeni gerekli.
+        </p>
+      ) : error ? (
+        <p className="text-[12px] text-orange font-bold py-3">Yorum oluşturulamadı — tekrar deneyin.</p>
+      ) : insights ? (
+        <ul className="flex flex-col gap-2 pt-2">
+          {insights.map((s, i) => (
+            <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
+              <span className="text-orange font-extrabold shrink-0">→</span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12px] text-green/50 py-3">
+          Seçili dönemin verilerini birkaç maddelik Türkçe yoruma çevirir: en çok/az satanlar, bakılıp alınmayanlar,
+          içerik sorunları.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -188,6 +256,8 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} />
       </div>
 
+      <AiInsights configured={data.insightsConfigured} />
+
       {/* Headline comparison */}
       <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
         <SalesVsEngagementChart data={data.comparison} />
@@ -202,6 +272,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         </ChartCard>
         <ChartCard title="En Çok Sepete Eklenen">
           <HBarChart data={data.topCarted} color="#243845" note={engagementNote} />
+        </ChartCard>
+        <ChartCard title="Bakıp Almayanlar">
+          <AbandonedViewsChart data={data.abandonedViews} note={engagementNote} />
         </ChartCard>
         <ChartCard title="Masa Aktivitesi (Garson Çağrısı)">
           <HBarChart data={data.tableActivity} note={engagementNote} />

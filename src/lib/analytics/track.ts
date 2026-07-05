@@ -40,6 +40,11 @@ export const track = {
       extras_count: item.extras ?? 0,
     }),
 
+  // Fired when a diner closes an item modal without adding to cart. Dwell <5s
+  // is filtered client-side (mistake tap) before this is called.
+  itemViewAbandoned: (item: { id: string; name: string; dwellMs: number }) =>
+    capture("item_view_abandoned", { item_id: item.id, item_name: item.name, dwell_ms: item.dwellMs }),
+
   itemRemovedFromCart: (item: { id: string; name?: string }) =>
     capture("item_removed_from_cart", { item_id: item.id, item_name: item.name }),
 
