@@ -56,10 +56,18 @@ const TZ = "Europe/Istanbul";
 // on this so a 21:00 Istanbul event isn't counted as an 18:00 UTC event.
 const LOCAL_TS = `toTimeZone(timestamp, '${TZ}')`;
 
+// Events before this date are excluded from every query: earlier data is
+// unreliable (waiter/bill calls from the bell sheet weren't tracked until
+// 2026-07-05, and dwell tracking didn't exist), so it would skew every chart.
+// Real sales (Supabase) are NOT affected — this floor is engagement-only.
+const DATA_FLOOR = "2026-07-05";
+
 // HogQL date bounds (inclusive), interpreted in local time. `to` is end-of-day.
+// `from` is clamped to DATA_FLOOR; a range entirely before it yields no rows.
 function bounds(range: DateRange) {
+  const from = range.from < DATA_FLOOR ? DATA_FLOOR : range.from;
   return {
-    from: `'${range.from} 00:00:00'`,
+    from: `'${from} 00:00:00'`,
     to: `'${range.to} 23:59:59'`,
   };
 }
