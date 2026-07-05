@@ -20,30 +20,46 @@ export function posthogConfigured(): boolean {
 
 type HogQLResult = { results: unknown[][]; columns?: string[] };
 
+// Own short-lived cache instead of Next's fetch cache: Next serves STALE data
+// while revalidating in the background, so a 60s auto-refresh against a 60s
+// revalidate window always rendered the previous cycle's numbers — the
+// dashboard looked frozen. Here an expired entry blocks for fresh data, while
+// rapid re-renders within the TTL still reuse the in-flight/last result.
+const queryCache = new Map<string, { at: number; result: Promise<unknown[][]> }>();
+const QUERY_TTL_MS = 30_000;
+
 /** Run a HogQL query; returns rows as arrays, or [] on any failure. */
 async function hogql(query: string): Promise<unknown[][]> {
   if (!posthogConfigured()) return [];
-  try {
-    const res = await fetch(`${HOST}/api/projects/${PROJECT_ID}/query/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      // Short revalidate window keeps the dashboard snappy without stale-forever data.
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) {
-      console.error("[analytics:posthog] query failed", res.status, await res.text());
+
+  const hit = queryCache.get(query);
+  if (hit && Date.now() - hit.at < QUERY_TTL_MS) return hit.result;
+
+  const result = (async () => {
+    try {
+      const res = await fetch(`${HOST}/api/projects/${PROJECT_ID}/query/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        console.error("[analytics:posthog] query failed", res.status, await res.text());
+        return [];
+      }
+      const json = (await res.json()) as HogQLResult;
+      return json.results ?? [];
+    } catch (err) {
+      console.error("[analytics:posthog] query error", err);
       return [];
     }
-    const json = (await res.json()) as HogQLResult;
-    return json.results ?? [];
-  } catch (err) {
-    console.error("[analytics:posthog] query error", err);
-    return [];
-  }
+  })();
+
+  queryCache.set(query, { at: Date.now(), result });
+  return result;
 }
 
 // Restaurant-local timezone. All date/hour math is done in local time so

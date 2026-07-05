@@ -55,8 +55,8 @@ const tl = new Intl.NumberFormat("tr-TR");
 // we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
-// Auto-refresh intervals. Server-side query results are cached for 60s
-// (posthog.ts revalidate), so anything faster would re-serve identical data.
+// Auto-refresh intervals. PostHog query results are cached server-side for
+// 30s (posthog.ts), so a 1 min minimum always lands on fresh data.
 const REFRESH_OPTIONS: { seconds: number; label: string }[] = [
   { seconds: 0, label: "Kapalı" },
   { seconds: 60, label: "1 dk" },
