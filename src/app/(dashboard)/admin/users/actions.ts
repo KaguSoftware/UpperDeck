@@ -6,10 +6,10 @@ import { requireRole } from "@/lib/auth/require-session";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { notifyOk } from "@/lib/admin/notify";
 
-const RoleSchema = z.enum(["admin", "owner"]);
+const RoleSchema = z.enum(["admin", "owner", "dev"]);
 
 export async function setRole(formData: FormData) {
-  const { user: actor } = await requireRole("owner");
+  const { user: actor } = await requireRole(["owner", "dev"]);
 
   const userId = z.string().uuid().parse(formData.get("user_id"));
   const role = RoleSchema.parse(formData.get("role"));
@@ -41,7 +41,7 @@ export async function setRole(formData: FormData) {
 }
 
 export async function removeUser(formData: FormData) {
-  const { user: actor } = await requireRole("owner");
+  const { user: actor } = await requireRole(["owner", "dev"]);
 
   const userId = z.string().uuid().parse(formData.get("user_id"));
 
@@ -77,7 +77,7 @@ export async function inviteUser(
   formData: FormData
 ): Promise<{ error: string | null; success: boolean }> {
   try {
-    await requireRole("owner");
+    await requireRole(["owner", "dev"]);
     const { email, role } = InviteSchema.parse({
       email: formData.get("email"),
       role: formData.get("role"),

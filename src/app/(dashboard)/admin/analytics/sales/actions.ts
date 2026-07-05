@@ -23,7 +23,7 @@ type AnyClient = any;
 
 /** Upsert one day's sales (manual form). Re-saving a date overwrites it. */
 export async function upsertSalesEntry(formData: FormData) {
-  const { supabase, profile } = await requireRole(["admin", "owner"]);
+  const { supabase, profile } = await requireRole("dev");
 
   const parsed = ManualSchema.safeParse({
     entry_date: formData.get("entry_date"),
@@ -54,7 +54,7 @@ export async function upsertSalesEntry(formData: FormData) {
 }
 
 export async function deleteSalesEntry(formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole("dev");
   const id = String(formData.get("id") ?? "");
   if (!id) return notifyErr(SALES_PATH, "Kayıt bulunamadı");
 
@@ -93,7 +93,7 @@ function num(v: unknown): number | null {
  * Optional sheet "Items": columns date, item_name, qty, revenue.
  */
 export async function importSalesExcel(formData: FormData) {
-  const { supabase, profile } = await requireRole(["admin", "owner"]);
+  const { supabase, profile } = await requireRole("dev");
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {

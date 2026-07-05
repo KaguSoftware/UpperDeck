@@ -1,4 +1,5 @@
 import { PageHeader, GhostButton } from "../../_components";
+import { requireRole } from "@/lib/auth/require-session";
 import { listSalesEntries } from "@/lib/analytics/sales";
 import { resolveRange } from "@/lib/analytics/range";
 import { SalesForms } from "./_form";
@@ -11,6 +12,8 @@ export default async function SalesEntryPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
+  await requireRole("dev");
+
   const sp = await searchParams;
   const { range } = resolveRange(sp);
   // Show a wide window of recent entries regardless of the analytics filter.

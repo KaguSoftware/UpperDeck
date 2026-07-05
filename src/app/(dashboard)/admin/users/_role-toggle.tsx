@@ -2,30 +2,35 @@
 
 import { useState } from "react";
 
-const descriptions: Record<string, string> = {
+type ToggleRole = "admin" | "owner" | "dev";
+
+const roles: ToggleRole[] = ["admin", "owner", "dev"];
+
+const descriptions: Record<ToggleRole, string> = {
   owner: "Kullanıcı yönetimi dahil tam erişim",
   admin: "Yalnızca menü, siparişler ve ayarlar",
+  dev: "Tüm yetkiler + Analitik sekmesi",
 };
 
 export function RoleToggle({
   defaultRole,
   name,
 }: {
-  defaultRole: "admin" | "owner";
+  defaultRole: ToggleRole;
   name?: string;
 }) {
-  const [selected, setSelected] = useState<"admin" | "owner">(defaultRole);
+  const [selected, setSelected] = useState<ToggleRole>(defaultRole);
 
   return (
     <div className="flex flex-col gap-1">
       <input type="hidden" name={name ?? "role"} value={selected} />
       <div className="flex">
-        {(["admin", "owner"] as const).map((r) => (
+        {roles.map((r, i) => (
           <button
             key={r}
             type="button"
             onClick={() => setSelected(r)}
-            style={r === "admin" ? { borderRight: "none" } : undefined}
+            style={i < roles.length - 1 ? { borderRight: "none" } : undefined}
             className={[
               "border-2 px-4 py-2 font-ui font-extrabold text-[11px] tracking-[0.18em] uppercase cursor-pointer",
               selected === r

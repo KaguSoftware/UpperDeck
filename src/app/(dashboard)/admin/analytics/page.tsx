@@ -1,4 +1,5 @@
 import { PageHeader, GhostButton } from "../_components";
+import { requireRole } from "@/lib/auth/require-session";
 import { resolveRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
 import { getSalesVsEngagement } from "@/lib/analytics/compare";
@@ -23,6 +24,8 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
+  await requireRole("dev");
+
   const sp = await searchParams;
   const { preset, range } = resolveRange(sp);
 
