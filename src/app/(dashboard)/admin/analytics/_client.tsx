@@ -75,6 +75,7 @@ function AutoRefresh() {
   const router = useRouter();
   const [seconds, setSeconds] = useState(0);
   const [left, setLeft] = useState(0);
+  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [refreshing, startRefreshing] = useTransition();
 
   useEffect(() => {
@@ -91,22 +92,32 @@ function AutoRefresh() {
     localStorage.setItem(REFRESH_STORAGE_KEY, String(s));
   };
 
+  // Countdown tick — pure state, no side effects in the updater (React may
+  // re-run updaters, which made the refresh call unreliable here before).
   useEffect(() => {
     if (seconds === 0) return;
-    const id = setInterval(() => {
-      setLeft((prev) => {
-        if (prev > 1) return prev - 1;
-        if (document.visibilityState === "visible") {
-          startRefreshing(() => router.refresh());
-        }
-        return seconds;
-      });
-    }, 1000);
+    const id = setInterval(() => setLeft((prev) => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(id);
-  }, [seconds, router]);
+  }, [seconds]);
+
+  // Fire on zero, then rearm. Hidden tabs skip the fetch but still rearm so
+  // the timer doesn't stall at 0:00 until the next visibility change.
+  useEffect(() => {
+    if (seconds === 0 || left > 0) return;
+    if (document.visibilityState === "visible") {
+      startRefreshing(() => router.refresh());
+      setLastRefresh(new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    }
+    setLeft(seconds);
+  }, [left, seconds, router]);
 
   return (
     <div className="flex items-center gap-2">
+      {lastRefresh && (
+        <span className="text-[10px] font-bold text-green/50 tabular-nums" title="Son yenileme">
+          Son: {lastRefresh}
+        </span>
+      )}
       <span className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Oto Yenile</span>
       <div className="flex items-center">
         {REFRESH_OPTIONS.map((o) => {
