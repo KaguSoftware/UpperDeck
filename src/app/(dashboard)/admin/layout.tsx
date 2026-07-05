@@ -4,17 +4,21 @@ import { AdminShell } from "./_sidebar";
 import { AdminToast } from "./_toast";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { profile } = await requireRole(["admin", "owner"]);
+  const { profile } = await requireRole(["admin", "owner", "dev"]);
 
   const nav = [
     { href: "/admin", label: "Ana Panel" },
+    // Analytics is dev-only.
+    ...(profile.role === "dev"
+      ? [{ href: "/admin/analytics", label: "Analitik" }]
+      : []),
     { href: "/admin/menu", label: "Menü" },
     { href: "/admin/categories", label: "Kategoriler" },
     { href: "/admin/addons", label: "Ekstra / Seçenek" },
     { href: "/admin/suggested", label: "Önerilen" },
     { href: "/admin/settings", label: "Başlangıç Bölümü" },
     { href: "/admin/qr", label: "Masa QR'ları" },
-    ...(profile.role === "owner"
+    ...(profile.role === "owner" || profile.role === "dev"
       ? [{ href: "/admin/users", label: "Kullanıcılar", admin: true }]
       : []),
   ];

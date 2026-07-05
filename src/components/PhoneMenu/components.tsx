@@ -16,6 +16,8 @@ import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
 import { Footer } from "@/components/Footer/components";
 import { OfflineBanner } from "@/components/OfflineBanner/components";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
+import { track } from "@/lib/analytics/track";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem } from "@/components/CartDrawer/types";
 import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
@@ -187,11 +189,18 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
 
+  // Opening an item modal — wraps setActiveItem so every open is tracked.
+  const openItem = useCallback((item: PlacedCard | null) => {
+    if (item) track.itemViewed({ id: item.id, name: item.name, price: item.price });
+    setActiveItem(item);
+  }, []);
+
   const handleCartClick = useCallback(() => {
     if (!tableNumber) {
       setQrModalOpen(true);
       return;
     }
+    track.cartOpened();
     setCartOpen(true);
   }, [tableNumber]);
 
@@ -201,6 +210,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     try {
       const { callWaiter } = await import("@/lib/waiter/call");
       const ok = await callWaiter(tableNumber, "order");
+      track.waiterCalled("order");
       handleWaiterCalled(WAITER_COOLDOWN_MS);
       buzz();
       flashToast(ok ? t.cart.waiterCalled : t.cart.error_send);
@@ -214,7 +224,11 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, [submitting, waiterSecondsLeft, tableNumber, handleWaiterCalled, flashToast, t.cart.waiterCalled, t.cart.error_send]);
 
   const handleRemove = useCallback((id: string) => {
-    setCartItems((prev) => prev.filter((i) => i.id !== id));
+    setCartItems((prev) => {
+      const removed = prev.find((i) => i.id === id);
+      if (removed) track.itemRemovedFromCart({ id: removed.menu_item_id, name: removed.name });
+      return prev.filter((i) => i.id !== id);
+    });
   }, []);
 
   const handleIncrement = useCallback((id: string) => {
@@ -246,6 +260,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       if (existing) return prev.map((i) => i.id === cartId ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
     });
+    track.itemAddedToCart({ id: menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length });
     setActiveItem(null);
     tap();
     flashToast(`${t.toast.addedPrefix}${name}`);
@@ -254,6 +269,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const handleSuggestedClick = useCallback((sug: SuggestedItemPublic) => {
     const fullItem = items.find((i) => i.id === sug.id);
     if (!fullItem) return;
+    track.suggestedItemClicked(sug.id);
+    track.itemViewed({ id: fullItem.id, name: fullItem.name, price: fullItem.price });
     setActiveItem({
       ...fullItem,
       sz: "size-m",
@@ -279,6 +296,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   const handlePillSelect = useCallback(
     (slug: string, btn: HTMLButtonElement) => {
+      track.categorySelected(slug);
       setActiveSlug(slug);
       isAutoScrollingRef.current = true;
 
@@ -308,6 +326,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   const handleFeaturedClick = useCallback(() => {
     if (!featuredItem) return;
+    track.featuredItemClicked(featuredItem.id);
     const target = stageRef.current?.querySelector<HTMLButtonElement>(
       `[data-item="${CSS.escape(featuredItem.id)}"]`
     );
@@ -365,6 +384,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
 
   return (
     <div className="fixed inset-0 flex flex-col">
+      <PostHogProvider locale={locale} tableNumber={tableNumber} />
       <div ref={topbarRef}>
         <TopBar
           cartCount={cartCount}
@@ -412,7 +432,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             />
           </div>
           <MenuStage
-            onOpen={setActiveItem}
+            onOpen={openItem}
             stageRef={stageRef}
             categories={categories}
             items={items}

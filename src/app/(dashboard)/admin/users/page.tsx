@@ -10,7 +10,7 @@ import { RemoveButton } from "./_remove-button";
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const { user: actor } = await requireRole("owner");
+  const { user: actor } = await requireRole(["owner", "dev"]);
 
   let rows: {
     id: string;
@@ -76,6 +76,17 @@ export default async function UsersPage() {
             Menü, kategoriler, ayarlar ve siparişleri yönetir. Kullanıcıları yönetemez.
           </p>
         </div>
+        <div className="flex-1 min-w-[160px] bg-orange text-white px-4 py-3">
+          <div className="flex items-center gap-2 mb-1">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M5.5 4L2 8l3.5 4 1.2-1.1L4.3 8l2.4-2.9L5.5 4Zm5 0L9.3 5.1 11.7 8l-2.4 2.9L10.5 12 14 8l-3.5-4Z" />
+            </svg>
+            <span className="font-bowlby uppercase text-[15px]">Dev</span>
+          </div>
+          <p className="font-ui text-[11px] opacity-80">
+            Geliştirici — tüm yetkiler ve Analitik sekmesine erişim.
+          </p>
+        </div>
       </div>
 
       {configError && (
@@ -113,7 +124,7 @@ export default async function UsersPage() {
 
               {rows.map((row) => {
                 const isSelf = row.id === actor.id;
-                const role = (row.profile?.role ?? "admin") as "admin" | "owner";
+                const role = (row.profile?.role ?? "admin") as "admin" | "owner" | "dev";
                 const displayName = row.profile?.display_name;
                 const initials = (displayName ?? row.email).charAt(0).toUpperCase();
                 const joinedDate = new Date(row.created_at).toLocaleDateString("en-GB", {
@@ -152,7 +163,9 @@ export default async function UsersPage() {
                       <span
                         className={[
                           "px-2 py-0.5 font-ui font-extrabold text-[9px] uppercase tracking-[0.18em]",
-                          role === "owner"
+                          role === "dev"
+                            ? "bg-orange text-white"
+                            : role === "owner"
                             ? "bg-green text-bg"
                             : "bg-bg-deep text-green border border-green/30",
                         ].join(" ")}
