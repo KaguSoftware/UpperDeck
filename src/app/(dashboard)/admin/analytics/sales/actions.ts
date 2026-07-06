@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 import { notifyOk, notifyErr } from "@/lib/admin/notify";
+import { cleanItemRows } from "@/lib/analytics/clean-sales";
 
 const SALES_PATH = "/admin/analytics/sales";
 
@@ -145,6 +146,7 @@ export async function importSalesExcel(formData: FormData) {
   }
 
   // ---- optional per-item rows ----
+  let cleanStats: import("@/lib/analytics/clean-sales").CleanStats | null = null;
   const itemsSheet = wb.Sheets["Items"];
   if (itemsSheet && upserted?.length) {
     const dateToId = new Map<string, string>(
@@ -165,12 +167,18 @@ export async function importSalesExcel(formData: FormData) {
       if (!entry_id || !name || qty == null) continue;
       itemInserts.push({ entry_id, item_name: name, qty, revenue: num(r.revenue ?? r.gelir) });
     }
-    if (itemInserts.length) {
-      const { error: itemErr } = await s.from("sales_entry_items").insert(itemInserts);
+    const cleaned = cleanItemRows(itemInserts);
+    cleanStats = cleaned.stats;
+    if (cleaned.rows.length) {
+      const { error: itemErr } = await s.from("sales_entry_items").insert(cleaned.rows);
       if (itemErr) console.error("[salesImport] items insert failed", itemErr.message);
     }
   }
 
-  const msg = `${entries.length} gün içe aktarıldı${skipped ? `, ${skipped} satır atlandı` : ""}`;
-  return notifyOk(SALES_PATH, msg);
+  const junk = (cleanStats?.modifiersDropped ?? 0) + (cleanStats?.zeroDropped ?? 0);
+  const parts = [`${entries.length} gün içe aktarıldı`];
+  if (skipped) parts.push(`${skipped} satır atlandı`);
+  if (junk) parts.push(`${junk} gereksiz satır temizlendi`);
+  if (cleanStats?.duplicatesMerged) parts.push(`${cleanStats.duplicatesMerged} tekrar birleştirildi`);
+  return notifyOk(SALES_PATH, parts.join(", "));
 }
