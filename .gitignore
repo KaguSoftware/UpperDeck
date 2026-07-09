@@ -42,3 +42,7 @@ next-env.d.ts
 
 # generated QR print sheet
 scripts/qrs.html
+
+# real POS sales exports (data, not code)
+*.xlsx
+*.xls

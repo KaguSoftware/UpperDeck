@@ -4,7 +4,8 @@ import * as XLSX from "xlsx";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 import { notifyOk, notifyErr } from "@/lib/admin/notify";
-import { cleanItemRows } from "@/lib/analytics/clean-sales";
+import { cleanItemRows, type RawItemRow } from "@/lib/analytics/clean-sales";
+import { detectPosSheet, parseGelirMerkezi, toIsoDate, num } from "@/lib/analytics/parse-pos";
 
 const SALES_PATH = "/admin/analytics/sales";
 
@@ -68,30 +69,43 @@ export async function deleteSalesEntry(formData: FormData) {
   return notifyOk(SALES_PATH, "Kayıt silindi");
 }
 
-// Normalize an Excel cell date/string to yyyy-mm-dd.
-function toIsoDate(v: unknown): string | null {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") {
-    const d = XLSX.SSF?.parse_date_code?.(v);
-    if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
-  }
-  const str = String(v).trim();
-  if (dateRe.test(str)) return str;
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return null;
-}
+/**
+ * Replace the per-item rows for a set of entries, then insert the cleaned rows.
+ * Shared by both import paths. Returns the clean stats for the success message.
+ */
+async function persistItems(
+  s: AnyClient,
+  dateToId: Map<string, string>,
+  rawItems: { entry_date: string; item_name: string; qty: number; revenue: number | null }[]
+) {
+  const entryIds = [...dateToId.values()];
+  if (!entryIds.length) return null;
 
-function num(v: unknown): number | null {
-  if (v == null || v === "") return null;
-  const n = Number(String(v).replace(/[^0-9.,-]/g, "").replace(",", "."));
-  return isNaN(n) ? null : n;
+  const inserts: RawItemRow[] = [];
+  for (const r of rawItems) {
+    const entry_id = dateToId.get(r.entry_date);
+    if (!entry_id) continue;
+    inserts.push({ entry_id, item_name: r.item_name, qty: r.qty, revenue: r.revenue });
+  }
+
+  const cleaned = cleanItemRows(inserts);
+  // Replace existing item rows for these entries, then insert fresh.
+  await s.from("sales_entry_items").delete().in("entry_id", entryIds);
+  if (cleaned.rows.length) {
+    const { error } = await s.from("sales_entry_items").insert(cleaned.rows);
+    if (error) console.error("[salesImport] items insert failed", error.message);
+  }
+  return cleaned.stats;
 }
 
 /**
- * Import sales from an uploaded .xlsx/.csv.
- * Sheet "Sales" (or first sheet): columns date, total_sales, covers (optional).
- * Optional sheet "Items": columns date, item_name, qty, revenue.
+ * Import sales from an uploaded .xlsx/.csv. Two formats are auto-detected:
+ *
+ *  - **Gelir Merkezi Detaylar** (real POS export): per-item, per-day rows — dates,
+ *    quantities and revenue all come from the file, so per-day entries and item
+ *    breakdowns are derived directly.
+ *  - **Simple template**: a "Sales" sheet (date, total_sales, covers) + optional
+ *    "Items" sheet (date, item_name, qty, revenue).
  */
 export async function importSalesExcel(formData: FormData) {
   const { supabase, profile } = await requireRole("dev");
@@ -112,6 +126,41 @@ export async function importSalesExcel(formData: FormData) {
 
   const s = supabase as AnyClient;
 
+  // ---- Real POS export: per-item-per-day "Gelir Merkezi Detaylar" ----
+  const detected = detectPosSheet(wb);
+  if (detected.format === "gelir-merkezi" && detected.sheetName) {
+    const parsed = parseGelirMerkezi(wb, detected.sheetName);
+    if (parsed.entries.length === 0) {
+      return notifyErr(SALES_PATH, "Geçerli satır bulunamadı");
+    }
+
+    const { data: upserted, error } = await s
+      .from("sales_entries")
+      .upsert(
+        parsed.entries.map((e) => ({ ...e, source: "excel", created_by: profile.id })),
+        { onConflict: "entry_date" }
+      )
+      .select("id, entry_date");
+
+    if (error) {
+      console.error("[salesImport] upsert failed", error.message);
+      return notifyErr(SALES_PATH, "İçe aktarılamadı");
+    }
+
+    const dateToId = new Map<string, string>(
+      (upserted as { id: string; entry_date: string }[]).map((e) => [e.entry_date, e.id])
+    );
+    const stats = await persistItems(s, dateToId, parsed.items);
+
+    const junk = (stats?.modifiersDropped ?? 0) + (stats?.zeroDropped ?? 0);
+    const parts = [`${parsed.meta.days} gün içe aktarıldı`, `${parsed.meta.itemRows} kalem satırı`];
+    if (parsed.meta.fractionalRounded) parts.push(`${parsed.meta.fractionalRounded} ondalık adet yuvarlandı`);
+    if (junk) parts.push(`${junk} gereksiz satır temizlendi`);
+    if (stats?.duplicatesMerged) parts.push(`${stats.duplicatesMerged} tekrar birleştirildi`);
+    return notifyOk(SALES_PATH, parts.join(", "));
+  }
+
+  // ---- Simple template: "Sales" sheet + optional "Items" sheet ----
   // ---- daily rows ----
   const salesSheet = wb.Sheets["Sales"] ?? wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(salesSheet ?? {}, { defval: "" });
@@ -153,26 +202,16 @@ export async function importSalesExcel(formData: FormData) {
       (upserted as { id: string; entry_date: string }[]).map((e) => [e.entry_date, e.id])
     );
     const itemRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(itemsSheet, { defval: "" });
-    const entryIds = [...dateToId.values()];
 
-    // Replace existing item rows for these entries, then insert fresh.
-    await s.from("sales_entry_items").delete().in("entry_id", entryIds);
-
-    const itemInserts: { entry_id: string; item_name: string; qty: number; revenue: number | null }[] = [];
+    const rawItems: { entry_date: string; item_name: string; qty: number; revenue: number | null }[] = [];
     for (const r of itemRows) {
       const date = toIsoDate(r.date ?? r.Date ?? r.tarih);
-      const entry_id = date ? dateToId.get(date) : undefined;
       const name = String(r.item_name ?? r.item ?? r.urun ?? "").trim();
       const qty = num(r.qty ?? r.adet);
-      if (!entry_id || !name || qty == null) continue;
-      itemInserts.push({ entry_id, item_name: name, qty, revenue: num(r.revenue ?? r.gelir) });
+      if (!date || !name || qty == null) continue;
+      rawItems.push({ entry_date: date, item_name: name, qty: Math.round(qty), revenue: num(r.revenue ?? r.gelir) });
     }
-    const cleaned = cleanItemRows(itemInserts);
-    cleanStats = cleaned.stats;
-    if (cleaned.rows.length) {
-      const { error: itemErr } = await s.from("sales_entry_items").insert(cleaned.rows);
-      if (itemErr) console.error("[salesImport] items insert failed", itemErr.message);
-    }
+    cleanStats = await persistItems(s, dateToId, rawItems);
   }
 
   const junk = (cleanStats?.modifiersDropped ?? 0) + (cleanStats?.zeroDropped ?? 0);

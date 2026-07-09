@@ -33,7 +33,7 @@ export type InsightsInput = {
   topCarted: { name: string; count: number }[];
   bestSellers: { item_name: string; qty: number; revenue: number }[];
   funnel: { step: string; count: number }[];
-  abandonedViews: { name: string; b5to10: number; b10to20: number; b20plus: number; total: number }[];
+  abandonedViews: { name: string; views: number }[];
   categoryPopularity: { name: string; count: number }[];
   itemConversion: { name: string; views: number; carts: number; sold: number; convPct: number }[];
   priceBands: { band: string; views: number; carts: number }[];
@@ -46,9 +46,10 @@ export type InsightsInput = {
 
 const SYSTEM_PROMPT = `You are a restaurant menu analytics advisor for a QR-code menu.
 You receive engagement data (item views, add-to-carts, waiter calls) and real POS sales for a date range,
-plus an "abandonedViews" table: items whose detail page was opened and closed WITHOUT adding to cart,
-bucketed by how long the diner looked — 5-10s (photo/appeal likely weak), 10-20s (description not convincing),
-20s+ (read everything and still didn't buy: content or price problem).
+plus an "abandonedViews" table: items that WERE viewed on the menu during the period but did NOT appear in
+the real POS sales at all (viewed but never actually sold). Each row is { name, views }. Treat a high view
+count with zero sales as a demand / visibility / naming-mismatch gap: the item draws interest but doesn't
+convert to an order — investigate price, description, placement, or whether its menu name matches the POS name.
 
 You also receive: "itemConversion" (per item: views → cart adds → actually sold),
 "priceBands" (view→cart conversion by price range), "discountSplit" (discounted vs

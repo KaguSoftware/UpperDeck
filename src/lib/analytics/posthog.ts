@@ -126,44 +126,9 @@ export async function getTopCartedItems(range: DateRange, limit = 10): Promise<N
   return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
 }
 
-export type AbandonedView = {
-  name: string;
-  /** 5–10 s: opened, glanced, left — likely the photo isn't selling it. */
-  b5to10: number;
-  /** 10–20 s: read a bit and bailed — likely a content/description issue. */
-  b10to20: number;
-  /** >20 s: read everything and still didn't buy — content or price problem. */
-  b20plus: number;
-  total: number;
-};
-
-/**
- * "Watched but not bought": item modal opened ≥5s and closed without an
- * add-to-cart (item_view_abandoned, dwell_ms property). Bucketed by dwell so
- * the failure mode is visible per item — photo vs. description vs. price.
- */
-export async function getAbandonedViews(range: DateRange, limit = 12): Promise<AbandonedView[]> {
-  const b = bounds(range);
-  const rows = await hogql(`
-    SELECT properties.item_name AS name,
-           countIf(toFloat(properties.dwell_ms) < 10000) AS b1,
-           countIf(toFloat(properties.dwell_ms) >= 10000 AND toFloat(properties.dwell_ms) < 20000) AS b2,
-           countIf(toFloat(properties.dwell_ms) >= 20000) AS b3,
-           count() AS total
-    FROM events
-    WHERE event = 'item_view_abandoned'
-      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
-      AND name != ''
-    GROUP BY name ORDER BY total DESC LIMIT ${limit}
-  `);
-  return rows.map((r) => ({
-    name: String(r[0]),
-    b5to10: Number(r[1]),
-    b10to20: Number(r[2]),
-    b20plus: Number(r[3]),
-    total: Number(r[4]),
-  }));
-}
+// "Seen but not bought" now lives in compare.ts (getAbandonedItems) — it's a
+// cross-source metric (PostHog views × real POS sales), not a pure dwell query.
+// The client still fires item_view_abandoned; we just no longer read it here.
 
 /**
  * Waiter-call volume by table (table_number super-property). The one true

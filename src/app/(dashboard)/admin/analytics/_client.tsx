@@ -15,8 +15,8 @@ import {
 } from "./_charts";
 import { generateInsightsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
-import type { NamedCount, AbandonedView, PriceBand } from "@/lib/analytics/posthog";
-import type { ItemConversion } from "@/lib/analytics/compare";
+import type { NamedCount, PriceBand } from "@/lib/analytics/posthog";
+import type { ItemConversion, AbandonedView } from "@/lib/analytics/compare";
 
 export type AnalyticsData = {
   preset: string;
