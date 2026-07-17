@@ -2,7 +2,7 @@ import { PageHeader, GhostButton } from "../_components";
 import { requireRole } from "@/lib/auth/require-session";
 import { resolveRange, previousRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
-import { getSalesVsEngagement, getItemConversion, getAbandonedItems } from "@/lib/analytics/compare";
+import { getSalesVsEngagement, getItemConversion } from "@/lib/analytics/compare";
 import {
   posthogConfigured,
   getTopViewedItems,
@@ -14,6 +14,7 @@ import {
   getEngagementFunnel,
   getSessionStats,
   getPeakHours,
+  getAbandonedViews,
   getPriceBands,
   getWeekHeatmap,
 } from "@/lib/analytics/posthog";
@@ -75,7 +76,7 @@ export default async function AnalyticsPage({
     getEngagementFunnel(range),
     getSessionStats(range),
     getPeakHours(range),
-    getAbandonedItems(range),
+    getAbandonedViews(range),
     getItemConversion(range),
     getPriceBands(range),
     getWeekHeatmap(range),

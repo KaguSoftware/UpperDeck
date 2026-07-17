@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
 import { resolveRange, previousRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealBestSellers } from "@/lib/analytics/sales";
-import { getItemConversion, getAbandonedItems } from "@/lib/analytics/compare";
+import { getItemConversion } from "@/lib/analytics/compare";
 import {
   getTopViewedItems,
   getTopCartedItems,
@@ -12,6 +12,7 @@ import {
   getSessionStats,
   getCartConversion,
   getCategoryPopularity,
+  getAbandonedViews,
   getPriceBands,
   getDiscountSplit,
 } from "@/lib/analytics/posthog";
@@ -82,7 +83,7 @@ export async function generateInsightsAction(params: {
     getSessionStats(range),
     getCartConversion(range),
     getCategoryPopularity(range),
-    getAbandonedItems(range),
+    getAbandonedViews(range),
     getItemConversion(range),
     getPriceBands(range),
     getDiscountSplit(range),

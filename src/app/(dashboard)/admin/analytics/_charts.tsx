@@ -162,7 +162,7 @@ export function AbandonedViewsChart({
   data,
   note,
 }: {
-  data: { name: string; views: number }[];
+  data: { name: string; b5to10: number; b10to20: number; b20plus: number }[];
   note?: string;
 }) {
   if (!data.length) return <Empty note={note ?? "Veri yok."} />;
@@ -181,12 +181,15 @@ export function AbandonedViewsChart({
             tickFormatter={(n) => (String(n).length > 24 ? `${String(n).slice(0, 23)}…` : String(n))}
           />
           <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} />
-          <Bar dataKey="views" name="Görüntüleme" fill={ORANGE} barSize={16} />
+          <Legend wrapperStyle={legendStyle} />
+          <Bar dataKey="b5to10" name="5–10 sn" stackId="d" fill={GREEN} barSize={16} />
+          <Bar dataKey="b10to20" name="10–20 sn" stackId="d" fill={GREEN_DEEP} barSize={16} />
+          <Bar dataKey="b20plus" name="+20 sn" stackId="d" fill={ORANGE} barSize={16} />
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-3 text-[11px] leading-relaxed text-green/60 font-bold">
-        Bu ürünler menüde görüntülendi ama seçili dönemde gerçek satışta yer almadı — talep, görünürlük veya isim
-        eşleşmesi sorunu olabilir.
+        5–10 sn · görsel ilgi çekmiyor &nbsp;·&nbsp; 10–20 sn · açıklama ikna etmiyor &nbsp;·&nbsp; +20 sn · okudu ama
+        almadı (içerik/fiyat)
       </p>
     </>
   );
