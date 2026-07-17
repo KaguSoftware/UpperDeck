@@ -1,8 +1,6 @@
 import "server-only";
 import { getRealSalesOverTime, getRealBestSellers, type DateRange } from "@/lib/analytics/sales";
 import { getDailyEngagement, getTopViewedItems, getTopCartedItems } from "@/lib/analytics/posthog";
-import { normalizeItemName } from "@/lib/analytics/clean-sales";
-import { getServerClient } from "@/lib/supabase/server";
 
 /**
  * Headline correlation: real daily revenue (Supabase) vs menu engagement
@@ -47,75 +45,6 @@ export async function getItemConversion(range: DateRange, limit = 15): Promise<I
     .map((r) => ({ ...r, convPct: r.views > 0 ? Math.round((r.carts / r.views) * 100) : 0 }))
     .sort((a, b) => b.views - a.views)
     .slice(0, limit);
-}
-
-export type AbandonedView = {
-  name: string;
-  /** Distinct diner sessions that viewed the item in the range. */
-  views: number;
-};
-
-/**
- * Build a normalized alias → canonical-name map from the menu so PostHog view
- * names (which are locale-specific: name_en for EN diners, name_tr for TR) both
- * resolve to one key that can be matched against Turkish POS sales names.
- */
-async function buildNameBridge(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s = (await getServerClient()) as any;
-    const { data } = await s.from("menu_items").select("name_en, name_tr");
-    for (const row of (data ?? []) as { name_en: string; name_tr: string }[]) {
-      // Canonical key = normalized Turkish name (matches POS/sales rows).
-      const canonical = normalizeItemName(row.name_tr || row.name_en || "");
-      if (!canonical) continue;
-      for (const alias of [row.name_en, row.name_tr]) {
-        const k = normalizeItemName(alias || "");
-        if (k) map.set(k, canonical);
-      }
-    }
-  } catch (err) {
-    console.error("[analytics:compare] name bridge failed", err);
-  }
-  return map;
-}
-
-/**
- * "Seen but not bought": items that were VIEWED on the menu during the range but
- * did NOT actually sell (no matching row in the entered POS sales). Cart activity
- * is irrelevant — most diners never use the cart, so real sales are the truth.
- *
- * Names are matched through a menu_items bridge (EN/TR → canonical), so a diner
- * who viewed the English name still matches the Turkish POS sale. Returns [] when
- * no per-item sales were entered for the range (otherwise every viewed item would
- * look "not sold" purely because sales data is missing).
- */
-export async function getAbandonedItems(range: DateRange, limit = 12): Promise<AbandonedView[]> {
-  const [viewed, sold, bridge] = await Promise.all([
-    getTopViewedItems(range, 200),
-    getRealBestSellers(range, 500),
-    buildNameBridge(),
-  ]);
-
-  // No per-item sales entered for this range → we can't tell "not sold" apart from
-  // "no data". Don't flag everything; let the UI show its empty-state note.
-  if (sold.length === 0) return [];
-
-  const canon = (name: string) => bridge.get(normalizeItemName(name)) ?? normalizeItemName(name);
-  const soldSet = new Set(sold.map((s) => canon(s.item_name)));
-
-  // Collapse locale-split view names to one canonical row, summing their views.
-  const byCanon = new Map<string, { name: string; views: number }>();
-  for (const v of viewed) {
-    const key = canon(v.name);
-    if (soldSet.has(key)) continue;
-    const cur = byCanon.get(key) ?? { name: v.name, views: 0 };
-    cur.views += v.count;
-    byCanon.set(key, cur);
-  }
-
-  return [...byCanon.values()].sort((a, b) => b.views - a.views).slice(0, limit);
 }
 
 export async function getSalesVsEngagement(range: DateRange) {
