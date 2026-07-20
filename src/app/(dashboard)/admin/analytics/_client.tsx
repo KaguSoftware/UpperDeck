@@ -287,7 +287,7 @@ function AiInsights({ configured, history }: { configured: boolean; history: Ins
       </div>
       {!configured ? (
         <p className="text-[12px] text-green/50 py-3">
-          Yapay zekâ yorumu için XAI_API_KEY ortam değişkeni gerekli.
+          Yapay zekâ yorumu için GROQ_API_KEY ortam değişkeni gerekli.
         </p>
       ) : error ? (
         <p className="text-[12px] text-orange font-bold py-3">Yorum oluşturulamadı — tekrar deneyin.</p>

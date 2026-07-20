@@ -2,18 +2,19 @@ import "server-only";
 import { env } from "@/lib/env";
 
 /**
- * AI insights over the analytics data via xAI (Grok).
+ * AI insights over the analytics data via Groq (GroqCloud).
  *
  * Plain fetch against the OpenAI-compatible chat completions endpoint — no SDK
  * dependency, mirroring how posthog.ts talks to its API. Returns [] on any
  * failure (unconfigured, network, bad response) so the dashboard never breaks.
  */
 
-const XAI_URL = "https://api.x.ai/v1/chat/completions";
-const MODEL = "grok-4-fast-non-reasoning";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+// Swap for any current Groq-hosted model — see https://console.groq.com/docs/models
+const MODEL = "llama-3.3-70b-versatile";
 
 export function insightsConfigured(): boolean {
-  return Boolean(env.XAI_API_KEY);
+  return Boolean(env.GROQ_API_KEY);
 }
 
 /** Trimmed serialization of the analytics page data — only what the model needs. */
@@ -69,10 +70,10 @@ Respond with ONLY a JSON array of strings, e.g. ["insight 1","insight 2"].`;
 export async function generateInsights(data: InsightsInput): Promise<string[]> {
   if (!insightsConfigured()) return [];
   try {
-    const res = await fetch(XAI_URL, {
+    const res = await fetch(GROQ_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.XAI_API_KEY}`,
+        Authorization: `Bearer ${env.GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -85,7 +86,7 @@ export async function generateInsights(data: InsightsInput): Promise<string[]> {
       }),
     });
     if (!res.ok) {
-      console.error("[insights] xAI request failed", res.status, await res.text());
+      console.error("[insights] Groq request failed", res.status, await res.text());
       return [];
     }
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };

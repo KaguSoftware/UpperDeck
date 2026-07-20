@@ -21,8 +21,8 @@ const ServerSchema = PublicSchema.extend({
   // PostHog server-side query API (optional)
   POSTHOG_PERSONAL_API_KEY: z.preprocess(emptyToUndefined, z.string().min(10).optional()),
   POSTHOG_PROJECT_ID: z.preprocess(emptyToUndefined, z.string().optional()),
-  // xAI (Grok) key for analytics AI insights (optional — button hides if absent)
-  XAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(10).optional()),
+  // Groq (GroqCloud) key for analytics AI insights (optional — button hides if absent)
+  GROQ_API_KEY: z.preprocess(emptyToUndefined, z.string().min(10).optional()),
 });
 
 type Env = z.infer<typeof ServerSchema>;
@@ -45,7 +45,7 @@ function getEnv(): Env {
     COOKIE_SECRET: process.env.COOKIE_SECRET,
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
-    XAI_API_KEY: process.env.XAI_API_KEY,
+    GROQ_API_KEY: process.env.GROQ_API_KEY,
   };
 
   const result = ServerSchema.safeParse(raw);
