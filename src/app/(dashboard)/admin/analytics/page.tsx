@@ -33,7 +33,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
-  const { supabase } = await requireRole("dev");
+  const { supabase } = await requireRole(["owner", "dev"]);
 
   const sp = await searchParams;
   const { preset, range } = resolveRange(sp);

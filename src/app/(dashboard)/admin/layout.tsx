@@ -8,8 +8,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const nav = [
     { href: "/admin", label: "Ana Panel" },
-    // Analytics is dev-only.
-    ...(profile.role === "dev"
+    // Analytics is owner + dev only.
+    ...(profile.role === "owner" || profile.role === "dev"
       ? [{ href: "/admin/analytics", label: "Analitik" }]
       : []),
     { href: "/admin/menu", label: "Menü" },

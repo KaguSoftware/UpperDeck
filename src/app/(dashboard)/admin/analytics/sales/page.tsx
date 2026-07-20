@@ -12,7 +12,7 @@ export default async function SalesEntryPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
-  await requireRole("dev");
+  await requireRole(["owner", "dev"]);
 
   const sp = await searchParams;
   const { range } = resolveRange(sp);

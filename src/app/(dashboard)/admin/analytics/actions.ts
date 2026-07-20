@@ -221,7 +221,7 @@ export async function generateInsightsAction(params: {
   if (!parsed.success) return FAIL;
   const mode = parsed.data.mode ?? "load";
 
-  const { supabase, profile } = await requireRole("dev");
+  const { supabase, profile } = await requireRole(["owner", "dev"]);
   if (!insightsConfigured()) return FAIL;
 
   const { range } = resolveRange(parsed.data);
