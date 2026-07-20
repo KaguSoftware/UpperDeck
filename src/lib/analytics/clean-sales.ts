@@ -10,9 +10,18 @@ export type RawItemRow = {
 
 export type CleanStats = {
   modifiersDropped: number;
+  notesDropped: number;
   zeroDropped: number;
   duplicatesMerged: number;
 };
+
+// POS order-note lines that get exported as if they were menu items
+// ("Mesaj", "Mesaj: az pişmiş", "Müşteri Notu …"). They carry a diner's note,
+// not a sold product, so they should never reach `sales_entry_items`.
+const NOTE_PATTERNS: RegExp[] = [
+  /^mesaj\b/i, // "Mesaj", "Mesaj:", "Mesaj - ..."
+  /^(müşteri|sipariş|masa)\s*not/i, // "Müşteri Notu", "Sipariş Notu"
+];
 
 const MODIFIER_PATTERNS: RegExp[] = [
   // trailing price adjustment: "no tomatoes +0", "extra cheese +15", "çift kaşar +25 TL"
@@ -41,16 +50,26 @@ export function isModifierLine(name: string): boolean {
   return MODIFIER_PATTERNS.some((re) => re.test(name));
 }
 
+/** True if the line is a POS order-note ("Mesaj", "Müşteri Notu"), not an item. */
+export function isNoteLine(name: string): boolean {
+  return NOTE_PATTERNS.some((re) => re.test(name.trim()));
+}
+
 /**
- * Drop modifier lines and zero-qty rows, normalize names, and merge duplicate
- * (entry_id, name) rows by summing qty/revenue.
+ * Drop note lines, modifier lines and zero-qty rows, normalize names, and merge
+ * duplicate (entry_id, name) rows by summing qty/revenue.
  */
 export function cleanItemRows(rows: RawItemRow[]): { rows: RawItemRow[]; stats: CleanStats } {
-  const stats: CleanStats = { modifiersDropped: 0, zeroDropped: 0, duplicatesMerged: 0 };
+  const stats: CleanStats = { modifiersDropped: 0, notesDropped: 0, zeroDropped: 0, duplicatesMerged: 0 };
   const merged = new Map<string, RawItemRow>();
 
   for (const row of rows) {
-    if (isModifierLine(row.item_name.trim())) {
+    const name = row.item_name.trim();
+    if (isNoteLine(name)) {
+      stats.notesDropped++;
+      continue;
+    }
+    if (isModifierLine(name)) {
       stats.modifiersDropped++;
       continue;
     }

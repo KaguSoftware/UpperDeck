@@ -12,6 +12,7 @@
  *    columns, optional "Items" sheet). Handled by the caller's original code path.
  */
 import * as XLSX from "xlsx";
+import { isNoteLine } from "@/lib/analytics/clean-sales";
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -114,7 +115,11 @@ export function parseGelirMerkezi(wb: XLSX.WorkBook, sheetName: string): ParsedP
     const revenue = num(r[COL.gross]);
 
     items.push({ entry_date, item_name: name, qty, revenue });
-    dailyTotal.set(entry_date, (dailyTotal.get(entry_date) ?? 0) + (revenue ?? 0));
+    // Order-note lines ("Mesaj", "Müşteri Notu") aren't sold products — keep them
+    // out of the day's revenue. `cleanItemRows` drops them from the item list too.
+    if (!isNoteLine(name)) {
+      dailyTotal.set(entry_date, (dailyTotal.get(entry_date) ?? 0) + (revenue ?? 0));
+    }
   }
 
   const entries: ParsedEntry[] = [...dailyTotal.entries()]

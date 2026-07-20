@@ -11,6 +11,21 @@ const SALES_PATH = "/admin/analytics/sales";
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
+/** yyyy-mm-dd → dd.MM.yyyy (Turkish date style), string-only so no TZ shifts. */
+function fmtDot(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+/** Compact span label for the import toast: "01.04.2026 – 30.04.2026", or a single date. */
+function fmtSpan(dates: string[]): string {
+  if (!dates.length) return "";
+  const sorted = [...dates].sort();
+  const from = sorted[0];
+  const to = sorted[sorted.length - 1];
+  return from === to ? fmtDot(from) : `${fmtDot(from)} – ${fmtDot(to)}`;
+}
+
 const ManualSchema = z.object({
   entry_date: z.string().regex(dateRe, "Geçersiz tarih"),
   total_sales: z.coerce.number().min(0, "Tutar negatif olamaz"),
@@ -152,8 +167,9 @@ export async function importSalesExcel(formData: FormData) {
     );
     const stats = await persistItems(s, dateToId, parsed.items);
 
-    const junk = (stats?.modifiersDropped ?? 0) + (stats?.zeroDropped ?? 0);
-    const parts = [`${parsed.meta.days} gün içe aktarıldı`, `${parsed.meta.itemRows} kalem satırı`];
+    const junk = (stats?.modifiersDropped ?? 0) + (stats?.notesDropped ?? 0) + (stats?.zeroDropped ?? 0);
+    const span = fmtSpan(parsed.entries.map((e) => e.entry_date));
+    const parts = [`${span} · ${parsed.meta.days} gün içe aktarıldı`, `${parsed.meta.itemRows} kalem satırı`];
     if (parsed.meta.fractionalRounded) parts.push(`${parsed.meta.fractionalRounded} ondalık adet yuvarlandı`);
     if (junk) parts.push(`${junk} gereksiz satır temizlendi`);
     if (stats?.duplicatesMerged) parts.push(`${stats.duplicatesMerged} tekrar birleştirildi`);
@@ -214,8 +230,10 @@ export async function importSalesExcel(formData: FormData) {
     cleanStats = await persistItems(s, dateToId, rawItems);
   }
 
-  const junk = (cleanStats?.modifiersDropped ?? 0) + (cleanStats?.zeroDropped ?? 0);
-  const parts = [`${entries.length} gün içe aktarıldı`];
+  const junk =
+    (cleanStats?.modifiersDropped ?? 0) + (cleanStats?.notesDropped ?? 0) + (cleanStats?.zeroDropped ?? 0);
+  const span = fmtSpan(entries.map((e) => e.entry_date));
+  const parts = [`${span} · ${entries.length} gün içe aktarıldı`];
   if (skipped) parts.push(`${skipped} satır atlandı`);
   if (junk) parts.push(`${junk} gereksiz satır temizlendi`);
   if (cleanStats?.duplicatesMerged) parts.push(`${cleanStats.duplicatesMerged} tekrar birleştirildi`);

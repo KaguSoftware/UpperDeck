@@ -2,7 +2,7 @@ import { PageHeader, GhostButton } from "../_components";
 import { requireRole } from "@/lib/auth/require-session";
 import { resolveRange, previousRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
-import { getSalesVsEngagement, getItemConversion } from "@/lib/analytics/compare";
+import { getSalesVsEngagement, getItemConversion, getAbandonedViewsNet } from "@/lib/analytics/compare";
 import {
   posthogConfigured,
   getTopViewedItems,
@@ -14,7 +14,6 @@ import {
   getEngagementFunnel,
   getSessionStats,
   getPeakHours,
-  getAbandonedViews,
   getPriceBands,
   getWeekHeatmap,
 } from "@/lib/analytics/posthog";
@@ -76,7 +75,7 @@ export default async function AnalyticsPage({
     getEngagementFunnel(range),
     getSessionStats(range),
     getPeakHours(range),
-    getAbandonedViews(range),
+    getAbandonedViewsNet(range),
     getItemConversion(range),
     getPriceBands(range),
     getWeekHeatmap(range),
@@ -94,11 +93,25 @@ export default async function AnalyticsPage({
 
   // Recent AI analyses for the history list. Non-fatal if the table is missing.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: historyRows } = await (supabase as any)
-    .from("analytics_insights")
-    .select("created_at, range_from, range_to, insights")
-    .order("created_at", { ascending: false })
-    .limit(3);
+  const s = supabase as any;
+  const [{ data: historyRows }, { data: currentRows }] = await Promise.all([
+    s.from("analytics_insights")
+      .select("created_at, range_from, range_to, insights")
+      .order("created_at", { ascending: false })
+      .limit(3),
+    // Latest persisted set for THIS range — shown on load so findings stay stable
+    // (no fresh random generation on every visit). null when nothing stored yet.
+    s.from("analytics_insights")
+      .select("insights")
+      .eq("range_from", range.from)
+      .eq("range_to", range.to)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+  const storedInsights = currentRows?.[0]?.insights;
+  const initialInsights: string[] | null = Array.isArray(storedInsights)
+    ? storedInsights.map(String).filter(Boolean)
+    : null;
 
   const data: AnalyticsData = {
     preset,
@@ -139,6 +152,7 @@ export default async function AnalyticsPage({
     itemConversion,
     priceBands,
     weekHeatmap,
+    initialInsights,
     insightsHistory: ((historyRows ?? []) as {
       created_at: string;
       range_from: string;

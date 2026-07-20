@@ -165,6 +165,42 @@ export async function getAbandonedViews(range: DateRange, limit = 12): Promise<A
   }));
 }
 
+export type AbandonedViewDay = {
+  name: string;
+  date: string; // yyyy-mm-dd, local
+  b5to10: number;
+  b10to20: number;
+  b20plus: number;
+};
+
+/**
+ * Same as `getAbandonedViews` but broken out per item PER DAY, unlimited. Feeds
+ * `getAbandonedViewsNet`, which drops the (item, day) pairs the item actually
+ * sold on before re-aggregating per item. Not shown directly.
+ */
+export async function getAbandonedViewsByDay(range: DateRange): Promise<AbandonedViewDay[]> {
+  const b = bounds(range);
+  const rows = await hogql(`
+    SELECT properties.item_name AS name,
+           toDate(${LOCAL_TS}) AS d,
+           countIf(toFloat(properties.dwell_ms) < 10000) AS b1,
+           countIf(toFloat(properties.dwell_ms) >= 10000 AND toFloat(properties.dwell_ms) < 20000) AS b2,
+           countIf(toFloat(properties.dwell_ms) >= 20000) AS b3
+    FROM events
+    WHERE event = 'item_view_abandoned'
+      AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+      AND name != ''
+    GROUP BY name, d
+  `);
+  return rows.map((r) => ({
+    name: String(r[0]),
+    date: String(r[1]),
+    b5to10: Number(r[2]),
+    b10to20: Number(r[3]),
+    b20plus: Number(r[4]),
+  }));
+}
+
 /**
  * Waiter-call volume by table (table_number super-property). The one true
  * order-intent signal in a waiter-served flow — shows which tables are busiest.

@@ -190,6 +190,7 @@ export function AbandonedViewsChart({
       <p className="mt-3 text-[11px] leading-relaxed text-green/60 font-bold">
         5–10 sn · görsel ilgi çekmiyor &nbsp;·&nbsp; 10–20 sn · açıklama ikna etmiyor &nbsp;·&nbsp; +20 sn · okudu ama
         almadı (içerik/fiyat)
+        <br />O gün gerçekten satılan ürünler hariç tutulur.
       </p>
     </>
   );

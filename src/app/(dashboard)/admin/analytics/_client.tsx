@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ChartCard,
   SalesVsEngagementChart,
@@ -15,6 +15,7 @@ import {
 } from "./_charts";
 import { generateInsightsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
+import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
 import type { NamedCount, AbandonedView, PriceBand } from "@/lib/analytics/posthog";
 import type { ItemConversion } from "@/lib/analytics/compare";
 
@@ -58,6 +59,8 @@ export type AnalyticsData = {
   itemConversion: ItemConversion[];
   priceBands: PriceBand[];
   weekHeatmap: { day: number; hour: number; count: number }[];
+  /** Latest persisted AI finding set for the current range; null when none yet. */
+  initialInsights: string[] | null;
   insightsHistory: { date: string; rangeFrom: string; rangeTo: string; insights: string[] }[];
 };
 
@@ -232,38 +235,153 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
               <td className={td}>{tl.format(r.views)}</td>
               <td className={td}>{tl.format(r.carts)}</td>
               <td className={td}>{r.sold ? tl.format(r.sold) : "—"}</td>
-              <td className={`${td} ${r.views >= 5 && r.convPct === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
+              <td className={`${td} ${r.views >= 5 && r.convPct === 0 && r.sold === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className="mt-2 text-[10px] text-green/50 font-bold">
-        Satılan = girilen gerçek satışlardan · turuncu %0 = çok bakılıp hiç sepete eklenmeyen
+        Satılan = girilen gerçek satışlardan · turuncu %0 = çok bakılıp sepete eklenmeyen ve hiç satılmayan
       </p>
     </div>
   );
 }
 
+// Verdict → chip label + colors. Literal class strings (no runtime concatenation)
+// so Tailwind's JIT scanner actually generates them.
+const TONE: Record<OverviewTone, { label: string; chip: string; edge: string }> = {
+  good: { label: "İyi Gidiyor", chip: "bg-green text-white border-green", edge: "border-l-green" },
+  mixed: { label: "Karışık", chip: "bg-orange/15 text-orange border-orange/40", edge: "border-l-orange" },
+  weak: { label: "Dikkat", chip: "bg-orange text-white border-orange", edge: "border-l-orange" },
+  neutral: { label: "Dengeli", chip: "bg-bg-deep text-green border-green/40", edge: "border-l-green/40" },
+};
+
+function OverviewGroup({ title, mark, markColor, lines }: { title: string; mark: string; markColor: string; lines: string[] }) {
+  if (!lines.length) return null;
+  return (
+    <div>
+      <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase mb-2">{title}</div>
+      <ul className="flex flex-col gap-1.5">
+        {lines.map((s, i) => (
+          <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
+            <span className={`${markColor} font-extrabold shrink-0`}>{mark}</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Deterministic verdict of the selected period, derived (see lib/analytics/overview)
+ * purely from the real numbers already on the page — no model call, so it can never
+ * invent a metric. Empty groups are hidden; when there's nothing to say at all it
+ * falls back to a gentle "not enough data yet" note.
+ */
+function Overview({ data }: { data: AnalyticsData }) {
+  const ov = buildOverview(data);
+  const tone = TONE[ov.tone];
+  const hasContent = ov.strengths.length + ov.push.length + ov.watch.length > 0;
+
+  return (
+    <section className={`border-2 border-green bg-white p-5 border-l-8 ${tone.edge}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="font-bowlby text-[13px] text-green leading-none">AI</span>
+          <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase">Genel Bakış</h3>
+        </div>
+        <span className={`px-2.5 py-1 border-2 font-ui font-extrabold text-[10px] tracking-[0.14em] uppercase ${tone.chip}`}>
+          {tone.label}
+        </span>
+      </div>
+
+      <p className="text-[15px] font-bold text-ink leading-snug mb-4">{ov.headline}</p>
+
+      {hasContent ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <OverviewGroup title="Güçlü Yanlar" mark="✓" markColor="text-green" lines={ov.strengths} />
+          <OverviewGroup title="Öne Çıkar" mark="↑" markColor="text-green" lines={ov.push} />
+          <OverviewGroup title="Gözden Geçir" mark="!" markColor="text-orange" lines={ov.watch} />
+        </div>
+      ) : (
+        <p className="text-[12px] text-green/50">
+          Henüz özetlenecek yeterli veri yok — gerçek satış girildikçe ve etkileşim biriktikçe burası dolacak.
+        </p>
+      )}
+
+      <p className="mt-4 text-[10px] text-green/40 font-bold">
+        Otomatik özet — yalnızca girilen gerçek satış ve etkileşim verilerinden çıkarılır, tahmin içermez.
+      </p>
+    </section>
+  );
+}
+
 type InsightsHistoryEntry = { date: string; rangeFrom: string; rangeTo: string; insights: string[] };
 
-function AiInsights({ configured, history }: { configured: boolean; history: InsightsHistoryEntry[] }) {
+type Finding = { text: string; isNew: boolean };
+
+/**
+ * LLM findings for the period. Auto-generates on load when nothing is stored for
+ * the range, then reuses the stored set so repeated visits stay consistent rather
+ * than surfacing fresh random findings. "Tekrar Kontrol Et" runs a validation pass
+ * that keeps still-true findings, drops resolved ones, and adds genuinely new ones.
+ *
+ * The parent remounts this per range (key={rangeKey}), so `initial` seeds state
+ * directly and a same-range router.refresh() (from a recheck) won't reset it.
+ */
+function AiInsights({
+  configured,
+  initial,
+  history,
+}: {
+  configured: boolean;
+  initial: string[] | null;
+  history: InsightsHistoryEntry[];
+}) {
   const params = useSearchParams();
-  const [insights, setInsights] = useState<string[] | null>(null);
+  const router = useRouter();
+  const [findings, setFindings] = useState<Finding[] | null>(() =>
+    initial && initial.length ? initial.map((t) => ({ text: t, isNew: false })) : null
+  );
+  const [resolved, setResolved] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const generate = useCallback(() => {
-    setError(false);
-    startTransition(async () => {
-      const res = await generateInsightsAction({
-        range: params.get("range") ?? undefined,
-        from: params.get("from") ?? undefined,
-        to: params.get("to") ?? undefined,
+  const run = useCallback(
+    (mode: "load" | "recheck") => {
+      setError(false);
+      startTransition(async () => {
+        const res = await generateInsightsAction({
+          range: params.get("range") ?? undefined,
+          from: params.get("from") ?? undefined,
+          to: params.get("to") ?? undefined,
+          mode,
+        });
+        if (res.ok) {
+          setFindings(res.findings);
+          setResolved(res.resolved);
+          // A recheck also re-derives the deterministic overview + KPIs from fresh
+          // data. Same range → same key here, so our own state survives the refresh.
+          if (mode === "recheck") router.refresh();
+        } else {
+          setError(true);
+        }
       });
-      if (res.ok) setInsights(res.insights);
-      else setError(true);
-    });
-  }, [params]);
+    },
+    [params, router]
+  );
+
+  // Auto-generate on first mount when nothing is stored for this range yet.
+  const didAuto = useRef(false);
+  useEffect(() => {
+    if (!configured || findings !== null || didAuto.current) return;
+    didAuto.current = true;
+    run("load");
+  }, [configured, findings, run]);
+
+  const hasFindings = findings !== null && findings.length > 0;
+  const buttonLabel = pending ? "Kontrol ediliyor…" : hasFindings ? "Tekrar Kontrol Et" : "Yorum Oluştur";
 
   return (
     <section className="border-2 border-green bg-white p-5">
@@ -272,7 +390,7 @@ function AiInsights({ configured, history }: { configured: boolean; history: Ins
         {configured && (
           <button
             type="button"
-            onClick={generate}
+            onClick={() => run(hasFindings ? "recheck" : "load")}
             disabled={pending}
             className={[
               "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
@@ -281,7 +399,7 @@ function AiInsights({ configured, history }: { configured: boolean; history: Ins
                 : "bg-orange text-white border-orange hover:bg-orange/90",
             ].join(" ")}
           >
-            {pending ? "Oluşturuluyor…" : insights ? "Yeniden Oluştur" : "Yorum Oluştur"}
+            {buttonLabel}
           </button>
         )}
       </div>
@@ -291,19 +409,45 @@ function AiInsights({ configured, history }: { configured: boolean; history: Ins
         </p>
       ) : error ? (
         <p className="text-[12px] text-orange font-bold py-3">Yorum oluşturulamadı — tekrar deneyin.</p>
-      ) : insights ? (
-        <ul className="flex flex-col gap-2 pt-2">
-          {insights.map((s, i) => (
-            <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
-              <span className="text-orange font-extrabold shrink-0">→</span>
-              <span>{s}</span>
-            </li>
-          ))}
-        </ul>
+      ) : hasFindings ? (
+        <>
+          <ul className="flex flex-col gap-2 pt-2">
+            {findings!.map((f, i) => (
+              <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
+                <span className="text-orange font-extrabold shrink-0">→</span>
+                <span>
+                  {f.text}
+                  {f.isNew && (
+                    <span className="ml-2 px-1.5 py-0.5 align-middle bg-green text-white font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase">
+                      Yeni
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {resolved.length > 0 && (
+            <div className="mt-4 border-t-2 border-green/15 pt-3">
+              <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase mb-2">
+                Çözüldü / artık geçerli değil
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {resolved.map((s, i) => (
+                  <li key={i} className="flex gap-2 text-[12px] leading-relaxed text-green/60 line-through decoration-green/30">
+                    <span className="text-green/40 font-extrabold shrink-0 no-underline">✓</span>
+                    <span>{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      ) : pending ? (
+        <p className="text-[12px] text-green/50 py-3">Veriler yoruma çevriliyor…</p>
       ) : (
         <p className="text-[12px] text-green/50 py-3">
-          Seçili dönemin verilerini birkaç maddelik Türkçe yoruma çevirir: en çok/az satanlar, bakılıp alınmayanlar,
-          içerik sorunları. Önceki analizleri hatırlar ve takip eder.
+          Seçili dönemin verilerini Türkçe bulgulara çevirir: en çok/az satanlar, bakılıp alınmayanlar,
+          içerik sorunları. Bulgular kalıcıdır; “Tekrar Kontrol Et” mevcut bulguları doğrular ve yenilerini ekler.
         </p>
       )}
       {history.length > 0 && (
@@ -471,7 +615,17 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} />
       </div>
 
-      <AiInsights configured={data.insightsConfigured} history={data.insightsHistory} />
+      {/* Deterministic verdict of the period — always on, derived from real numbers */}
+      <Overview data={data} />
+
+      {/* key remounts per range so stored findings seed cleanly and a same-range
+          refresh (from a recheck) doesn't wipe the component's own state */}
+      <AiInsights
+        key={`${data.range.from}_${data.range.to}`}
+        configured={data.insightsConfigured}
+        initial={data.initialInsights}
+        history={data.insightsHistory}
+      />
 
       {/* Item funnel table — the strongest single view for menu decisions */}
       <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
