@@ -19,6 +19,7 @@ import {
   generateFindingsBatch,
   revalidateFindings,
   insightsConfigured,
+  isInsightFresh,
   type InsightsInput,
 } from "@/lib/analytics/insights";
 
@@ -89,21 +90,24 @@ function toResult(findings: string[], resolved: string[], newlyAdded: Set<string
   };
 }
 
-/** Latest persisted set for this exact range, or [] if none/table missing. */
+/** Latest persisted set for this exact range (with its age), or empty if none. */
 async function loadStoredSet(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   range: DateRange
-): Promise<string[]> {
+): Promise<{ insights: string[]; createdAt: string | null }> {
   const { data } = await supabase
     .from("analytics_insights")
-    .select("insights")
+    .select("insights, created_at")
     .eq("range_from", range.from)
     .eq("range_to", range.to)
     .order("created_at", { ascending: false })
     .limit(1);
-  const insights = data?.[0]?.insights;
-  return Array.isArray(insights) ? insights.map(String).filter(Boolean) : [];
+  const row = data?.[0];
+  return {
+    insights: Array.isArray(row?.insights) ? row.insights.map(String).filter(Boolean) : [],
+    createdAt: row?.created_at ?? null,
+  };
 }
 
 /** Assemble everything the model sees for a range (shared by generate + recheck). */
@@ -227,13 +231,15 @@ export async function generateInsightsAction(params: {
 
   // Load mode reuses a cached/persisted set — this is what keeps the findings
   // stable across page loads instead of re-rolling a new random set each time.
+  // A set only counts as reusable while it's within the 3-day freshness window;
+  // once it's stale we fall through and fully re-generate on this load.
   if (mode === "load") {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return toResult(hit.findings, [], new Set(), true);
     const stored = await loadStoredSet(s, range);
-    if (stored.length) {
-      cache.set(key, { at: Date.now(), findings: stored });
-      return toResult(stored, [], new Set(), true);
+    if (stored.insights.length && isInsightFresh(stored.createdAt)) {
+      cache.set(key, { at: Date.now(), findings: stored.insights });
+      return toResult(stored.insights, [], new Set(), true);
     }
   }
 
@@ -245,7 +251,8 @@ export async function generateInsightsAction(params: {
   let baseline: string[] = []; // set we started from, to detect real changes
 
   if (mode === "recheck") {
-    const existing = cache.get(key)?.findings ?? (await loadStoredSet(s, range));
+    // Recheck validates the current set no matter its age (the user asked for it).
+    const existing = cache.get(key)?.findings ?? (await loadStoredSet(s, range)).insights;
     baseline = existing;
     if (existing.length) {
       const r = await revalidateFindings(input, existing);

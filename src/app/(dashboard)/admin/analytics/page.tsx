@@ -17,7 +17,7 @@ import {
   getPriceBands,
   getWeekHeatmap,
 } from "@/lib/analytics/posthog";
-import { insightsConfigured } from "@/lib/analytics/insights";
+import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -100,18 +100,21 @@ export default async function AnalyticsPage({
       .order("created_at", { ascending: false })
       .limit(3),
     // Latest persisted set for THIS range — shown on load so findings stay stable
-    // (no fresh random generation on every visit). null when nothing stored yet.
+    // (no fresh random generation on every visit). Only reused while within the
+    // 3-day freshness window; older than that it's treated as absent so the client
+    // fully re-generates on load. null when nothing (fresh) is stored.
     s.from("analytics_insights")
-      .select("insights")
+      .select("insights, created_at")
       .eq("range_from", range.from)
       .eq("range_to", range.to)
       .order("created_at", { ascending: false })
       .limit(1),
   ]);
-  const storedInsights = currentRows?.[0]?.insights;
-  const initialInsights: string[] | null = Array.isArray(storedInsights)
-    ? storedInsights.map(String).filter(Boolean)
-    : null;
+  const storedRow = currentRows?.[0];
+  const initialInsights: string[] | null =
+    isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
+      ? storedRow.insights.map(String).filter(Boolean)
+      : null;
 
   const data: AnalyticsData = {
     preset,

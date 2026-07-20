@@ -346,6 +346,7 @@ function AiInsights({
   );
   const [resolved, setResolved] = useState<string[]>([]);
   const [error, setError] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const run = useCallback(
@@ -383,6 +384,12 @@ function AiInsights({
   const hasFindings = findings !== null && findings.length > 0;
   const buttonLabel = pending ? "Kontrol ediliyor…" : hasFindings ? "Tekrar Kontrol Et" : "Yorum Oluştur";
 
+  // Newest (recheck-added) findings float to the top so they aren't hidden below
+  // the fold; the rest keep their order. Collapsed to the first 4 with a toggle.
+  const VISIBLE_LIMIT = 4;
+  const sorted = findings ? [...findings].sort((a, b) => Number(b.isNew) - Number(a.isNew)) : [];
+  const visible = expanded ? sorted : sorted.slice(0, VISIBLE_LIMIT);
+
   return (
     <section className="border-2 border-green bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
@@ -412,7 +419,7 @@ function AiInsights({
       ) : hasFindings ? (
         <>
           <ul className="flex flex-col gap-2 pt-2">
-            {findings!.map((f, i) => (
+            {visible.map((f, i) => (
               <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
                 <span className="text-orange font-extrabold shrink-0">→</span>
                 <span>
@@ -426,6 +433,15 @@ function AiInsights({
               </li>
             ))}
           </ul>
+          {sorted.length > VISIBLE_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="mt-3 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase text-orange hover:text-orange/70 cursor-pointer transition-colors"
+            >
+              {expanded ? "Daha az göster" : `Daha fazla göster (+${sorted.length - VISIBLE_LIMIT})`}
+            </button>
+          )}
           {resolved.length > 0 && (
             <div className="mt-4 border-t-2 border-green/15 pt-3">
               <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase mb-2">

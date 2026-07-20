@@ -38,7 +38,7 @@ export function num(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-export type PosFormat = "gelir-merkezi" | "simple";
+export type PosFormat = "gelir-merkezi" | "simple" | "summary";
 
 export type ParsedEntry = { entry_date: string; total_sales: number };
 export type ParsedItem = { entry_date: string; item_name: string; qty: number; revenue: number | null };
@@ -59,12 +59,23 @@ function isGelirMerkeziName(name: string): boolean {
 }
 
 /**
+ * The monthly "Genel Satış Raporu" — a single-period financial summary (one
+ * "Toplam Satış" figure, payment/discount/expense breakdowns). It has NO per-day
+ * or per-item rows, so it can't feed the daily/item analytics: we detect it to
+ * reject with a clear "wrong report" message instead of a generic parse failure.
+ */
+function isSummaryName(name: string): boolean {
+  return name.toLocaleLowerCase("tr").includes("genel satış raporu");
+}
+
+/**
  * Pick the import strategy for a workbook. Returns the detected format and, for
  * "gelir-merkezi", the matching sheet name.
  */
 export function detectPosSheet(wb: XLSX.WorkBook): { format: PosFormat; sheetName?: string } {
   const match = wb.SheetNames.find(isGelirMerkeziName);
   if (match) return { format: "gelir-merkezi", sheetName: match };
+  if (wb.SheetNames.some(isSummaryName)) return { format: "summary" };
   return { format: "simple" };
 }
 

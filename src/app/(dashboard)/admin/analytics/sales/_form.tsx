@@ -26,8 +26,8 @@ export function SalesForms() {
       <section className="border-2 border-green bg-white p-5">
         <h2 className="font-bowlby text-[18px] text-green uppercase mb-1">Excel İçe Aktar</h2>
         <p className="text-[11px] text-green/70 mb-4">
-          POS raporunu ("Menü Kalemi Raporu") doğrudan yükleyin — tarihler ve ürünler otomatik okunur.
-          Ya da basit şablonu kullanın.{" "}
+          <b>Gelir Merkezi Detaylar</b> raporunu (ürün/gün detaylı) doğrudan yükleyin — tarihler ve
+          ürünler otomatik okunur. Ya da basit şablonu kullanın.{" "}
           <a href="/sales-template.csv" download className="text-orange font-extrabold underline">
             Şablonu indir
           </a>
@@ -47,6 +47,9 @@ export function SalesForms() {
           </label>
           <p className="text-[10px] text-green/60 leading-relaxed">
             <b>POS raporu:</b> "Gelir Merkezi Detaylar" sayfası otomatik algılanır — hazırlık gerekmez.
+            <br />
+            <b className="text-orange">Not:</b> "Genel Satış Raporu" (aylık özet) çalışmaz — günlük/ürün
+            detayı içermez.
             <br />
             <b>Basit şablon:</b> sütunlar <b>date</b>, <b>total_sales</b>, <b>covers</b> (opsiyonel); isteğe
             bağlı <b>Items</b> sayfası: date, item_name, qty, revenue.

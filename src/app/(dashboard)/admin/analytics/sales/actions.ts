@@ -141,8 +141,16 @@ export async function importSalesExcel(formData: FormData) {
 
   const s = supabase as AnyClient;
 
-  // ---- Real POS export: per-item-per-day "Gelir Merkezi Detaylar" ----
+  // ---- Wrong report: the monthly "Genel Satış Raporu" summary has no daily/item detail ----
   const detected = detectPosSheet(wb);
+  if (detected.format === "summary") {
+    return notifyErr(
+      SALES_PATH,
+      "Bu 'Genel Satış Raporu' aylık özet — günlük/ürün detayı yok. 'Gelir Merkezi Detaylar' raporunu yükleyin."
+    );
+  }
+
+  // ---- Real POS export: per-item-per-day "Gelir Merkezi Detaylar" ----
   if (detected.format === "gelir-merkezi" && detected.sheetName) {
     const parsed = parseGelirMerkezi(wb, detected.sheetName);
     if (parsed.entries.length === 0) {

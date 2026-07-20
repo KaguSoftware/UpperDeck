@@ -26,6 +26,19 @@ export function insightsConfigured(): boolean {
   return Boolean(env.GROQ_API_KEY);
 }
 
+/**
+ * Persisted findings are reused as-is for this long. Past it they're stale and a
+ * page load fully re-generates them; within it, only an explicit recheck updates.
+ */
+export const INSIGHTS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** True while a stored set (by its created_at) is still within the reuse window. */
+export function isInsightFresh(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return Number.isFinite(t) && Date.now() - t < INSIGHTS_TTL_MS;
+}
+
 /** Trimmed serialization of the analytics page data — only what the model needs. */
 export type InsightsInput = {
   range: { from: string; to: string };
@@ -74,7 +87,15 @@ You also receive: "itemConversion" (per item: views → cart adds → actually s
 "deltas" (percent change of each KPI vs the previous period of equal length),
 and "previousInsights" (your earlier analyses, newest first).
 Every finding must cite a specific number from the data AND carry a concrete takeaway or action —
-never just restate a number. No greetings, no fluff. Write IN TURKISH.`;
+never just restate a number. No greetings, no fluff. Write IN TURKISH.
+
+Include ONLY strong, material findings. A finding qualifies only if ALL hold:
+- it rests on a meaningful sample — ignore items with very few views or sales (roughly under 5), a couple of
+  data points prove nothing;
+- it cites a concrete number and the movement is material (skip deltas smaller than ~10% and rounding-noise);
+- it leads to a clear, non-obvious action.
+Drop anything weak, speculative, marginal, or merely restating an obvious fact. Fewer strong findings are far
+better than many thin ones — never pad the list to look thorough.`;
 
 const GENERATE_SYSTEM = `${DATA_CONTEXT}
 
@@ -98,7 +119,8 @@ existing finding and look for new ones:
 - "resolved": findings that NO LONGER hold because the situation improved or reversed — briefly restate what changed.
 - "added": NEW distinct findings not covered by existingFindings.
 Base every item on a specific current number. Do not move a finding to "resolved" unless the data clearly
-shows it no longer applies.
+shows it no longer applies. Hold "ongoing" and "added" to the same strength bar as generation: meaningful
+sample, material number, clear action — drop weak or speculative ones rather than keep them.
 
 Respond with ONLY a JSON object: {"ongoing":[...],"resolved":[...],"added":[...]}.`;
 
@@ -133,20 +155,29 @@ async function chat(system: string, user: string): Promise<string> {
 }
 
 /**
+ * Weak-argument guard: the prompt requires every finding to cite a concrete
+ * number, so anything without a digit is a vague claim we drop. Also filters out
+ * trivially short strings. A last-line defense on top of the prompt's strength bar.
+ */
+const isStrong = (s: string) => /\d/.test(s) && s.trim().length >= 15;
+
+/**
  * One generation pass. `alreadyFound` is echoed to the model so it returns only
  * findings not already surfaced — call this in a loop to collect the full set.
  */
 export async function generateFindingsBatch(data: InsightsInput, alreadyFound: string[]): Promise<string[]> {
   if (!insightsConfigured()) return [];
   const content = await chat(GENERATE_SYSTEM, JSON.stringify({ ...data, alreadyFound }));
-  return parseStringArray(content);
+  return parseStringArray(content).filter(isStrong);
 }
 
 /** Re-check an existing set against the latest data. Keeps the set on any failure. */
 export async function revalidateFindings(data: InsightsInput, existing: string[]): Promise<RevalidateResult> {
   if (!insightsConfigured()) return { ongoing: existing, resolved: [], added: [] };
   const content = await chat(REVALIDATE_SYSTEM, JSON.stringify({ ...data, existingFindings: existing }));
-  return parseRevalidate(content, existing);
+  const r = parseRevalidate(content, existing);
+  // Apply the same strength bar to what we keep/add (resolved is informational, left as-is).
+  return { ongoing: r.ongoing.filter(isStrong), resolved: r.resolved, added: r.added.filter(isStrong) };
 }
 
 function stripFence(content: string): string {
