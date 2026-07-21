@@ -1,0 +1,67 @@
+import "server-only";
+import { normalizeItemName } from "@/lib/analytics/clean-sales";
+
+/**
+ * Owner-configured "ignore these items" list for the analytics tab.
+ *
+ * Some menu entries dominate the item-level charts without carrying any signal —
+ * e.g. an upsell like "Menu Upgrade" tops views/carts/best-sellers on every range
+ * but tells the owner nothing. This list omits such items from the INSIGHT-level
+ * views (top viewed/carted, conversion, abandoned, best-sellers → and therefore the
+ * deterministic Overview and the AI insights) so the analysis focuses on real
+ * products.
+ *
+ * It deliberately does NOT touch money/amount aggregates (total sales, covers,
+ * average spend, total views, funnel counts): those stay complete.
+ *
+ * Stored as a JSON string array in the key/value `settings` table.
+ */
+
+export const EXCLUDED_ITEMS_SETTINGS_KEY = "analytics_excluded_items";
+
+/**
+ * Shared match key — same normalization compare.ts uses to line up PostHog menu
+ * names with POS item names, so an exclusion entered once matches both sources.
+ */
+export const itemKey = (name: string) => normalizeItemName(name).toLocaleLowerCase("tr");
+
+/** Read the configured item names to ignore. Safe ([]) on any failure. */
+export async function getExcludedItemNames(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", EXCLUDED_ITEMS_SETTINGS_KEY)
+    .maybeSingle();
+  const raw = data?.value;
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Predicate that keeps only item names NOT in the excluded set (by match key). */
+export function makeKeepFilter(excluded: string[]): (name: string) => boolean {
+  const keys = new Set(excluded.map(itemKey));
+  return (name: string) => !keys.has(itemKey(name));
+}
+
+/** Trim, drop blanks, and dedupe by match key while keeping the display form. */
+export function normalizeExclusionList(names: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of names) {
+    const t = String(n).trim();
+    if (!t) continue;
+    const k = itemKey(t);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}

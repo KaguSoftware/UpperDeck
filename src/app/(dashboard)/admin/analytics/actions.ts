@@ -22,6 +22,13 @@ import {
   isInsightFresh,
   type InsightsInput,
 } from "@/lib/analytics/insights";
+import {
+  getExcludedItemNames,
+  makeKeepFilter,
+  normalizeExclusionList,
+  itemKey,
+  EXCLUDED_ITEMS_SETTINGS_KEY,
+} from "@/lib/analytics/exclusions";
 
 const RangeSchema = z.object({
   range: z.string().optional(),
@@ -156,6 +163,10 @@ async function buildInsightsInput(
   const views = funnelCount(funnel, "Görüntü");
   const waiterCalls = funnelCount(funnel, "Garson");
 
+  // Drop owner-ignored items from the item-level lists the model reasons over, so
+  // its findings match the (filtered) charts. Aggregate KPIs/funnel stay whole.
+  const keep = makeKeepFilter(await getExcludedItemNames(supabase));
+
   // Earlier analyses (may be empty; table might not exist yet — that's fine).
   const { data: historyRows } = await supabase
     .from("analytics_insights")
@@ -179,13 +190,13 @@ async function buildInsightsInput(
       views,
       cartConversion,
     },
-    topViewed,
-    topCarted,
-    bestSellers,
+    topViewed: topViewed.filter((x) => keep(x.name)),
+    topCarted: topCarted.filter((x) => keep(x.name)),
+    bestSellers: bestSellers.filter((x) => keep(x.item_name)),
     funnel,
-    abandonedViews,
+    abandonedViews: abandonedViews.filter((x) => keep(x.name)),
     categoryPopularity,
-    itemConversion,
+    itemConversion: itemConversion.filter((x) => keep(x.name)),
     priceBands,
     discountSplit,
     deltas: {
@@ -225,7 +236,12 @@ export async function generateInsightsAction(params: {
   if (!insightsConfigured()) return FAIL;
 
   const { range } = resolveRange(parsed.data);
-  const key = `${range.from}_${range.to}`;
+  // Fold the ignore-list into the cache key so changing it regenerates rather than
+  // serving cached findings that still mention an item the owner just excluded.
+  // (The range-keyed DB set is filtered at build time on the next recheck.)
+  const excluded = await getExcludedItemNames(supabase);
+  const exclSig = excluded.length ? `|x:${excluded.map(itemKey).sort().join(",")}` : "";
+  const key = `${range.from}_${range.to}${exclSig}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
 
@@ -286,4 +302,29 @@ export async function generateInsightsAction(params: {
   }
 
   return toResult(current, resolved, newlyAdded, false);
+}
+
+/**
+ * Persist the owner's "ignore these items" list for the analytics tab. Excluded
+ * items are dropped from item-level views (top viewed/carted, conversion,
+ * abandoned, best-sellers) and from the AI insights; money/amount totals are not
+ * touched. Stored as a JSON array in the key/value `settings` table.
+ */
+export async function setExcludedItemsAction(names: string[]): Promise<{ ok: boolean }> {
+  const parsed = z.array(z.string().max(200)).max(300).safeParse(names);
+  if (!parsed.success) return { ok: false };
+
+  const { supabase } = await requireRole(["owner", "dev"]);
+  const clean = normalizeExclusionList(parsed.data);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const { error } = await s
+    .from("settings")
+    .upsert({ key: EXCLUDED_ITEMS_SETTINGS_KEY, value: JSON.stringify(clean) }, { onConflict: "key" });
+  if (error) {
+    console.warn("[analytics] setExcludedItems failed", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
 }

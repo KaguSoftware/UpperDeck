@@ -18,6 +18,7 @@ import {
   getWeekHeatmap,
 } from "@/lib/analytics/posthog";
 import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
+import { getExcludedItemNames, makeKeepFilter, itemKey } from "@/lib/analytics/exclusions";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +117,29 @@ export default async function AnalyticsPage({
       ? storedRow.insights.map(String).filter(Boolean)
       : null;
 
+  // Owner-configured "ignore" list. Excluded items are dropped from the item-level
+  // views below (top viewed/carted, conversion, abandoned, best-sellers) so they
+  // stop polluting the Overview and AI insights. Money/amount aggregates (sales,
+  // covers, views count, funnel) are intentionally left whole.
+  const excludedItems = await getExcludedItemNames(supabase);
+  const keep = makeKeepFilter(excludedItems);
+
+  // Options for the ignore dropdown: every item name seen this range, unioned with
+  // already-excluded names (so they can be toggled back on even with no data now).
+  const optionMap = new Map<string, string>(); // match key -> display name
+  for (const name of [
+    ...topViewed.map((x) => x.name),
+    ...topCarted.map((x) => x.name),
+    ...bestSellers.map((x) => x.item_name),
+    ...itemConversion.map((x) => x.name),
+    ...abandonedViews.map((x) => x.name),
+    ...excludedItems,
+  ]) {
+    const k = itemKey(name);
+    if (!optionMap.has(k)) optionMap.set(k, name);
+  }
+  const itemOptions = [...optionMap.values()].sort((a, b) => a.localeCompare(b, "tr"));
+
   const data: AnalyticsData = {
     preset,
     range,
@@ -143,18 +167,21 @@ export default async function AnalyticsPage({
     },
     comparison,
     revenueOverTime,
-    topViewed,
-    topCarted,
+    // Item-level lists: excluded items removed (feeds charts + Overview + insights).
+    topViewed: topViewed.filter((x) => keep(x.name)),
+    topCarted: topCarted.filter((x) => keep(x.name)),
     tableActivity,
     funnel,
     peakHours,
     categoryPopularity,
     localeSplit,
-    bestSellers,
-    abandonedViews,
-    itemConversion,
+    bestSellers: bestSellers.filter((x) => keep(x.item_name)),
+    abandonedViews: abandonedViews.filter((x) => keep(x.name)),
+    itemConversion: itemConversion.filter((x) => keep(x.name)),
     priceBands,
     weekHeatmap,
+    excludedItems,
+    itemOptions,
     initialInsights,
     insightsHistory: ((historyRows ?? []) as {
       created_at: string;

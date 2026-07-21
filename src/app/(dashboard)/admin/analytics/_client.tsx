@@ -13,7 +13,7 @@ import {
   ConversionBars,
   WeekHeatmapChart,
 } from "./_charts";
-import { generateInsightsAction } from "./actions";
+import { generateInsightsAction, setExcludedItemsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
 import type { NamedCount, AbandonedView, PriceBand } from "@/lib/analytics/posthog";
@@ -59,6 +59,10 @@ export type AnalyticsData = {
   itemConversion: ItemConversion[];
   priceBands: PriceBand[];
   weekHeatmap: { day: number; hour: number; count: number }[];
+  /** Item names the owner chose to omit from item-level views + insights. */
+  excludedItems: string[];
+  /** Candidate item names for the ignore dropdown (seen this range ∪ excluded). */
+  itemOptions: string[];
   /** Latest persisted AI finding set for the current range; null when none yet. */
   initialInsights: string[] | null;
   insightsHistory: { date: string; rangeFrom: string; rangeTo: string; insights: string[] }[];
@@ -494,6 +498,119 @@ function AiInsights({
   );
 }
 
+/**
+ * "Ignore items" dropdown. Lets the owner tick menu entries that should be left
+ * out of the item-level analysis (top viewed/carted, conversion, abandoned,
+ * best-sellers → and therefore the Overview + AI insights) — e.g. an upsell that
+ * tops every chart but carries no signal. Money/amount totals are unaffected.
+ *
+ * The selection persists server-side (settings table); each toggle saves and
+ * refreshes the dashboard so the charts and insights update immediately.
+ */
+function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: string[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>(excluded);
+  const [saving, startSaving] = useTransition();
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selectedKeys = new Set(selected.map((s) => s.trim().toLocaleLowerCase("tr")));
+  const isOn = (name: string) => selectedKeys.has(name.trim().toLocaleLowerCase("tr"));
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const save = (next: string[]) => {
+    setSelected(next); // optimistic — checkbox reacts instantly
+    startSaving(async () => {
+      const res = await setExcludedItemsAction(next);
+      // Re-derive the whole dashboard (charts + Overview) with the new exclusions.
+      if (res.ok) router.refresh();
+    });
+  };
+
+  const toggle = (name: string) =>
+    save(isOn(name) ? selected.filter((s) => s.trim().toLocaleLowerCase("tr") !== name.trim().toLocaleLowerCase("tr")) : [...selected, name]);
+
+  const count = selected.length;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={[
+          "flex items-center gap-1.5 px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.14em] uppercase border-2 cursor-pointer transition-colors",
+          count > 0 ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
+        ].join(" ")}
+        title="Analiz ve yapay zekâ yorumundan ürün çıkar (satış/tutar toplamları etkilenmez)"
+      >
+        <span>Ürün Yoksay</span>
+        {count > 0 && (
+          <span className="px-1.5 py-0.5 bg-white text-green font-ui font-extrabold text-[9px] leading-none tabular-nums">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 z-30 w-72 max-w-[80vw] border-2 border-green bg-white shadow-lg">
+          <div className="px-3 py-2 border-b-2 border-green/20 flex items-center justify-between gap-2">
+            <span className="text-[10px] tracking-[0.14em] font-extrabold text-green/70 uppercase">
+              İçgörüden çıkar
+            </span>
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={() => save([])}
+                className="text-[10px] font-extrabold text-orange hover:text-orange/70 uppercase tracking-[0.1em] cursor-pointer"
+              >
+                Temizle
+              </button>
+            )}
+          </div>
+          <p className="px-3 pt-2 text-[10px] leading-relaxed text-green/50 font-bold">
+            Seçilenler en çok satan / incelenen listelerinden ve yapay zekâ yorumundan çıkarılır. Satış ve tutar toplamları değişmez.
+          </p>
+          <div className="max-h-64 overflow-y-auto py-1.5">
+            {options.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-green/50">Henüz ürün verisi yok.</p>
+            ) : (
+              options.map((name) => (
+                <label
+                  key={name}
+                  className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-ink hover:bg-bg-deep cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isOn(name)}
+                    disabled={saving}
+                    onChange={() => toggle(name)}
+                    className="size-3.5 accent-green shrink-0"
+                  />
+                  <span className="truncate" title={name}>{name}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -556,8 +673,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           </div>
         </div>
       )}
-      {/* Auto-refresh bar — stays pinned as an overlay while scrolling */}
-      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg/90 backdrop-blur-sm flex justify-end">
+      {/* Controls bar — ignore-items menu + auto-refresh, pinned while scrolling */}
+      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg/90 backdrop-blur-sm flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <IgnoreItemsMenu options={data.itemOptions} excluded={data.excludedItems} />
         <AutoRefresh />
       </div>
 
