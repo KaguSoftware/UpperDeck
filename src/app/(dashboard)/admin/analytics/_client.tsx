@@ -16,8 +16,10 @@ import {
 import { generateInsightsAction, setExcludedItemsAction } from "./actions";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
-import type { NamedCount, AbandonedView, PriceBand } from "@/lib/analytics/posthog";
-import type { ItemConversion } from "@/lib/analytics/compare";
+import type { NamedCount, AbandonedView, PriceBand, LocalePref } from "@/lib/analytics/posthog";
+import type { ItemConversion, HiddenGem, ItemMomentum } from "@/lib/analytics/compare";
+import type { PromoPerformance } from "@/lib/analytics/promo";
+import type { ItemPair } from "@/lib/analytics/basket";
 
 export type AnalyticsData = {
   preset: string;
@@ -48,7 +50,6 @@ export type AnalyticsData = {
   comparison: { date: string; revenue: number | null; covers: number | null; views: number; waiterCalls: number }[];
   revenueOverTime: { date: string; revenue: number; covers: number }[];
   topViewed: NamedCount[];
-  topCarted: NamedCount[];
   tableActivity: NamedCount[];
   funnel: { step: string; count: number }[];
   peakHours: { hour: number; count: number }[];
@@ -59,6 +60,16 @@ export type AnalyticsData = {
   itemConversion: ItemConversion[];
   priceBands: PriceBand[];
   weekHeatmap: { day: number; hour: number; count: number }[];
+  /** Converts views→sales well but under-exposed — promote candidates. */
+  hiddenGems: HiddenGem[];
+  /** Per-item view momentum vs the previous period. */
+  momentum: { rising: ItemMomentum[]; fading: ItemMomentum[] };
+  /** Featured-banner / suggested-rail engagement + follow-through. */
+  promo: PromoPerformance;
+  /** Bought-together item pairs from real orders. */
+  basket: { pairs: ItemPair[]; orders: number };
+  /** Behavior split by menu language (tr / en). */
+  localePrefs: LocalePref[];
   /** Item names the owner chose to omit from item-level views + insights. */
   excludedItems: string[];
   /** Candidate item names for the ignore dropdown (seen this range ∪ excluded). */
@@ -79,6 +90,12 @@ const tl = new Intl.NumberFormat("tr-TR");
 // Plain number (no currency style): the Bowlby display font has no ₺ glyph, so
 // we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+
+// Guest-count estimate factor: people per unique visit (menu session). Used only
+// when no real covers were entered for the period. Picker persists in localStorage.
+const COVERS_MULT_OPTIONS = [1.5, 2, 2.5, 3];
+const COVERS_MULT_DEFAULT = 2;
+const COVERS_MULT_KEY = "analytics-covers-multiplier";
 
 // Auto-refresh intervals. PostHog query results are cached server-side for
 // 30s (posthog.ts), so a 1 min minimum always lands on fresh data.
@@ -175,6 +192,43 @@ function AutoRefresh() {
   );
 }
 
+/**
+ * People-per-visit picker for the guest-count estimate. Only relevant when no
+ * real covers were entered — the parent renders it in that case. Pure client
+ * state persisted in localStorage (like AutoRefresh); changing it re-derives the
+ * "~tahmini" Kişi / Kişi Başı cards instantly, no refetch.
+ */
+function CoversMultiplier({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
+        title="Menüyü açan her tekil ziyaret için varsayılan kişi sayısı — tahmini Kişi hesabında kullanılır"
+      >
+        Kişi Tahmini ×
+      </span>
+      <div className="flex items-center">
+        {COVERS_MULT_OPTIONS.map((o) => {
+          const active = value === o;
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => onChange(o)}
+              className={[
+                "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors tabular-nums",
+                active ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
+              ].join(" ")}
+            >
+              {o.toLocaleString("tr-TR")}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function duration(sec: number): string {
   if (!sec) return "—";
   const m = Math.floor(sec / 60);
@@ -182,7 +236,20 @@ function duration(sec: number): string {
   return m > 0 ? `${m}d ${s}s` : `${s}s`;
 }
 
-function Kpi({ label, value, unit, delta }: { label: string; value: string; unit?: string; delta?: number | null }) {
+function Kpi({
+  label,
+  value,
+  unit,
+  delta,
+  estimated,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  delta?: number | null;
+  /** Renders a "~" prefix + "tahmini" note (used for the sessions-based cover estimate). */
+  estimated?: boolean;
+}) {
   // The Bowlby display font is very wide, so long values (e.g. "1.234.567")
   // overrun the narrow cards. Step the size down as the string grows.
   const size =
@@ -191,19 +258,29 @@ function Kpi({ label, value, unit, delta }: { label: string; value: string; unit
     <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden">
       <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
       <div className="flex items-baseline gap-1 mt-1.5 whitespace-nowrap">
-        {/* ₺ (and %) live outside the display font, which lacks those glyphs. */}
+        {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
+        {estimated && <span className="font-ui font-extrabold text-[16px] text-green/50">~</span>}
         {unit && <span className="font-ui font-extrabold text-[16px] text-green/70">{unit}</span>}
         <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
       </div>
-      {/* vs previous period of equal length; hidden when there's no baseline */}
-      {delta != null && (
+      {estimated ? (
         <div
-          className={`mt-1.5 text-[11px] font-extrabold ${delta > 0 ? "text-green" : delta < 0 ? "text-orange" : "text-green/50"}`}
-          title="Önceki döneme göre"
+          className="mt-1.5 text-[11px] font-extrabold text-green/40"
+          title="Gerçek kişi sayısı girilmedi — menüyü açan tekil ziyaretlerden tahmin edildi"
         >
-          {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
-          {delta}%
+          tahmini
         </div>
+      ) : (
+        // vs previous period of equal length; hidden when there's no baseline
+        delta != null && (
+          <div
+            className={`mt-1.5 text-[11px] font-extrabold ${delta > 0 ? "text-green" : delta < 0 ? "text-orange" : "text-green/50"}`}
+            title="Önceki döneme göre"
+          >
+            {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
+            {delta}%
+          </div>
+        )
       )}
     </div>
   );
@@ -229,7 +306,7 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
             <th className={th}>Görüntüleme</th>
             <th className={th}>Sepet</th>
             <th className={th}>Satılan</th>
-            <th className={th}>Görünt.→Sepet</th>
+            <th className={th}>Görünt.→Satış</th>
           </tr>
         </thead>
         <tbody>
@@ -239,13 +316,13 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
               <td className={td}>{tl.format(r.views)}</td>
               <td className={td}>{tl.format(r.carts)}</td>
               <td className={td}>{r.sold ? tl.format(r.sold) : "—"}</td>
-              <td className={`${td} ${r.views >= 5 && r.convPct === 0 && r.sold === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
+              <td className={`${td} ${r.views >= 5 && r.sold === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className="mt-2 text-[10px] text-green/50 font-bold">
-        Satılan = girilen gerçek satışlardan · turuncu %0 = çok bakılıp sepete eklenmeyen ve hiç satılmayan
+        Satılan = girilen gerçek satışlardan · Görünt.→Satış = görüntüleyip satın alma oranı · turuncu = çok görüntülenip hiç satılmayan
       </p>
     </div>
   );
@@ -611,6 +688,200 @@ function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: s
   );
 }
 
+/** Shared scaffold for the compact stat sections below: a divided list of
+ *  "name on the left, metrics on the right" rows. Each caller supplies its own
+ *  right-hand span so per-section spacing/figures stay exactly as they were. */
+function StatList({ children }: { children: React.ReactNode }) {
+  return <ul className="flex flex-col divide-y divide-green/10">{children}</ul>;
+}
+function StatRow({ name, children }: { name: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center justify-between gap-3 py-2">
+      <span className="text-[13px] font-bold text-ink truncate min-w-0" title={name}>{name}</span>
+      {children}
+    </li>
+  );
+}
+
+/** Converts views into real sales at a high rate, but few diners see it → promote. */
+function HiddenGems({ items }: { items: HiddenGem[] }) {
+  if (!items.length) return null;
+  return (
+    <ChartCard title="Gizli Cevherler (az görülüyor, çok satıyor)">
+      <StatList>
+        {items.map((g) => (
+          <StatRow key={g.name} name={g.name}>
+            <span className="flex items-center gap-3 shrink-0 text-[12px] tabular-nums">
+              <span className="text-green/50">{tl.format(g.views)} görüntüleme</span>
+              <span className="text-green/50">{tl.format(g.sold)} satış</span>
+              <span className="font-bowlby text-green text-[15px] leading-none">{g.convPct}%</span>
+            </span>
+          </StatRow>
+        ))}
+      </StatList>
+      <p className="mt-2 text-[10px] text-green/50 font-bold">
+        Görüntüleyenlerin büyük kısmı satın alıyor ama az kişi görüyor — menüde üst sıraya taşı / öne çıkar.
+      </p>
+    </ChartCard>
+  );
+}
+
+/** Rising and fading items by view momentum vs the previous period. */
+function Momentum({ rising, fading }: { rising: ItemMomentum[]; fading: ItemMomentum[] }) {
+  if (!rising.length && !fading.length) return null;
+  const Row = ({ m, up }: { m: ItemMomentum; up: boolean }) => (
+    <StatRow name={m.name}>
+      <span className="flex items-center gap-2 shrink-0 text-[12px] tabular-nums">
+        <span className="text-green/40">{tl.format(m.previous)}→{tl.format(m.current)}</span>
+        <span className={`font-extrabold ${up ? "text-green" : "text-orange"}`}>
+          {m.isNew ? "YENİ" : `${(m.deltaPct ?? 0) > 0 ? "▲ +" : "▼ "}${m.deltaPct}%`}
+        </span>
+      </span>
+    </StatRow>
+  );
+  return (
+    <ChartCard title="Yükselenler / Düşenler (görüntülenme ivmesi)">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+        <div>
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase mb-1">Yükselenler</div>
+          {rising.length ? (
+            <StatList>{rising.map((m) => <Row key={m.name} m={m} up />)}</StatList>
+          ) : (
+            <p className="text-[11px] text-green/40 py-2">—</p>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-orange/70 uppercase mb-1">Düşenler</div>
+          {fading.length ? (
+            <StatList>{fading.map((m) => <Row key={m.name} m={m} up={false} />)}</StatList>
+          ) : (
+            <p className="text-[11px] text-green/40 py-2">—</p>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] text-green/50 font-bold">
+        Önceki döneme göre görüntülenme değişimi. “Yeni” = geçen dönem yokken bu dönem öne çıkan.
+      </p>
+    </ChartCard>
+  );
+}
+
+/** Which items get ordered together — combo / upsell / suggested-rail fuel. */
+function BoughtTogether({ pairs, orders }: { pairs: ItemPair[]; orders: number }) {
+  if (orders === 0) return null;
+  return (
+    <ChartCard title="Birlikte Alınanlar">
+      {pairs.length === 0 ? (
+        <div className="h-24 grid place-items-center text-[12px] text-green/50 text-center px-4">
+          {tl.format(orders)} siparişte belirgin bir ikili örüntü yok.
+        </div>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-2">
+            {pairs.map((p) => (
+              <li key={`${p.a}__${p.b}`} className="flex items-center justify-between gap-3">
+                <span className="text-[13px] text-ink min-w-0 truncate">
+                  <span className="font-extrabold">{p.a}</span>
+                  <span className="text-green/40 mx-1.5">+</span>
+                  <span className="font-bold">{p.b}</span>
+                </span>
+                <span className="flex items-center gap-3 shrink-0 text-[12px] tabular-nums">
+                  <span className="text-green/50">{tl.format(p.count)} sipariş</span>
+                  <span className="font-bowlby text-green text-[15px] leading-none">{p.confidencePct}%</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[10px] text-green/50 font-bold">
+            “%” = ilk ürünü sipariş edenlerin ikinciyi de alma oranı · {tl.format(orders)} sipariş üzerinden · kombin/öneri fırsatı.
+          </p>
+        </>
+      )}
+    </ChartCard>
+  );
+}
+
+/** Is the featured banner / suggested rail earning its prime menu real estate? */
+function PromoPerformance({ promo }: { promo: PromoPerformance }) {
+  if (!promo.hasData) return null;
+  const Block = ({ label, s }: { label: string; s: { clicks: number; sessions: number; convPct: number } }) => (
+    <div className="border-2 border-green/30 p-3">
+      <div className="text-[10px] tracking-[0.16em] font-extrabold text-green/60 uppercase truncate">{label}</div>
+      <div className="flex items-baseline gap-1.5 mt-1">
+        <span className="font-bowlby text-[26px] text-green leading-none">{tl.format(s.clicks)}</span>
+        <span className="text-[11px] font-bold text-green/50">tıklama</span>
+      </div>
+      <div className="mt-1.5 text-[11px] font-bold text-green/60">
+        {tl.format(s.sessions)} oturum · <span className="text-orange">{s.convPct}%</span> sepete ekledi
+      </div>
+    </div>
+  );
+  return (
+    <ChartCard title="Öne Çıkan / Öneri Performansı">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Block label="Öne Çıkan (Başlık)" s={promo.featured} />
+        <Block label="Öneri Rayı" s={promo.suggested} />
+      </div>
+      {promo.topSuggested.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] tracking-[0.16em] font-extrabold text-green/60 uppercase mb-1.5">En Çok Tıklanan Öneriler</div>
+          <StatList>
+            {promo.topSuggested.map((t) => (
+              <li key={t.name} className="flex items-center justify-between py-1.5 text-[12px]">
+                <span className="font-bold text-ink truncate min-w-0" title={t.name}>{t.name}</span>
+                <span className="tabular-nums text-green/50 shrink-0">{tl.format(t.clicks)}</span>
+              </li>
+            ))}
+          </StatList>
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-green/50 font-bold">
+        “%” = o alana tıklayan oturumların sepete ekleme oranı — alanın işe yarayıp yaramadığını gösterir.
+      </p>
+    </ChartCard>
+  );
+}
+
+/** Per-locale (tr / en) sessions, dwell and top items — tourist vs local tastes. */
+function LocalePrefs({ locales }: { locales: LocalePref[] }) {
+  if (!locales.length) return null;
+  const label = (l: string) => (l === "tr" ? "🇹🇷 Türkçe menü" : l === "en" ? "🇬🇧 İngilizce menü" : l);
+  return (
+    <ChartCard title="Turist vs Yerli (menü diline göre)">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        {locales.map((l) => (
+          <div key={l.locale}>
+            <div className="flex items-center justify-between gap-2 mb-1.5 pb-1.5 border-b-2 border-green/15">
+              <span className="text-[12px] font-extrabold text-green">{label(l.locale)}</span>
+              <span className="text-[11px] font-bold text-green/50 tabular-nums">
+                {tl.format(l.sessions)} oturum · {duration(l.medianSeconds)}
+              </span>
+            </div>
+            {l.topItems.length ? (
+              <ol className="flex flex-col gap-1">
+                {l.topItems.map((it, i) => (
+                  <li key={it.name} className="flex items-center justify-between gap-2 text-[12px]">
+                    <span className="text-ink truncate min-w-0">
+                      <span className="text-green/40 font-bold mr-1.5">{i + 1}</span>
+                      {it.name}
+                    </span>
+                    <span className="tabular-nums text-green/50 shrink-0">{tl.format(it.count)}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-[11px] text-green/40">Veri yok.</p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[10px] text-green/50 font-bold">
+        Her dil için en çok görüntülenen ürünler ve oturum/süre — dile göre öne çıkarmayı şekillendirir.
+      </p>
+    </ChartCard>
+  );
+}
+
 export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -657,6 +928,28 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
   const { kpis } = data;
 
+  // Guest-count estimate factor (people per unique visit) — client-side + persisted,
+  // like the auto-refresh interval. Changing it re-derives the cards instantly.
+  const [coversMult, setCoversMult] = useState(COVERS_MULT_DEFAULT);
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(COVERS_MULT_KEY));
+    if (COVERS_MULT_OPTIONS.includes(saved)) setCoversMult(saved);
+  }, []);
+  const pickCoversMult = (v: number) => {
+    setCoversMult(v);
+    localStorage.setItem(COVERS_MULT_KEY, String(v));
+  };
+
+  // Covers: real entered figures win; otherwise fall back to the sessions-based
+  // estimate (flagged "~tahmini"). Per-cover spend follows the same rule.
+  const coversReal = kpis.totalCovers > 0;
+  const coversEst = !coversReal && kpis.sessions > 0;
+  const estimatedCovers = coversEst ? Math.round(kpis.sessions * coversMult) : null;
+  const estimatedSpendPerCover =
+    estimatedCovers && kpis.totalSales > 0 ? kpis.totalSales / estimatedCovers : null;
+  const spendReal = coversReal && kpis.avgSpendPerCover > 0;
+  const spendEst = coversEst && (estimatedSpendPerCover ?? 0) > 0;
+
   // Distinguish "not configured" from "configured but no events yet".
   const engagementNote = data.posthogConfigured
     ? "Bu dönemde menü etkileşimi kaydedilmedi."
@@ -673,10 +966,14 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           </div>
         </div>
       )}
-      {/* Controls bar — ignore-items menu + auto-refresh, pinned while scrolling */}
+      {/* Controls bar — ignore-items menu + covers-estimate + auto-refresh, pinned */}
       <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg/90 backdrop-blur-sm flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <IgnoreItemsMenu options={data.itemOptions} excluded={data.excludedItems} />
-        <AutoRefresh />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Only shown when Kişi is running on the estimate (no real covers entered) */}
+          {coversEst && <CoversMultiplier value={coversMult} onChange={pickCoversMult} />}
+          <AutoRefresh />
+        </div>
       </div>
 
       {/* Date range switcher */}
@@ -739,10 +1036,22 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
         <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
-        <Kpi label="Kişi" value={kpis.totalCovers ? tl.format(kpis.totalCovers) : "—"} delta={data.deltas.totalCovers} />
-        <Kpi label="Kişi Başı" value={kpis.avgSpendPerCover ? money.format(kpis.avgSpendPerCover) : "—"} unit={kpis.avgSpendPerCover ? "₺" : undefined} delta={data.deltas.avgSpendPerCover} />
+        <Kpi
+          label="Kişi"
+          value={coversReal ? tl.format(kpis.totalCovers) : estimatedCovers != null ? tl.format(estimatedCovers) : "—"}
+          delta={coversReal ? data.deltas.totalCovers : undefined}
+          estimated={coversEst}
+        />
+        <Kpi
+          label="Kişi Başı"
+          value={spendReal ? money.format(kpis.avgSpendPerCover) : spendEst ? money.format(estimatedSpendPerCover as number) : "—"}
+          unit={spendReal || spendEst ? "₺" : undefined}
+          delta={spendReal ? data.deltas.avgSpendPerCover : undefined}
+          estimated={spendEst}
+        />
+        <Kpi label="Tekil Ziyaret" value={kpis.sessions ? tl.format(kpis.sessions) : "—"} delta={data.deltas.sessions} />
         <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} />
         <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} />
         <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} />
@@ -766,20 +1075,42 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <ConversionTable rows={data.itemConversion} note={engagementNote} />
       </ChartCard>
 
+      {/* Actionable menu-decision insights: hidden gems + momentum */}
+      {(data.hiddenGems.length > 0 || data.momentum.rising.length > 0 || data.momentum.fading.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <HiddenGems items={data.hiddenGems} />
+          <Momentum rising={data.momentum.rising} fading={data.momentum.fading} />
+        </div>
+      )}
+
+      {/* Basket affinity + promo real-estate performance */}
+      {(data.basket.orders > 0 || data.promo.hasData) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <BoughtTogether pairs={data.basket.pairs} orders={data.basket.orders} />
+          <PromoPerformance promo={data.promo} />
+        </div>
+      )}
+
       {/* Headline comparison */}
       <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
         <SalesVsEngagementChart data={data.comparison} />
       </ChartCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* items-start so each card hugs its chart — a short chart (e.g. the sales
+          area) no longer stretches to a taller neighbor and show phantom padding. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <ChartCard title="Satış (Zaman İçinde)">
           <RevenueAreaChart data={data.revenueOverTime} />
         </ChartCard>
         <ChartCard title="En Çok İncelenen Ürünler">
           <HBarChart data={data.topViewed} note={engagementNote} />
         </ChartCard>
-        <ChartCard title="En Çok Sepete Eklenen">
-          <HBarChart data={data.topCarted} color="#243845" note={engagementNote} />
+        <ChartCard title="En Çok Satılan">
+          <HBarChart
+            data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))}
+            color="#243845"
+            note="Henüz gerçek satış girilmedi. Sağ üstten “Gerçek Satış Gir”."
+          />
         </ChartCard>
         <ChartCard title="Bakıp Almayanlar">
           <AbandonedViewsChart data={data.abandonedViews} note={engagementNote} />
@@ -807,15 +1138,11 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         </ChartCard>
       </div>
 
+      <LocalePrefs locales={data.localePrefs} />
+
       <ChartCard title="Haftalık Yoğunluk Haritası (Gün × Saat)">
         <WeekHeatmapChart data={data.weekHeatmap} note={engagementNote} />
       </ChartCard>
-
-      {data.bestSellers.length > 0 && (
-        <ChartCard title="Gerçekte En Çok Satanlar">
-          <HBarChart data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))} />
-        </ChartCard>
-      )}
     </div>
   );
 }

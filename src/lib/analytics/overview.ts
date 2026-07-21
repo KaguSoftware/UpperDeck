@@ -124,21 +124,26 @@ export function buildOverview(data: OverviewInput): Overview {
     );
   }
 
+  // Only trust sales-based judgments when per-item sales were actually entered for
+  // the period — otherwise every item reads as "sold 0" and would be mis-flagged.
+  const hasSalesData = itemConversion.some((r) => r.sold > 0) || bestSellers.some((b) => b.qty > 0);
+
   // 3. Push: keep leaning on proven winners…
   for (const b of bestSellers.slice(0, 2)) {
     if (b.qty <= 0) continue;
     mentioned.add(norm(b.item_name));
     push.push(`${b.item_name} güçlü satıyor — menüde ve önerilerde öne çıkarmayı sürdür.`);
   }
-  // …and on high-intent items: viewed a lot, high view→cart, not already a winner.
+  // …and on items that convert views into real SALES (not just cart adds): viewed a
+  // lot, high view→sale rate, not already named as a top seller.
   const highIntent = itemConversion
-    .filter((r) => r.views >= MIN_VIEWS && r.convPct >= 40 && !mentioned.has(norm(r.name)))
+    .filter((r) => r.views >= MIN_VIEWS && r.sold > 0 && r.convPct >= 40 && !mentioned.has(norm(r.name)))
     .sort((a, b) => b.convPct - a.convPct)
     .slice(0, 2);
   for (const r of highIntent) {
     mentioned.add(norm(r.name));
     push.push(
-      `${r.name} yüksek ilgi görüyor (görüntüleyenlerin %${r.convPct}'i sepete ekliyor) — menüde üst sıraya taşımayı dene.`
+      `${r.name} görüntülenince satışa dönüşüyor (görüntüleyenlerin %${r.convPct}'i satın alıyor) — menüde üst sıraya taşımayı dene.`
     );
   }
 
@@ -155,14 +160,18 @@ export function buildOverview(data: OverviewInput): Overview {
     watch.push(`${a.name} çok inceleniyor ama alınmıyor (${tl.format(a.total)} kez); ${detail}.`);
   }
 
-  const dead = itemConversion
-    .filter((r) => r.views >= MIN_VIEWS && r.carts === 0 && r.sold === 0 && !mentioned.has(norm(r.name)))
-    .sort((a, b) => b.views - a.views);
+  // "Viewed a lot but never actually sold" — the real waste. Only judged when we
+  // have sales data for the period; otherwise sold===0 is meaningless.
+  const dead = hasSalesData
+    ? itemConversion
+        .filter((r) => r.views >= MIN_VIEWS && r.sold === 0 && !mentioned.has(norm(r.name)))
+        .sort((a, b) => b.views - a.views)
+    : [];
   for (const r of dead) {
     if (watch.length >= 4) break;
     mentioned.add(norm(r.name));
     watch.push(
-      `${r.name} ${tl.format(r.views)} kez görüntülendi ama hiç sepete eklenmedi/satılmadı — tanıtımını gözden geçir.`
+      `${r.name} ${tl.format(r.views)} kez görüntülendi ama hiç satılmadı — tanıtımını gözden geçir.`
     );
   }
 

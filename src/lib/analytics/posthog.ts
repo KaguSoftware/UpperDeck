@@ -410,6 +410,133 @@ export async function getWeekHeatmap(range: DateRange): Promise<{ day: number; h
   return rows.map((r) => ({ day: Number(r[0]), hour: Number(r[1]), count: Number(r[2]) }));
 }
 
+export type PromoEngagement = {
+  featured: { clicks: number; sessions: number; toCart: number };
+  suggested: { clicks: number; sessions: number; toCart: number };
+  /** Suggested-rail items by click volume, keyed by item_id (names resolved in promo.ts). */
+  topSuggestedIds: { id: string; clicks: number }[];
+};
+
+/**
+ * Featured-banner and suggested-rail engagement: raw click volume, distinct
+ * sessions, and how many of those sessions went on to add anything to cart — i.e.
+ * whether that menu real estate is actually working. Item ids are resolved to
+ * names by the caller (promo.ts) since names live in Supabase.
+ */
+export async function getPromoEngagement(range: DateRange): Promise<PromoEngagement> {
+  const b = bounds(range);
+  const [clickRows, funnelRows, topSuggested] = await Promise.all([
+    hogql(`
+      SELECT event, count() AS clicks
+      FROM events
+      WHERE event IN ('featured_item_clicked','suggested_item_clicked')
+        AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+      GROUP BY event
+    `),
+    hogql(`
+      SELECT
+        countIf(has(e,'featured_item_clicked')) AS f_sess,
+        countIf(has(e,'featured_item_clicked') AND has(e,'item_added_to_cart')) AS f_cart,
+        countIf(has(e,'suggested_item_clicked')) AS s_sess,
+        countIf(has(e,'suggested_item_clicked') AND has(e,'item_added_to_cart')) AS s_cart
+      FROM (
+        SELECT $session_id AS sid, groupArray(event) AS e
+        FROM events
+        WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+          AND $session_id IS NOT NULL
+          AND event IN ('featured_item_clicked','suggested_item_clicked','item_added_to_cart')
+        GROUP BY sid
+      )
+    `),
+    hogql(`
+      SELECT properties.item_id AS id, count() AS c
+      FROM events
+      WHERE event = 'suggested_item_clicked'
+        AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+        AND id != ''
+      GROUP BY id ORDER BY c DESC LIMIT 8
+    `),
+  ]);
+
+  const clicks = new Map(clickRows.map((r) => [String(r[0]), Number(r[1])]));
+  const f = funnelRows[0];
+  return {
+    featured: {
+      clicks: clicks.get("featured_item_clicked") ?? 0,
+      sessions: f ? Number(f[0]) : 0,
+      toCart: f ? Number(f[1]) : 0,
+    },
+    suggested: {
+      clicks: clicks.get("suggested_item_clicked") ?? 0,
+      sessions: f ? Number(f[2]) : 0,
+      toCart: f ? Number(f[3]) : 0,
+    },
+    topSuggestedIds: topSuggested.map((r) => ({ id: String(r[0]), clicks: Number(r[1]) })),
+  };
+}
+
+export type LocalePref = {
+  locale: string;
+  sessions: number;
+  medianSeconds: number;
+  topItems: NamedCount[];
+};
+
+/**
+ * Behavior split by menu language (the `locale` super-property): per-locale
+ * session count, median dwell, and each locale's most-viewed items — answers
+ * "do English-menu diners want different things than Turkish-menu diners?".
+ */
+export async function getLocalePreferences(range: DateRange, perLocale = 5): Promise<LocalePref[]> {
+  const b = bounds(range);
+  const [statRows, itemRows] = await Promise.all([
+    hogql(`
+      SELECT loc, count() AS sessions, median(duration) AS med
+      FROM (
+        SELECT $session_id AS sid,
+               any(properties.locale) AS loc,
+               dateDiff('second', min(timestamp), max(timestamp)) AS duration
+        FROM events
+        WHERE ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+          AND $session_id IS NOT NULL
+        GROUP BY sid
+        HAVING count() >= 2
+      )
+      WHERE loc != ''
+      GROUP BY loc
+    `),
+    hogql(`
+      SELECT properties.locale AS loc, properties.item_name AS name, count(DISTINCT $session_id) AS c
+      FROM events
+      WHERE event = 'item_viewed'
+        AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
+        AND name != '' AND loc != ''
+      GROUP BY loc, name
+    `),
+  ]);
+
+  const stats = new Map(
+    statRows.map((r) => [String(r[0]), { sessions: Number(r[1]), med: Math.round(Number(r[2]) || 0) }])
+  );
+  const itemsByLoc = new Map<string, NamedCount[]>();
+  for (const r of itemRows) {
+    const loc = String(r[0]);
+    const list = itemsByLoc.get(loc) ?? [];
+    list.push({ name: String(r[1]), count: Number(r[2]) });
+    itemsByLoc.set(loc, list);
+  }
+
+  // Only the supported locales, stable order, that actually have data.
+  return (["tr", "en"] as const)
+    .filter((loc) => stats.has(loc) || itemsByLoc.has(loc))
+    .map((loc) => ({
+      locale: loc,
+      sessions: stats.get(loc)?.sessions ?? 0,
+      medianSeconds: stats.get(loc)?.med ?? 0,
+      topItems: (itemsByLoc.get(loc) ?? []).sort((a, b) => b.count - a.count).slice(0, perLocale),
+    }));
+}
+
 /** Orders/views by hour-of-day (peak hours, from item_viewed). */
 export async function getPeakHours(range: DateRange) {
   const b = bounds(range);

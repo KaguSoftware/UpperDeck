@@ -82,10 +82,18 @@ You receive engagement data (item views, add-to-carts, waiter calls) and real PO
 plus an "abandonedViews" table: items whose detail page was opened and closed WITHOUT adding to cart,
 bucketed by how long the diner looked — 5-10s (photo/appeal likely weak), 10-20s (description not convincing),
 20s+ (read everything and still didn't buy: content or price problem).
-You also receive: "itemConversion" (per item: views → cart adds → actually sold),
-"priceBands" (view→cart conversion by price range), "discountSplit" (discounted vs full-price conversion),
+You also receive: "itemConversion" (per item: views, cart adds, actually sold, and convPct =
+views→SALE rate in percent), "priceBands" (view→cart conversion by price range),
+"discountSplit" (discounted vs full-price conversion),
 "deltas" (percent change of each KPI vs the previous period of equal length),
 and "previousInsights" (your earlier analyses, newest first).
+
+IMPORTANT — real POS SALES are the ground truth for demand. This menu has NO checkout, so many
+diners order verbally without ever adding to cart; add-to-cart is only a weak intent proxy. Judge an
+item's success or failure on how much it actually SOLD (and its views→sale rate), NOT on cart adds.
+Only fall back to cart data when sales figures are absent. Never call an item a winner because it was
+carted a lot, and never call it a failure for low carts if it sold well.
+
 Every finding must cite a specific number from the data AND carry a concrete takeaway or action —
 never just restate a number. No greetings, no fluff. Write IN TURKISH.
 
@@ -101,7 +109,7 @@ const GENERATE_SYSTEM = `${DATA_CONTEXT}
 
 Extract EVERY distinct, well-supported finding the data justifies — do NOT cap the count, but never pad:
 skip anything you can't tie to a real number. Cover, where supported: best/worst sellers and shared traits
-(ingredients, category, price band); items viewed a lot but rarely carted or sold; dwell-time patterns per
+(ingredients, category, price band); items viewed a lot but rarely SOLD (low views→sale rate); dwell-time patterns per
 the bucket meanings above, with the matching fix; meaningful period-over-period movement (deltas) — what
 improved, what declined; whether discounts and price bands actually change behavior; and follow-ups on
 previousInsights.

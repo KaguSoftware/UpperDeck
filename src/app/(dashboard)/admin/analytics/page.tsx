@@ -2,7 +2,13 @@ import { PageHeader, GhostButton } from "../_components";
 import { requireRole } from "@/lib/auth/require-session";
 import { resolveRange, previousRange } from "@/lib/analytics/range";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
-import { getSalesVsEngagement, getItemConversion, getAbandonedViewsNet } from "@/lib/analytics/compare";
+import {
+  getSalesVsEngagement,
+  getItemConversion,
+  getAbandonedViewsNet,
+  getHiddenGems,
+  getItemMomentum,
+} from "@/lib/analytics/compare";
 import {
   posthogConfigured,
   getTopViewedItems,
@@ -16,7 +22,10 @@ import {
   getPeakHours,
   getPriceBands,
   getWeekHeatmap,
+  getLocalePreferences,
 } from "@/lib/analytics/posthog";
+import { getPromoPerformance } from "@/lib/analytics/promo";
+import { getBoughtTogether } from "@/lib/analytics/basket";
 import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
 import { getExcludedItemNames, makeKeepFilter, itemKey } from "@/lib/analytics/exclusions";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
@@ -40,6 +49,12 @@ export default async function AnalyticsPage({
   const { preset, range } = resolveRange(sp);
   const prev = previousRange(range);
 
+  // Owner-configured "ignore" list. Read first so item-level metrics (and the
+  // basket pairing, which filters at query time) all honor it. Money/amount
+  // aggregates are intentionally left whole.
+  const excludedItems = await getExcludedItemNames(supabase);
+  const keep = makeKeepFilter(excludedItems);
+
   const [
     summary,
     revenueOverTime,
@@ -58,6 +73,11 @@ export default async function AnalyticsPage({
     itemConversion,
     priceBands,
     weekHeatmap,
+    hiddenGems,
+    momentum,
+    promo,
+    basket,
+    localePrefs,
     prevSummary,
     prevFunnel,
     prevSessions,
@@ -80,6 +100,11 @@ export default async function AnalyticsPage({
     getItemConversion(range),
     getPriceBands(range),
     getWeekHeatmap(range),
+    getHiddenGems(range),
+    getItemMomentum(range),
+    getPromoPerformance(range),
+    getBoughtTogether(range, keep),
+    getLocalePreferences(range),
     // Previous period of equal length, for the KPI deltas.
     getRealSalesSummary(prev),
     getEngagementFunnel(prev),
@@ -117,13 +142,6 @@ export default async function AnalyticsPage({
       ? storedRow.insights.map(String).filter(Boolean)
       : null;
 
-  // Owner-configured "ignore" list. Excluded items are dropped from the item-level
-  // views below (top viewed/carted, conversion, abandoned, best-sellers) so they
-  // stop polluting the Overview and AI insights. Money/amount aggregates (sales,
-  // covers, views count, funnel) are intentionally left whole.
-  const excludedItems = await getExcludedItemNames(supabase);
-  const keep = makeKeepFilter(excludedItems);
-
   // Options for the ignore dropdown: every item name seen this range, unioned with
   // already-excluded names (so they can be toggled back on even with no data now).
   const optionMap = new Map<string, string>(); // match key -> display name
@@ -157,8 +175,10 @@ export default async function AnalyticsPage({
     },
     deltas: {
       totalSales: pctDelta(summary.totalSales, prevSummary.totalSales),
-      totalCovers: pctDelta(summary.totalCovers, prevSummary.totalCovers),
-      avgSpendPerCover: pctDelta(summary.avgSpendPerCover, prevSummary.avgSpendPerCover),
+      // No real covers entered this period → don't compare (avoids a false "covers
+      // dropped 100%" in the deterministic overview; the estimate is display-only).
+      totalCovers: summary.totalCovers > 0 ? pctDelta(summary.totalCovers, prevSummary.totalCovers) : null,
+      avgSpendPerCover: summary.totalCovers > 0 ? pctDelta(summary.avgSpendPerCover, prevSummary.avgSpendPerCover) : null,
       views: pctDelta(views, funnelCount(prevFunnel, "Görüntü")),
       avgSeconds: pctDelta(sessions.avgSeconds, prevSessions.avgSeconds),
       waiterCalls: pctDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
@@ -169,7 +189,6 @@ export default async function AnalyticsPage({
     revenueOverTime,
     // Item-level lists: excluded items removed (feeds charts + Overview + insights).
     topViewed: topViewed.filter((x) => keep(x.name)),
-    topCarted: topCarted.filter((x) => keep(x.name)),
     tableActivity,
     funnel,
     peakHours,
@@ -180,6 +199,15 @@ export default async function AnalyticsPage({
     itemConversion: itemConversion.filter((x) => keep(x.name)),
     priceBands,
     weekHeatmap,
+    // New insight sections — item-level ones honor the ignore list too.
+    hiddenGems: hiddenGems.filter((x) => keep(x.name)),
+    momentum: {
+      rising: momentum.rising.filter((x) => keep(x.name)),
+      fading: momentum.fading.filter((x) => keep(x.name)),
+    },
+    promo: { ...promo, topSuggested: promo.topSuggested.filter((x) => keep(x.name)) },
+    basket, // already filtered at query time via `keep`
+    localePrefs: localePrefs.map((l) => ({ ...l, topItems: l.topItems.filter((x) => keep(x.name)) })),
     excludedItems,
     itemOptions,
     initialInsights,

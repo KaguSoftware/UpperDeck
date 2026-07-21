@@ -12,6 +12,7 @@ import {
   getAbandonedViewsByDay,
   type AbandonedView,
 } from "@/lib/analytics/posthog";
+import { previousRange } from "@/lib/analytics/range";
 import { normalizeItemName } from "@/lib/analytics/clean-sales";
 
 /** Shared join key for matching PostHog menu names against POS item names. */
@@ -30,7 +31,8 @@ export type ItemConversion = {
   views: number;
   carts: number;
   sold: number; // real POS qty; 0 when per-item sales weren't entered
-  convPct: number; // views → carts, 0–100
+  convPct: number; // views → actually SOLD, in percent (can exceed 100 when an item
+  // sells more than its detail page is opened — common for staples ordered verbally)
 };
 
 /**
@@ -40,10 +42,13 @@ export type ItemConversion = {
  * but never bought" items surface without cross-referencing three charts.
  */
 export async function getItemConversion(range: DateRange, limit = 15): Promise<ItemConversion[]> {
+  // Fetch at least the display limit, wider when the caller wants a deeper pool
+  // (e.g. Hidden Gems needs the low-view tail, not just the top 50).
+  const pool = Math.max(50, limit);
   const [viewed, carted, sold] = await Promise.all([
-    getTopViewedItems(range, 50),
-    getTopCartedItems(range, 50),
-    getRealBestSellers(range, 50),
+    getTopViewedItems(range, pool),
+    getTopCartedItems(range, pool),
+    getRealBestSellers(range, pool),
   ]);
 
   // Key by normalized name so PostHog's raw menu names line up with the POS item
@@ -60,7 +65,10 @@ export async function getItemConversion(range: DateRange, limit = 15): Promise<I
   for (const s of sold) row(s.item_name).sold += s.qty;
 
   return [...rows.values()]
-    .map((r) => ({ ...r, convPct: r.views > 0 ? Math.round((r.carts / r.views) * 100) : 0 }))
+    // Conversion is views → actually SOLD (real POS qty), not views → cart adds:
+    // the menu has no checkout, so add-to-cart is only a weak intent proxy while
+    // entered sales are the ground truth for demand.
+    .map((r) => ({ ...r, convPct: r.views > 0 ? Math.round((r.sold / r.views) * 100) : 0 }))
     .sort((a, b) => b.views - a.views)
     .slice(0, limit);
 }
@@ -102,6 +110,79 @@ export async function getAbandonedViewsNet(range: DateRange, limit = 12): Promis
     .filter((v) => v.total > 0)
     .sort((a, b) => b.total - a.total)
     .slice(0, limit);
+}
+
+export type HiddenGem = { name: string; views: number; sold: number; convPct: number };
+
+/**
+ * "Hidden gems": items that convert views into real SALES at a high rate but get
+ * little exposure — few diners find them, yet most who do buy. The inverse of the
+ * dead-item list, and a direct menu-placement lever: move these up / feature them.
+ */
+export async function getHiddenGems(range: DateRange, limit = 6): Promise<HiddenGem[]> {
+  const rows = await getItemConversion(range, 80); // deep pool so low-view items are kept
+  const maxViews = Math.max(...rows.map((r) => r.views), 1);
+  return rows
+    // sells for real, has a usable sample, converts well, yet seen far less than the
+    // most-viewed item (≤40% of it) — i.e. under-exposed relative to the menu's stars.
+    .filter((r) => r.sold >= 2 && r.views >= 3 && r.convPct >= 50 && r.views <= maxViews * 0.4)
+    .sort((a, b) => b.convPct - a.convPct || a.views - b.views)
+    .slice(0, limit)
+    .map((r) => ({ name: r.name, views: r.views, sold: r.sold, convPct: r.convPct }));
+}
+
+export type ItemMomentum = {
+  name: string;
+  current: number;
+  previous: number;
+  deltaPct: number | null; // null when previous = 0 (brand new)
+  isNew: boolean;
+};
+
+/**
+ * Per-item interest momentum: distinct-session views this period vs the previous
+ * period of equal length. Surfaces rising stars and quietly fading items early,
+ * instead of waiting for end-of-season totals. Based on views (always available);
+ * a volume floor keeps a 1→3 blip from being called a trend.
+ */
+export async function getItemMomentum(
+  range: DateRange,
+  limit = 6
+): Promise<{ rising: ItemMomentum[]; fading: ItemMomentum[] }> {
+  const prev = previousRange(range);
+  const [cur, old] = await Promise.all([
+    getTopViewedItems(range, 60),
+    getTopViewedItems(prev, 60),
+  ]);
+
+  const oldByKey = new Map(old.map((o) => [nameKey(o.name), o.count]));
+  const seen = new Set<string>();
+  const rows: ItemMomentum[] = [];
+  for (const c of cur) {
+    const k = nameKey(c.name);
+    seen.add(k);
+    const previous = oldByKey.get(k) ?? 0;
+    const deltaPct = previous > 0 ? Math.round(((c.count - previous) / previous) * 100) : null;
+    rows.push({ name: c.name, current: c.count, previous, deltaPct, isNew: previous === 0 });
+  }
+  // Items that fell out of the current top list entirely still count as fading.
+  for (const o of old) {
+    const k = nameKey(o.name);
+    if (seen.has(k)) continue;
+    rows.push({ name: o.name, current: 0, previous: o.count, deltaPct: -100, isNew: false });
+  }
+
+  const MIN = 5; // ignore items too small in both periods to read a trend from
+  const rising = rows
+    .filter((r) => r.current >= MIN && (r.isNew || (r.deltaPct != null && r.deltaPct >= 25)))
+    .sort((a, b) => (b.deltaPct ?? 9999) - (a.deltaPct ?? 9999) || b.current - a.current)
+    .slice(0, limit);
+  const fading = rows
+    // previous >= MIN implies !isNew (isNew ⟺ previous === 0), so it's not repeated.
+    .filter((r) => r.previous >= MIN && r.deltaPct != null && r.deltaPct <= -25)
+    .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
+    .slice(0, limit);
+  return { rising, fading };
 }
 
 export async function getSalesVsEngagement(range: DateRange) {
