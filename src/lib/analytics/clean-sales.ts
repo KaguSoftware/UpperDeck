@@ -36,13 +36,45 @@ const MODIFIER_PATTERNS: RegExp[] = [
   /^[-–—*>+]\s?/,
 ];
 
-/** Trim, collapse whitespace, Turkish-aware title-case. */
+// Control (Cc: NUL, stray tabs, …) and format (Cf: zero-width space/joiner, BOM)
+// characters that sneak in from POS/Excel exports. trim() and \s miss several of
+// them, and a single invisible char silently breaks name matching ("0 sold").
+const INVISIBLE = /[\p{Cc}\p{Cf}]/gu;
+
+/** Strip invisibles, collapse whitespace, trim, Turkish-aware title-case. */
 export function normalizeItemName(name: string): string {
   return name
+    .replace(INVISIBLE, " ")
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("tr")
     .replace(/(^|\s)(\S)/g, (_, sep: string, ch: string) => sep + ch.toLocaleUpperCase("tr"));
+}
+
+/**
+ * POS/kitchen product names that differ from the customer-facing MENU names.
+ *
+ * PostHog engagement is tracked under the menu name, while the sales sheet often
+ * exports a different kitchen name — so the two never line up on their own and the
+ * item reads "0 sold". Map each variant (normalized, lower-case) → the canonical
+ * menu name so real sales correlate with engagement.
+ *
+ * Add a line per mismatch: `[normalized sheet name]: "Menu Name"`. The key must be
+ * the sheet name lower-cased (spaces collapsed); the value is shown in the charts.
+ */
+const NAME_ALIASES: Record<string, string> = {
+  "oklahoma smash": "Oklahoma Onion",
+  "simple smash burger": "Simple Burger",
+};
+
+/**
+ * Canonical menu name for any raw item name (from PostHog OR the sales sheet):
+ * normalize, then fold known kitchen-name variants onto their menu name. This is
+ * the single key both analytics sources should be matched/displayed by.
+ */
+export function canonicalItemName(name: string): string {
+  const normalized = normalizeItemName(name);
+  return NAME_ALIASES[normalized.toLocaleLowerCase("tr")] ?? normalized;
 }
 
 /** True if the line looks like a POS modifier/option row, not an actual item. */

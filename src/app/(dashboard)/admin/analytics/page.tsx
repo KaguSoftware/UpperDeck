@@ -26,6 +26,7 @@ import {
 } from "@/lib/analytics/posthog";
 import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
+import { getRealFoodFilter } from "@/lib/analytics/food";
 import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
 import { getExcludedItemNames, makeKeepFilter, itemKey } from "@/lib/analytics/exclusions";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
@@ -78,6 +79,7 @@ export default async function AnalyticsPage({
     promo,
     basket,
     localePrefs,
+    isRealFood,
     prevSummary,
     prevFunnel,
     prevSessions,
@@ -105,6 +107,7 @@ export default async function AnalyticsPage({
     getPromoPerformance(range),
     getBoughtTogether(range, keep),
     getLocalePreferences(range),
+    getRealFoodFilter(),
     // Previous period of equal length, for the KPI deltas.
     getRealSalesSummary(prev),
     getEngagementFunnel(prev),
@@ -200,7 +203,8 @@ export default async function AnalyticsPage({
     priceBands,
     weekHeatmap,
     // New insight sections — item-level ones honor the ignore list too.
-    hiddenGems: hiddenGems.filter((x) => keep(x.name)),
+    // Hidden Gems additionally keeps only real food (no drinks/extras/sauces/fries).
+    hiddenGems: hiddenGems.filter((x) => keep(x.name) && isRealFood(x.name)),
     momentum: {
       rising: momentum.rising.filter((x) => keep(x.name)),
       fading: momentum.fading.filter((x) => keep(x.name)),

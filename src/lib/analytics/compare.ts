@@ -13,10 +13,11 @@ import {
   type AbandonedView,
 } from "@/lib/analytics/posthog";
 import { previousRange } from "@/lib/analytics/range";
-import { normalizeItemName } from "@/lib/analytics/clean-sales";
+import { canonicalItemName } from "@/lib/analytics/clean-sales";
 
-/** Shared join key for matching PostHog menu names against POS item names. */
-const nameKey = (name: string) => normalizeItemName(name).toLocaleLowerCase("tr");
+/** Shared join key for matching PostHog menu names against POS item names.
+ *  Uses the canonical name so kitchen-name variants (see NAME_ALIASES) line up. */
+const nameKey = (name: string) => canonicalItemName(name).toLocaleLowerCase("tr");
 
 /**
  * Headline correlation: real daily revenue (Supabase) vs menu engagement
