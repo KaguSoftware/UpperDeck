@@ -23,8 +23,9 @@ const NON_FOOD_CATEGORIES = new Set([
   "sauces",
 ]);
 
-// Non-food by name, regardless of category (fries sit under `shared`).
-const NON_FOOD_NAME = /(patates|fries|\bmenü?\b|upgrade)/i;
+// Non-food by name, regardless of category: fries (sit under `shared`) and the
+// POS combo line "Menu Kalemi" / "Menü Kalemi" (a meal-deal line, not a dish).
+const NON_FOOD_NAME = /(patates|fries|\bmen[uü]\b|\bkalem|upgrade)/i;
 
 const key = (name: string) => canonicalItemName(name).toLocaleLowerCase("tr");
 

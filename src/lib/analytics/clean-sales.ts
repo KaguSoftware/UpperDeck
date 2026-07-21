@@ -64,7 +64,12 @@ export function normalizeItemName(name: string): string {
  */
 const NAME_ALIASES: Record<string, string> = {
   "oklahoma smash": "Oklahoma Onion",
-  "simple smash burger": "Simple Burger",
+  "oklahama onion": "Oklahoma Onion", // Turkish menu-name typo — folds the en/tr view split
+  "simple smash burger": "Simple Smash",
+  "wild eggy smash": "Wild Eggy",
+  "biroche ekmeği": "Brioche Ekmeği",
+  "peanut pancake": "Pancake",
+  "truf gravyer patates": "Truffle Parmesan Fries",
 };
 
 /**

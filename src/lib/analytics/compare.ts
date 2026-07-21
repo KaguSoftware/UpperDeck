@@ -57,12 +57,16 @@ export async function getItemConversion(range: DateRange, limit = 15): Promise<I
   const rows = new Map<string, ItemConversion>();
   const row = (name: string) => {
     const k = nameKey(name);
-    const r = rows.get(k) ?? { name, views: 0, carts: 0, sold: 0, convPct: 0 };
+    // Display the canonical menu name so a merged row never shows a kitchen-name variant.
+    const r = rows.get(k) ?? { name: canonicalItemName(name), views: 0, carts: 0, sold: 0, convPct: 0 };
     if (!rows.has(k)) rows.set(k, r);
     return r;
   };
-  for (const v of viewed) row(v.name).views = v.count;
-  for (const c of carted) row(c.name).carts = c.count;
+  // Accumulate (+=), never assign: two source names can canonicalize to the same
+  // item (a rename, or a kitchen-name alias), and their views/carts must SUM — an
+  // assignment would let a stray low-count variant clobber the real total.
+  for (const v of viewed) row(v.name).views += v.count;
+  for (const c of carted) row(c.name).carts += c.count;
   for (const s of sold) row(s.item_name).sold += s.qty;
 
   return [...rows.values()]
