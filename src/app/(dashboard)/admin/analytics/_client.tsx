@@ -643,7 +643,7 @@ function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: s
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-30 w-72 max-w-[80vw] border-2 border-green bg-white shadow-lg">
+        <div className="absolute left-0 top-full mt-1.5 z-30 w-72 max-w-[80vw] border-2 border-green bg-white shadow-lg">
           <div className="px-3 py-2 border-b-2 border-green/20 flex items-center justify-between gap-2">
             <span className="text-[10px] tracking-[0.14em] font-extrabold text-green/70 uppercase">
               İçgörüden çıkar
