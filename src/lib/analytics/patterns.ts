@@ -293,42 +293,54 @@ async function mineBasketLift(range: DateRange, keep: (n: string) => boolean, t:
 // ---------- family 3: weekday over-indexing ----------
 
 /**
- * Items that sell disproportionately on a given weekday. Compares each item's
- * observed weekday share against what its total would predict if spread evenly
- * across the weekdays actually present in the range — so a "Saturday item" only
- * flags when it beats its own baseline, not just because Saturdays are busy.
+ * Items that sell disproportionately on a given weekday, RELATIVE TO the whole
+ * restaurant's weekday rhythm. The baseline is the house's own share of sales on
+ * that weekday, not the calendar — otherwise every item "over-indexes" on the
+ * busiest day just because that day is busy (a side like fries at 2.6× on Friday
+ * is only telling you Fridays are busy). Here an item flags only when it does MORE
+ * of its business on the day than the restaurant as a whole does — a real skew.
  */
 function mineWeekdaySkew(
   soldByDay: { name: string; date: string; qty: number }[],
   recordedDays: string[],
   t: Thresholds
 ): PatternCandidate[] {
-  // How many of each weekday exist in the range (the expected-share denominator).
+  // How many of each weekday exist in the range (used only as a sample-size guard).
   const weekdayCount = new Array(7).fill(0);
   for (const d of recordedDays) weekdayCount[weekdayOf(d)]++;
   const totalDays = recordedDays.length;
   if (totalDays < t.minDays) return [];
 
-  // Per-item qty per weekday + item total.
+  // Per-item qty per weekday + item total, AND the house-wide weekday totals that
+  // form the de-trended baseline.
   const byItem = new Map<string, { perDay: number[]; total: number }>();
+  const housePerDay = new Array(7).fill(0);
+  let houseTotal = 0;
   const recorded = new Set(recordedDays);
   for (const row of soldByDay) {
     if (!recorded.has(row.date) || row.qty <= 0) continue;
     const name = canonicalItemName(row.name);
+    const wd = weekdayOf(row.date);
     const rec = byItem.get(name) ?? { perDay: new Array(7).fill(0), total: 0 };
-    rec.perDay[weekdayOf(row.date)] += row.qty;
+    rec.perDay[wd] += row.qty;
     rec.total += row.qty;
     byItem.set(name, rec);
+    housePerDay[wd] += row.qty;
+    houseTotal += row.qty;
   }
+  if (houseTotal <= 0) return [];
 
   const out: PatternCandidate[] = [];
   for (const [name, rec] of byItem) {
     if (rec.total < t.minItemQty) continue;
     for (let wd = 0; wd < 7; wd++) {
       if (weekdayCount[wd] === 0 || rec.perDay[wd] < t.minWeekdayQty) continue;
-      const expectedShare = weekdayCount[wd] / totalDays;
+      // Baseline = share of ALL sales that land on this weekday (busy-day effect
+      // baked in), so the index is "vs the house", not "vs a flat calendar".
+      const baselineShare = housePerDay[wd] / houseTotal;
+      if (baselineShare <= 0) continue;
       const observedShare = rec.perDay[wd] / rec.total;
-      const index = expectedShare > 0 ? observedShare / expectedShare : 0;
+      const index = observedShare / baselineShare;
       if (index < t.minWeekdayIndex) continue;
       const strength = Math.min(1, (index - 1) / 2); // index 3 → ~1.0
       const subjects = [name, TR_WEEKDAYS[wd]];
@@ -339,17 +351,19 @@ function mineWeekdaySkew(
         metrics: {
           weekday: TR_WEEKDAYS[wd],
           index: round1(index),
-          qtyOnDay: rec.perDay[wd],
+          itemDayPct: pct(observedShare),
+          houseDayPct: pct(baselineShare),
           itemTotal: rec.total,
         },
         sampleSize: weekdayCount[wd],
         strength,
         score: strength * Math.log2(rec.total + 2),
         desc:
-          `"${name}" over-indexes on ${TR_WEEKDAYS[wd]}: ${pct(observedShare)}% of its ${rec.total} units ` +
-          `sell on that weekday, ${round1(index)}× the ${pct(expectedShare)}% expected from how often that ` +
-          `weekday occurs in the range. Based on ${weekdayCount[wd]} such days.`,
-        fallbackText: `${name} özellikle ${TR_WEEKDAYS[wd]} günleri satıyor — normalin ${round1(index)} katı (satışlarının %${pct(observedShare)}'i o gün). O güne özel öne çıkarın.`,
+          `"${name}" skews to ${TR_WEEKDAYS[wd]} ABOVE the restaurant's own rhythm: ${pct(observedShare)}% of its ` +
+          `${rec.total} units sell on ${TR_WEEKDAYS[wd]}, vs ${pct(baselineShare)}% of ALL sales that fall on that ` +
+          `day — ${round1(index)}× the house level (${weekdayCount[wd]} such days). The general busy-day effect is ` +
+          `already removed by baselining against the house weekday mix, so this is item-specific, not "the day is busy".`,
+        fallbackText: `${name} ${TR_WEEKDAYS[wd]} günleri restoran ortalamasının üstünde: satışlarının %${pct(observedShare)}'i o gün, tüm satışların %${pct(baselineShare)}'i o güne düşerken (evin düzeyinin ${round1(index)} katı). Bu güne özel, ürüne özgü bir eğilim.`,
       });
     }
   }
