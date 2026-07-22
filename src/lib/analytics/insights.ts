@@ -20,7 +20,7 @@ import { env } from "@/lib/env";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Swap for any current Groq-hosted model — see https://console.groq.com/docs/models
-const MODEL = "llama-3.3-70b-versatile";
+const MODEL = "qwen/qwen3.6-27b";
 
 export function insightsConfigured(): boolean {
   return Boolean(env.GROQ_API_KEY);
