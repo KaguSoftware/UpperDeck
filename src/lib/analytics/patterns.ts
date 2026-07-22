@@ -419,29 +419,42 @@ async function mineSegmentSkews(range: DateRange, keep: (n: string) => boolean, 
     }
   }
 
-  // Locale divergence: an item that is a top pick for one language but not the other.
+  // Locale divergence — judged by PENETRATION RATE, never raw views. Since almost
+  // every diner stays on the default language, the EN audience is tiny and its raw
+  // counts can't be compared to TR's. Each item's rate is its share of that
+  // locale's OWN sessions, so the two audiences are finally on the same scale.
+  const MIN_LOCALE_RATE = 0.15; // item must reach ≥15% penetration in its locale to matter
   const tr = locales.find((l) => l.locale === "tr");
   const en = locales.find((l) => l.locale === "en");
-  if (tr && en && tr.topItems.length && en.topItems.length && tr.sessions >= 5 && en.sessions >= 5) {
-    const enTop = new Set(en.topItems.map((i) => canonicalItemName(i.name).toLocaleLowerCase("tr")));
-    const trTop = new Set(tr.topItems.map((i) => canonicalItemName(i.name).toLocaleLowerCase("tr")));
-    const onlyTr = tr.topItems.find((i) => keep(i.name) && !enTop.has(canonicalItemName(i.name).toLocaleLowerCase("tr")));
-    const onlyEn = en.topItems.find((i) => keep(i.name) && !trTop.has(canonicalItemName(i.name).toLocaleLowerCase("tr")));
+  if (tr && en && tr.sessions >= 8 && en.sessions >= 8) {
+    const key = (n: string) => canonicalItemName(n).toLocaleLowerCase("tr");
+    const enTop = new Set(en.topItems.map((i) => key(i.name)));
+    const trTop = new Set(tr.topItems.map((i) => key(i.name)));
+    // topItems are already sorted by rate (== by count within a locale).
+    const onlyTr = tr.topItems.find((i) => keep(i.name) && i.rate >= MIN_LOCALE_RATE && !enTop.has(key(i.name)));
+    const onlyEn = en.topItems.find((i) => keep(i.name) && i.rate >= MIN_LOCALE_RATE && !trTop.has(key(i.name)));
     if (onlyTr && onlyEn) {
       const subjects = ["locale", onlyTr.name, onlyEn.name];
+      const strength = Math.min(1, (onlyTr.rate + onlyEn.rate) / 2 + 0.2);
       out.push({
         id: idKey("segment", subjects),
         kind: "segment",
         subjects: [onlyTr.name, onlyEn.name],
-        metrics: { trFavorite: onlyTr.name, trViews: onlyTr.count, enFavorite: onlyEn.name, enViews: onlyEn.count },
+        metrics: {
+          trFavorite: onlyTr.name,
+          trPenetrationPct: pct(onlyTr.rate),
+          enFavorite: onlyEn.name,
+          enPenetrationPct: pct(onlyEn.rate),
+        },
         sampleSize: tr.sessions + en.sessions,
-        strength: 0.55,
-        score: 0.55 * Math.log2(tr.sessions + en.sessions + 2),
+        strength,
+        score: strength * Math.log2(tr.sessions + en.sessions + 2),
         desc:
-          `Menu-language divergence: Turkish-menu diners favor "${onlyTr.name}" (${onlyTr.count} views, absent ` +
-          `from the English top list) while English-menu diners favor "${onlyEn.name}" (${onlyEn.count} views). ` +
-          `Different audiences want different things.`,
-        fallbackText: `Türkçe menü kullananlar ${onlyTr.name}, İngilizce menü kullananlar ${onlyEn.name} tercih ediyor — dile göre öne çıkan ürünü değiştirin.`,
+          `Menu-language divergence by PENETRATION RATE (share of each locale's own sessions, so the far ` +
+          `smaller EN audience is comparable — raw view counts are deliberately NOT used): Turkish-menu diners ` +
+          `gravitate to "${onlyTr.name}" (${pct(onlyTr.rate)}% of TR sessions viewed it, absent from the EN top ` +
+          `list), while English-menu diners gravitate to "${onlyEn.name}" (${pct(onlyEn.rate)}% of EN sessions).`,
+        fallbackText: `Türkçe menü kullananların %${pct(onlyTr.rate)}'i ${onlyTr.name}, İngilizce menü kullananların %${pct(onlyEn.rate)}'i ${onlyEn.name} inceliyor (her dil kendi oturum oranına göre) — dile göre öne çıkan ürünü değiştirin.`,
       });
     }
   }

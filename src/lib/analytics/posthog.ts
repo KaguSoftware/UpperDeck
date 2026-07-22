@@ -475,11 +475,20 @@ export async function getPromoEngagement(range: DateRange): Promise<PromoEngagem
   };
 }
 
+/**
+ * An item within a locale, carrying its penetration RATE — the share of that
+ * locale's own sessions that viewed it. Rate, not raw count, is what's comparable
+ * across locales: almost every diner stays on the default language, so the EN
+ * audience is a fraction of TR's and their raw view counts can never be compared
+ * directly. `count` is kept only as secondary context.
+ */
+export type LocaleItem = { name: string; count: number; rate: number };
+
 export type LocalePref = {
   locale: string;
   sessions: number;
   medianSeconds: number;
-  topItems: NamedCount[];
+  topItems: LocaleItem[];
 };
 
 /**
@@ -529,12 +538,21 @@ export async function getLocalePreferences(range: DateRange, perLocale = 5): Pro
   // Only the supported locales, stable order, that actually have data.
   return (["tr", "en"] as const)
     .filter((loc) => stats.has(loc) || itemsByLoc.has(loc))
-    .map((loc) => ({
-      locale: loc,
-      sessions: stats.get(loc)?.sessions ?? 0,
-      medianSeconds: stats.get(loc)?.med ?? 0,
-      topItems: (itemsByLoc.get(loc) ?? []).sort((a, b) => b.count - a.count).slice(0, perLocale),
-    }));
+    .map((loc) => {
+      const sessions = stats.get(loc)?.sessions ?? 0;
+      return {
+        locale: loc,
+        sessions,
+        medianSeconds: stats.get(loc)?.med ?? 0,
+        // Penetration rate = distinct-session views ÷ this locale's session count.
+        // (Ranking by rate is identical to ranking by count within a locale, since
+        // sessions is constant here — only the comparable figure changes.)
+        topItems: (itemsByLoc.get(loc) ?? [])
+          .sort((a, b) => b.count - a.count)
+          .slice(0, perLocale)
+          .map((it) => ({ ...it, rate: sessions > 0 ? Math.min(1, it.count / sessions) : 0 })),
+      };
+    });
 }
 
 /** Orders/views by hour-of-day (peak hours, from item_viewed). */

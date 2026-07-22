@@ -606,8 +606,13 @@ function patternEvidence(p: PatternItem): string {
       return `lift ${m.lift} · ${m.support} sipariş · %${m.confidencePct}`;
     case "time":
       return `${m.weekday} · normalin ${m.index}×`;
-    case "segment":
+    case "segment": {
+      // Prefer the rate/percentage metrics (keys ending in "Pct") so locale/price/
+      // discount patterns read as comparable rates, not raw counts.
+      const rates = Object.entries(m).filter(([k]) => /pct$/i.test(k));
+      if (rates.length) return rates.map(([, v]) => `%${v}`).join(" · ");
       return Object.values(m).slice(0, 2).join(" · ");
+    }
   }
 }
 
@@ -985,6 +990,13 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
   const label = (l: string) => (l === "tr" ? "🇹🇷 Türkçe menü" : l === "en" ? "🇬🇧 İngilizce menü" : l);
   return (
     <ChartCard title="Turist vs Yerli (menü diline göre)">
+      {/* Ratio explainer up top: raw counts across locales aren't comparable
+          because almost no one switches language — so we show penetration rate. */}
+      <p className="mb-3 text-[10px] text-green/60 font-bold leading-relaxed">
+        Yüzdeler <span className="text-green">penetrasyon oranı</span>: o dilin oturumlarının yüzde kaçı ürüne
+        baktı. Diller arasında karşılaştırılabilir olması için ham görüntülenme değil oran kullanılır
+        (İngilizce trafik çok daha az). Parantez içi ham görüntülenme.
+      </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
         {locales.map((l) => (
           <div key={l.locale}>
@@ -1002,7 +1014,10 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
                       <span className="text-green/40 font-bold mr-1.5">{i + 1}</span>
                       {it.name}
                     </span>
-                    <span className="tabular-nums text-green/50 shrink-0">{tl.format(it.count)}</span>
+                    <span className="shrink-0 tabular-nums">
+                      <span className="font-extrabold text-green">%{Math.round(it.rate * 100)}</span>
+                      <span className="text-green/40 ml-1.5">({tl.format(it.count)})</span>
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -1013,7 +1028,8 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
         ))}
       </div>
       <p className="mt-3 text-[10px] text-green/50 font-bold">
-        Her dil için en çok görüntülenen ürünler ve oturum/süre — dile göre öne çıkarmayı şekillendirir.
+        Her dil için en çok görüntülenen ürünler (kendi oturum oranına göre) ve oturum/süre — dile göre öne
+        çıkarmayı şekillendirir.
       </p>
     </ChartCard>
   );
