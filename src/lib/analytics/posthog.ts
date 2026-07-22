@@ -28,7 +28,37 @@ type HogQLResult = { results: unknown[][]; columns?: string[] };
 const queryCache = new Map<string, { at: number; result: Promise<unknown[][]> }>();
 const QUERY_TTL_MS = 30_000;
 
-/** Run a HogQL query; returns rows as arrays, or [] on any failure. */
+// PostHog's upstream (ClickHouse) occasionally drops a request mid-flight — the
+// Envoy "503 upstream connect error … reset reason: connection termination"
+// message — a transient server-side blip that a quick retry almost always
+// clears. We retry only 5xx and network errors, never 4xx (bad query / auth /
+// 429 rate-limit won't fix themselves), and back off a little between tries.
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 250;
+
+/** One HogQL POST. Throws on 5xx/network (retryable); returns [] on 4xx (not). */
+async function hogqlOnce(query: string): Promise<unknown[][]> {
+  const res = await fetch(`${HOST}/api/projects/${PROJECT_ID}/query/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+    cache: "no-store",
+  });
+  if (res.status >= 500) {
+    throw new Error(`posthog ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  if (!res.ok) {
+    console.error("[analytics:posthog] query failed", res.status, await res.text());
+    return [];
+  }
+  const json = (await res.json()) as HogQLResult;
+  return json.results ?? [];
+}
+
+/** Run a HogQL query with transient-failure retries; returns [] once exhausted. */
 async function hogql(query: string): Promise<unknown[][]> {
   if (!posthogConfigured()) return [];
 
@@ -36,26 +66,18 @@ async function hogql(query: string): Promise<unknown[][]> {
   if (hit && Date.now() - hit.at < QUERY_TTL_MS) return hit.result;
 
   const result = (async () => {
-    try {
-      const res = await fetch(`${HOST}/api/projects/${PROJECT_ID}/query/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        console.error("[analytics:posthog] query failed", res.status, await res.text());
-        return [];
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        return await hogqlOnce(query);
+      } catch (err) {
+        if (attempt === MAX_ATTEMPTS) {
+          console.error("[analytics:posthog] query error (gave up after retries)", err);
+          return [];
+        }
+        await new Promise((r) => setTimeout(r, RETRY_BASE_MS * attempt)); // 250ms, then 500ms
       }
-      const json = (await res.json()) as HogQLResult;
-      return json.results ?? [];
-    } catch (err) {
-      console.error("[analytics:posthog] query error", err);
-      return [];
     }
+    return [];
   })();
 
   queryCache.set(query, { at: Date.now(), result });
