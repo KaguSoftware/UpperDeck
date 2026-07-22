@@ -49,7 +49,11 @@ export async function getItemConversion(range: DateRange, limit = 15): Promise<I
   const [viewed, carted, sold] = await Promise.all([
     getTopViewedItems(range, pool),
     getTopCartedItems(range, pool),
-    getRealBestSellers(range, pool),
+    // ALL sold items, not just the top N: this table is keyed on the top-VIEWED
+    // items, and a heavily-viewed but moderate-selling item (e.g. Nashville Waffle,
+    // which ranks below the top 50 sellers) must still get its real sold count —
+    // otherwise it shows "0 sold" despite having sales.
+    getRealBestSellers(range, Number.MAX_SAFE_INTEGER),
   ]);
 
   // Key by normalized name so PostHog's raw menu names line up with the POS item
