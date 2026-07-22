@@ -20,7 +20,7 @@ import { env } from "@/lib/env";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Swap for any current Groq-hosted model — see https://console.groq.com/docs/models
-const MODEL = "qwen/qwen3.6-27b";
+const MODEL = "llama-3.3-70b-versatile";
 
 export function insightsConfigured(): boolean {
   return Boolean(env.GROQ_API_KEY);
@@ -144,10 +144,6 @@ async function chat(system: string, user: string): Promise<string> {
       body: JSON.stringify({
         model: MODEL,
         temperature: 0, // consistent findings across runs, not fresh random ones
-        // MODEL is a reasoning model (qwen3): Groq's default reasoning_format "raw"
-        // injects <think>…</think> into message.content and breaks JSON parsing.
-        // "hidden" keeps the internal reasoning but returns only the final answer.
-        reasoning_format: "hidden",
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
