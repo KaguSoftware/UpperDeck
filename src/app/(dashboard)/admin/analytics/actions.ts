@@ -20,8 +20,11 @@ import {
   revalidateFindings,
   insightsConfigured,
   isInsightFresh,
+  validatePatterns,
   type InsightsInput,
+  type PatternForJudge,
 } from "@/lib/analytics/insights";
+import { minePatterns, MAX_PATTERN_LEVEL, type PatternKind } from "@/lib/analytics/patterns";
 import {
   getExcludedItemNames,
   makeKeepFilter,
@@ -302,6 +305,164 @@ export async function generateInsightsAction(params: {
   }
 
   return toResult(current, resolved, newlyAdded, false);
+}
+
+// ---------- Patterns ("Kalıplar") ----------
+
+// Separate in-memory cache from the insights one — different shape, same 1h TTL.
+const patternsCache = new Map<string, { at: number; patterns: PatternItem[] }>();
+
+// How many validated patterns we aim for before stopping the widening loop, and
+// how many candidates each pass hands the judge (keeps the prompt bounded).
+const PATTERN_TARGET = 6;
+const CANDIDATES_PER_PASS = 24;
+
+export type PatternItem = {
+  id: string;
+  kind: PatternKind;
+  /** Final sentence: the LLM judge's phrasing, or the templated fallback. */
+  text: string;
+  subjects: string[];
+  metrics: Record<string, number | string>;
+  strength: number;
+};
+
+export type PatternsResult = {
+  ok: boolean;
+  patterns: PatternItem[];
+  /** True when served from cache/stored set without re-mining. */
+  cached: boolean;
+  /** False when GROQ_API_KEY is absent — patterns still generate via the math gate + templates. */
+  usedAI: boolean;
+};
+
+const PATTERNS_FAIL: PatternsResult = { ok: false, patterns: [], cached: false, usedAI: false };
+
+/** Latest persisted pattern set for this exact range (with age), or empty. */
+async function loadStoredPatterns(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  range: DateRange
+): Promise<{ patterns: PatternItem[]; createdAt: string | null }> {
+  const { data } = await supabase
+    .from("analytics_patterns")
+    .select("patterns, created_at")
+    .eq("range_from", range.from)
+    .eq("range_to", range.to)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const row = data?.[0];
+  return {
+    patterns: Array.isArray(row?.patterns) ? (row.patterns as PatternItem[]) : [],
+    createdAt: row?.created_at ?? null,
+  };
+}
+
+/**
+ * Mine → validate → widen. Each cycle mines at a looser statistical level, hands
+ * fresh candidates to the LLM judge (which rejects the obvious ones and phrases
+ * the rest), and stops once we have enough strong patterns or the levels run out.
+ * Without an LLM key it degrades to the math gate + templated sentences.
+ */
+async function buildPatterns(range: DateRange, keep: (name: string) => boolean): Promise<PatternItem[]> {
+  const ai = insightsConfigured();
+  const found: PatternItem[] = [];
+  const foundIds = new Set<string>();
+
+  for (let level = 0; level < MAX_PATTERN_LEVEL && found.length < PATTERN_TARGET; level++) {
+    const candidates = (await minePatterns(range, keep, level)).filter((c) => !foundIds.has(c.id));
+    if (candidates.length === 0) continue;
+    const pool = candidates.slice(0, CANDIDATES_PER_PASS);
+
+    if (ai) {
+      const forJudge: PatternForJudge[] = pool.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        subjects: c.subjects,
+        metrics: c.metrics,
+        hint: c.desc,
+      }));
+      const judged = await validatePatterns(
+        forJudge,
+        found.map((p) => p.text)
+      );
+      const byId = new Map(pool.map((c) => [c.id, c]));
+      for (const j of judged) {
+        const c = byId.get(j.id);
+        if (!c || foundIds.has(c.id)) continue;
+        foundIds.add(c.id);
+        found.push({ id: c.id, kind: c.kind, text: j.text, subjects: c.subjects, metrics: c.metrics, strength: c.strength });
+        if (found.length >= PATTERN_TARGET) break;
+      }
+    } else {
+      // No judge: the math gate already dropped the obvious ones (lift≈1, weak
+      // correlation). Take the strongest candidates with their templated sentence.
+      for (const c of pool) {
+        if (found.length >= PATTERN_TARGET) break;
+        if (foundIds.has(c.id)) continue;
+        foundIds.add(c.id);
+        found.push({ id: c.id, kind: c.kind, text: c.fallbackText, subjects: c.subjects, metrics: c.metrics, strength: c.strength });
+      }
+      break; // no widening benefit without the judge — one strong pass is enough
+    }
+  }
+
+  return found.sort((a, b) => b.strength - a.strength);
+}
+
+export async function generatePatternsAction(params: {
+  range?: string;
+  from?: string;
+  to?: string;
+  mode?: "load" | "rescan";
+}): Promise<PatternsResult> {
+  const parsed = z
+    .object({ range: z.string().optional(), from: z.string().optional(), to: z.string().optional(), mode: z.enum(["load", "rescan"]).optional() })
+    .safeParse(params);
+  if (!parsed.success) return PATTERNS_FAIL;
+  const mode = parsed.data.mode ?? "load";
+
+  const { supabase, profile } = await requireRole(["owner", "dev"]);
+  const { range } = resolveRange(parsed.data);
+  const excluded = await getExcludedItemNames(supabase);
+  const keep = makeKeepFilter(excluded);
+  const exclSig = excluded.length ? `|x:${excluded.map(itemKey).sort().join(",")}` : "";
+  const key = `${range.from}_${range.to}${exclSig}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const usedAI = insightsConfigured();
+
+  // Load mode reuses a fresh cached/persisted set so patterns stay stable across
+  // visits instead of re-mining (and re-billing the judge) every page load.
+  if (mode === "load") {
+    const hit = patternsCache.get(key);
+    if (hit && Date.now() - hit.at < TTL_MS) return { ok: true, patterns: hit.patterns, cached: true, usedAI };
+    const stored = await loadStoredPatterns(s, range);
+    if (stored.patterns.length && isInsightFresh(stored.createdAt)) {
+      patternsCache.set(key, { at: Date.now(), patterns: stored.patterns });
+      return { ok: true, patterns: stored.patterns, cached: true, usedAI };
+    }
+  }
+
+  const patterns = await buildPatterns(range, keep);
+  if (patterns.length === 0) {
+    // Cache the empty result briefly so a data-poor range doesn't re-mine on every visit.
+    patternsCache.set(key, { at: Date.now(), patterns: [] });
+    return { ok: true, patterns: [], cached: false, usedAI };
+  }
+
+  patternsCache.set(key, { at: Date.now(), patterns });
+
+  // Persist for future loads/rescans. Non-fatal if the table isn't there yet.
+  const { error: insertError } = await s.from("analytics_patterns").insert({
+    range_from: range.from,
+    range_to: range.to,
+    patterns,
+    created_by: profile.id,
+  });
+  if (insertError) console.warn("[patterns] history insert failed", insertError.message);
+
+  return { ok: true, patterns, cached: false, usedAI };
 }
 
 /**

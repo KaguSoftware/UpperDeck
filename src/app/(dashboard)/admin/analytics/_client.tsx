@@ -13,7 +13,7 @@ import {
   ConversionBars,
   WeekHeatmapChart,
 } from "./_charts";
-import { generateInsightsAction, setExcludedItemsAction } from "./actions";
+import { generateInsightsAction, generatePatternsAction, setExcludedItemsAction, type PatternItem } from "./actions";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
 import type { NamedCount, AbandonedView, PriceBand, LocalePref } from "@/lib/analytics/posthog";
@@ -589,6 +589,129 @@ function AiInsights({
   );
 }
 
+const PATTERN_KIND: Record<PatternItem["kind"], { label: string; chip: string }> = {
+  "co-move": { label: "Birlikte Satış", chip: "bg-green text-white" },
+  basket: { label: "Sepet İlişkisi", chip: "bg-orange text-white" },
+  time: { label: "Zaman Kalıbı", chip: "bg-ink text-white" },
+  segment: { label: "Segment", chip: "bg-green/70 text-white" },
+};
+
+/** Compact "the numbers behind it" line, phrased per pattern kind. */
+function patternEvidence(p: PatternItem): string {
+  const m = p.metrics;
+  switch (p.kind) {
+    case "co-move":
+      return `pay korelasyonu ${m.shareCorrelation} · ${m.days} gün`;
+    case "basket":
+      return `lift ${m.lift} · ${m.support} sipariş · %${m.confidencePct}`;
+    case "time":
+      return `${m.weekday} · normalin ${m.index}×`;
+    case "segment":
+      return Object.values(m).slice(0, 2).join(" · ");
+  }
+}
+
+/**
+ * "Kalıplar" — computed, validated patterns across every numeric signal.
+ *
+ * Unlike the AI Yorumu card (which asks the model to read a data blob), these are
+ * mined deterministically in patterns.ts — real correlation, market-basket lift,
+ * weekday over-indexing, segment skews — with the "busy-day" confound controlled
+ * for. The LLM only acts as a taste gate: it rejects the obvious ones and phrases
+ * the survivors. Auto-runs a cached "load" on mount; "Yeniden Tara" re-mines and
+ * widens the search. Remounted per range by the parent (key), like AiInsights.
+ */
+function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
+  const params = useSearchParams();
+  const [patterns, setPatterns] = useState<PatternItem[] | null>(null);
+  const [error, setError] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const run = useCallback(
+    (mode: "load" | "rescan") => {
+      setError(false);
+      startTransition(async () => {
+        const res = await generatePatternsAction({
+          range: params.get("range") ?? undefined,
+          from: params.get("from") ?? undefined,
+          to: params.get("to") ?? undefined,
+          mode,
+        });
+        if (res.ok) setPatterns(res.patterns);
+        else setError(true);
+      });
+    },
+    [params]
+  );
+
+  const didAuto = useRef(false);
+  useEffect(() => {
+    if (patterns !== null || didAuto.current) return;
+    didAuto.current = true;
+    run("load");
+  }, [patterns, run]);
+
+  const has = patterns !== null && patterns.length > 0;
+  const buttonLabel = pending ? "Taranıyor…" : patterns !== null ? "Yeniden Tara" : "Kalıpları Bul";
+
+  return (
+    <section className="border-2 border-ink bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-ink/70 uppercase">Kalıplar</h3>
+        <button
+          type="button"
+          onClick={() => run(has ? "rescan" : "load")}
+          disabled={pending}
+          className={[
+            "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors",
+            pending ? "bg-bg-deep text-ink/40 border-ink/30 cursor-wait" : "bg-ink text-white border-ink hover:bg-ink/90",
+          ].join(" ")}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+
+      {error ? (
+        <p className="text-[12px] text-orange font-bold py-3">Kalıplar oluşturulamadı — tekrar deneyin.</p>
+      ) : has ? (
+        <>
+          <ul className="flex flex-col gap-3 pt-2">
+            {patterns!.map((p) => (
+              <li key={p.id} className="flex gap-2 text-[13px] leading-relaxed text-ink">
+                <span className="text-ink/40 font-extrabold shrink-0">◆</span>
+                <div className="flex flex-col gap-1">
+                  <span>{p.text}</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase ${PATTERN_KIND[p.kind].chip}`}>
+                      {PATTERN_KIND[p.kind].label}
+                    </span>
+                    <span className="text-[11px] text-ink/45 font-mono">{patternEvidence(p)}</span>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {!aiConfigured && (
+            <p className="mt-3 text-[11px] text-ink/40 leading-relaxed">
+              Yapay zekâ eleyicisi kapalı (GROQ_API_KEY yok) — kalıplar yalnızca istatistiksel eşiklerle
+              süzülüyor. Açıldığında bariz olanlar da elenir.
+            </p>
+          )}
+        </>
+      ) : pending ? (
+        <p className="text-[12px] text-ink/50 py-3">Veriler taranıyor, kalıplar aranıyor…</p>
+      ) : (
+        <p className="text-[12px] text-ink/50 py-3">
+          Tüm satış/etkileşim verisini tarayıp sayılarla görünen gerçek kalıpları bulur: birlikte hareket eden
+          ürünler (yoğun gün etkisi arındırılmış), beklentinin üstünde birlikte alınan çiftler, güne özel satışlar
+          ve segment farkları. Bariz olanlar ({aiConfigured ? "yapay zekâ + " : ""}istatistik eşikleriyle) elenir.
+          Yeterli veri yoksa kalıp gösterilmez.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * "Ignore items" dropdown. Lets the owner tick menu entries that should be left
  * out of the item-level analysis (top viewed/carted, conversion, abandoned,
@@ -1083,6 +1206,10 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         initial={data.initialInsights}
         history={data.insightsHistory}
       />
+
+      {/* Computed + validated patterns across every numeric signal. Remounted per
+          range so a cached "load" seeds cleanly. */}
+      <PatternsCard key={`p_${data.range.from}_${data.range.to}`} aiConfigured={data.insightsConfigured} />
 
       {/* Item funnel table — the strongest single view for menu decisions */}
       <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">

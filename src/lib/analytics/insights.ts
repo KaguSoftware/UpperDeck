@@ -188,6 +188,84 @@ export async function revalidateFindings(data: InsightsInput, existing: string[]
   return { ongoing: r.ongoing.filter(isStrong), resolved: r.resolved, added: r.added.filter(isStrong) };
 }
 
+// ---------- pattern validation (the "is this a good insight?" gate) ----------
+
+/**
+ * A computed pattern candidate handed to the judge. The numbers are already
+ * calculated in patterns.ts and are ground truth — the model must NOT recompute
+ * or second-guess them, only decide whether the pattern is worth showing and, if
+ * so, phrase it. Kept intentionally minimal so the model reasons over the claim,
+ * not the whole dataset.
+ */
+export type PatternForJudge = {
+  id: string;
+  kind: "co-move" | "basket" | "time" | "segment";
+  subjects: string[];
+  metrics: Record<string, number | string>;
+  /** Neutral English description of what was computed. */
+  hint: string;
+};
+
+/** A pattern the judge kept, with its final Turkish sentence. */
+export type JudgedPattern = { id: string; text: string };
+
+const VALIDATE_SYSTEM = `You are the quality gate for a restaurant-menu "patterns" feature (QR-code menu).
+You receive an array "candidates": each is a REAL statistical pattern already computed from the data
+(correlation, market-basket lift, weekday over-indexing, or a segment skew). The numbers are ground truth —
+NEVER recompute, doubt, or adjust them. Your ONLY job is judgment + phrasing.
+
+KEEP a candidate only if a smart restaurant owner would find it genuinely NON-OBVIOUS and ACTIONABLE.
+REJECT (keep=false) anything that is:
+- obvious / already known — two universally popular items selling together, a staple that of course sells
+  on busy days, "people who order food also order a drink", or any pairing whose lift is barely above 1;
+- trivial or circular — restating that a bestseller sells well;
+- an artifact — a correlation with a tiny sample, or a "pattern" that just reflects overall volume;
+- not something the owner could act on.
+Be strict: it is far better to keep 2 sharp patterns than 8 mild ones. Keeping nothing is a valid answer.
+
+For every KEPT candidate, write ONE natural TURKISH sentence that: states the relationship in plain words,
+cites the single most telling number from its metrics, and ends with a concrete action or takeaway. No
+greetings, no fluff, no restating the raw metric names. The user message may include "alreadyKept" —
+sentences already shown; do NOT produce anything that duplicates or rephrases those.
+
+Respond with ONLY a JSON array of objects: [{"id":"<candidate id>","keep":true,"sentence":"<Turkish>"}].
+Include every candidate you KEEP; omit or set keep=false for the rest.`;
+
+/**
+ * Run the LLM taste/novelty gate over computed candidates. Returns only the kept
+ * ones with their Turkish sentence, in the model's returned order. Safe on any
+ * failure (returns []), so the caller can fall back to templated sentences.
+ */
+export async function validatePatterns(
+  candidates: PatternForJudge[],
+  alreadyKept: string[] = []
+): Promise<JudgedPattern[]> {
+  if (!insightsConfigured() || candidates.length === 0) return [];
+  const content = await chat(VALIDATE_SYSTEM, JSON.stringify({ candidates, alreadyKept }));
+  const trimmed = stripFence(content);
+  const validIds = new Set(candidates.map((c) => c.id));
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) return [];
+    const out: JudgedPattern[] = [];
+    const usedIds = new Set<string>();
+    for (const row of parsed) {
+      if (!row || typeof row !== "object") continue;
+      const r = row as { id?: unknown; keep?: unknown; sentence?: unknown };
+      const id = String(r.id ?? "");
+      const text = String(r.sentence ?? "").trim();
+      // keep defaults to true when the model emits only survivors (per the prompt).
+      const keep = r.keep === undefined ? true : Boolean(r.keep);
+      if (!keep || !validIds.has(id) || usedIds.has(id) || !isStrong(text)) continue;
+      usedIds.add(id);
+      out.push({ id, text });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function stripFence(content: string): string {
   return content.trim().replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
 }
