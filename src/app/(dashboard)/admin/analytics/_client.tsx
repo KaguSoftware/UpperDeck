@@ -91,6 +91,20 @@ const tl = new Intl.NumberFormat("tr-TR");
 // we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
+// Sold-per-view as a ratio ("1,2×"), not a probability ("120%"). Views count
+// distinct phone sessions that opened the item; sold counts real POS units — two
+// different populations, so this is an index, not "% of viewers who bought".
+// Framing it as a multiplier makes >1× ("sells more than it's browsed" — staples
+// ordered verbally) read as a signal instead of a broken over-100% conversion.
+const ratioFmt = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+function saleRatio(sold: number, views: number): string {
+  if (views === 0) return "—";
+  if (sold === 0) return "0×";
+  const r = sold / views;
+  if (r < 0.1) return "<0,1×";
+  return `${ratioFmt.format(r)}×`;
+}
+
 // Guest-count estimate factor: people per unique visit (menu session). Used only
 // when no real covers were entered for the period. Picker persists in localStorage.
 const COVERS_MULT_OPTIONS = [1.5, 2, 2.5, 3];
@@ -306,7 +320,7 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
             <th className={th}>Görüntüleme</th>
             <th className={th}>Sepet</th>
             <th className={th}>Satılan</th>
-            <th className={th}>Görünt.→Satış</th>
+            <th className={th}>Satış/Görünt.</th>
           </tr>
         </thead>
         <tbody>
@@ -316,13 +330,13 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
               <td className={td}>{tl.format(r.views)}</td>
               <td className={td}>{tl.format(r.carts)}</td>
               <td className={td}>{r.sold ? tl.format(r.sold) : "—"}</td>
-              <td className={`${td} ${r.views >= 5 && r.sold === 0 ? "text-orange" : ""}`}>{r.convPct}%</td>
+              <td className={`${td} ${r.views >= 5 && r.sold === 0 ? "text-orange" : r.views > 0 && r.sold / r.views >= 1 ? "text-green" : ""}`}>{saleRatio(r.sold, r.views)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className="mt-2 text-[10px] text-green/50 font-bold">
-        Satılan = girilen gerçek satışlardan · Görünt.→Satış = görüntüleyip satın alma oranı · turuncu = çok görüntülenip hiç satılmayan
+        Satılan = girilen gerçek satışlardan · Satış/Görünt. = her görüntülemeye düşen satış (1× = görüntülendiği kadar satılıyor, 1×+ = menüde bakılmadan da sipariş ediliyor) · turuncu = çok görüntülenip hiç satılmayan
       </p>
     </div>
   );

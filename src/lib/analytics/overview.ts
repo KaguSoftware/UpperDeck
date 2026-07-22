@@ -143,7 +143,7 @@ export function buildOverview(data: OverviewInput): Overview {
   for (const r of highIntent) {
     mentioned.add(norm(r.name));
     push.push(
-      `${r.name} görüntülenince satışa dönüşüyor (görüntüleyenlerin %${r.convPct}'i satın alıyor) — menüde üst sıraya taşımayı dene.`
+      `${r.name} görüntülenince satışa dönüşüyor (her 10 görüntülemeye ~${Math.round(r.convPct / 10)} satış) — menüde üst sıraya taşımayı dene.`
     );
   }
 
