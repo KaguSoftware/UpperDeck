@@ -144,6 +144,10 @@ async function chat(system: string, user: string): Promise<string> {
       body: JSON.stringify({
         model: MODEL,
         temperature: 0, // consistent findings across runs, not fresh random ones
+        // MODEL is a reasoning model (qwen3): Groq's default reasoning_format "raw"
+        // injects <think>…</think> into message.content and breaks JSON parsing.
+        // "hidden" keeps the internal reasoning but returns only the final answer.
+        reasoning_format: "hidden",
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -267,7 +271,14 @@ export async function validatePatterns(
 }
 
 function stripFence(content: string): string {
-  return content.trim().replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
+  return content
+    // Defense in depth: drop any reasoning-model <think> block that leaks into
+    // content (e.g. if reasoning_format is ever "raw"), so the JSON survives.
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+    .replace(/^```(?:json)?/, "")
+    .replace(/```$/, "")
+    .trim();
 }
 
 /** Parse a JSON array of strings; line-split fallback. */
