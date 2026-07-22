@@ -29,6 +29,7 @@ import {
   getExcludedItemNames,
   makeKeepFilter,
   normalizeExclusionList,
+  dropExcludedMentions,
   itemKey,
   EXCLUDED_ITEMS_SETTINGS_KEY,
 } from "@/lib/analytics/exclusions";
@@ -256,9 +257,12 @@ export async function generateInsightsAction(params: {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return toResult(hit.findings, [], new Set(), true);
     const stored = await loadStoredSet(s, range);
-    if (stored.insights.length && isInsightFresh(stored.createdAt)) {
-      cache.set(key, { at: Date.now(), findings: stored.insights });
-      return toResult(stored.insights, [], new Set(), true);
+    // The DB set is keyed by range only, so it can predate the current ignore list —
+    // strip any finding that names a now-excluded item before reusing it.
+    const storedInsights = dropExcludedMentions(stored.insights, excluded);
+    if (storedInsights.length && isInsightFresh(stored.createdAt)) {
+      cache.set(key, { at: Date.now(), findings: storedInsights });
+      return toResult(storedInsights, [], new Set(), true);
     }
   }
 
@@ -271,7 +275,12 @@ export async function generateInsightsAction(params: {
 
   if (mode === "recheck") {
     // Recheck validates the current set no matter its age (the user asked for it).
-    const existing = cache.get(key)?.findings ?? (await loadStoredSet(s, range)).insights;
+    // Filter first so a stored set predating the ignore list doesn't feed excluded
+    // items back into the revalidation prompt.
+    const existing = dropExcludedMentions(
+      cache.get(key)?.findings ?? (await loadStoredSet(s, range)).insights,
+      excluded
+    );
     baseline = existing;
     if (existing.length) {
       const r = await revalidateFindings(input, existing);
@@ -438,9 +447,13 @@ export async function generatePatternsAction(params: {
     const hit = patternsCache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return { ok: true, patterns: hit.patterns, cached: true, usedAI };
     const stored = await loadStoredPatterns(s, range);
-    if (stored.patterns.length && isInsightFresh(stored.createdAt)) {
-      patternsCache.set(key, { at: Date.now(), patterns: stored.patterns });
-      return { ok: true, patterns: stored.patterns, cached: true, usedAI };
+    // Patterns carry their subjects, so honoring the ignore list on reuse is exact:
+    // drop any pattern whose items include a now-excluded one (aggregate patterns —
+    // price band, discount — have non-item subjects and are kept).
+    const storedPatterns = stored.patterns.filter((p) => p.subjects.every((sub) => keep(sub)));
+    if (storedPatterns.length && isInsightFresh(stored.createdAt)) {
+      patternsCache.set(key, { at: Date.now(), patterns: storedPatterns });
+      return { ok: true, patterns: storedPatterns, cached: true, usedAI };
     }
   }
 

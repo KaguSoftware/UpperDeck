@@ -28,7 +28,7 @@ import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
 import { getRealFoodFilter } from "@/lib/analytics/food";
 import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
-import { getExcludedItemNames, makeKeepFilter, itemKey } from "@/lib/analytics/exclusions";
+import { getExcludedItemNames, makeKeepFilter, dropExcludedMentions, itemKey } from "@/lib/analytics/exclusions";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -142,7 +142,9 @@ export default async function AnalyticsPage({
   const storedRow = currentRows?.[0];
   const initialInsights: string[] | null =
     isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
-      ? storedRow.insights.map(String).filter(Boolean)
+      ? // The stored set is range-keyed, so it can predate the ignore list — strip any
+        // finding naming a now-excluded item so the AI card never shows one.
+        dropExcludedMentions(storedRow.insights.map(String).filter(Boolean), excludedItems)
       : null;
 
   // Options for the ignore dropdown: every item name seen this range, unioned with

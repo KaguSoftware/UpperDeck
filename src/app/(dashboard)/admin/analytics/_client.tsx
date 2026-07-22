@@ -766,7 +766,8 @@ function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: s
   const count = selected.length;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="flex flex-col items-start gap-1">
+      <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -826,6 +827,11 @@ function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: s
           </div>
         </div>
       )}
+      </div>
+      <p className="max-w-68 text-[9px] leading-snug text-green/50 font-bold">
+        Seçilen ürünleri grafiklerden ve tüm yapay zekâ analizlerinden (Yorum + Kalıplar) çıkarır; satış ve
+        tutar toplamları etkilenmez.
+      </p>
     </div>
   );
 }
@@ -1108,6 +1114,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     ? "Bu dönemde menü etkileşimi kaydedilmedi."
     : "Etkileşim verisi yok (PostHog gerekli).";
 
+  // Scope key for the AI cards: range + the ignore list. Changing either remounts
+  // them so they regenerate over the same filtered data the charts already show.
+  const aiScopeKey = `${data.range.from}_${data.range.to}__${[...data.excludedItems]
+    .sort()
+    .join("|")}`;
+
   return (
     <div className="relative flex flex-col gap-6" aria-busy={switching}>
       {/* Range-switch feedback: dim the dashboard and pin a loader while the
@@ -1217,15 +1229,16 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       {/* key remounts per range so stored findings seed cleanly and a same-range
           refresh (from a recheck) doesn't wipe the component's own state */}
       <AiInsights
-        key={`${data.range.from}_${data.range.to}`}
+        key={`${aiScopeKey}`}
         configured={data.insightsConfigured}
         initial={data.initialInsights}
         history={data.insightsHistory}
       />
 
-      {/* Computed + validated patterns across every numeric signal. Remounted per
-          range so a cached "load" seeds cleanly. */}
-      <PatternsCard key={`p_${data.range.from}_${data.range.to}`} aiConfigured={data.insightsConfigured} />
+      {/* Computed + validated patterns across every numeric signal. Keyed by range
+          AND the ignore list, so excluding an item remounts the card and it
+          regenerates without that item (matching the charts + Overview). */}
+      <PatternsCard key={`p_${aiScopeKey}`} aiConfigured={data.insightsConfigured} />
 
       {/* Item funnel table — the strongest single view for menu decisions */}
       <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">

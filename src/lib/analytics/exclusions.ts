@@ -51,6 +51,23 @@ export function makeKeepFilter(excluded: string[]): (name: string) => boolean {
   return (name: string) => !keys.has(itemKey(name));
 }
 
+/**
+ * Drop freeform AI lines (findings / pattern sentences) that NAME an excluded
+ * item. A safety net for reused or persisted sets that were generated before the
+ * owner excluded the item: generation already filters item-level inputs, but a
+ * stored set from an earlier run can still mention it, so we strip those on reuse.
+ * Case-insensitive substring match on the display name (Turkish locale).
+ */
+export function dropExcludedMentions(texts: string[], excluded: string[]): string[] {
+  if (!excluded.length) return texts;
+  const needles = excluded.map((n) => n.trim().toLocaleLowerCase("tr")).filter((n) => n.length >= 2);
+  if (!needles.length) return texts;
+  return texts.filter((t) => {
+    const low = t.toLocaleLowerCase("tr");
+    return !needles.some((n) => low.includes(n));
+  });
+}
+
 /** Trim, drop blanks, and dedupe by match key while keeping the display form. */
 export function normalizeExclusionList(names: string[]): string[] {
   const seen = new Set<string>();
