@@ -269,7 +269,7 @@ function Kpi({
   const size =
     value.length > 11 ? "text-[20px]" : value.length > 9 ? "text-[26px]" : value.length > 6 ? "text-[32px]" : "text-[40px]";
   return (
-    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden">
+    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard">
       <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
       <div className="flex items-baseline gap-1 mt-1.5 whitespace-nowrap">
         {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
@@ -344,11 +344,13 @@ function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string 
 
 // Verdict → chip label + colors. Literal class strings (no runtime concatenation)
 // so Tailwind's JIT scanner actually generates them.
+// `edge` is a TOP accent (not a side-stripe): it reads as a header rule and the
+// verdict tone is already carried by the chip, so it stays decorative-but-tied.
 const TONE: Record<OverviewTone, { label: string; chip: string; edge: string }> = {
-  good: { label: "İyi Gidiyor", chip: "bg-green text-white border-green", edge: "border-l-green" },
-  mixed: { label: "Karışık", chip: "bg-orange/15 text-orange border-orange/40", edge: "border-l-orange" },
-  weak: { label: "Dikkat", chip: "bg-orange text-white border-orange", edge: "border-l-orange" },
-  neutral: { label: "Dengeli", chip: "bg-bg-deep text-green border-green/40", edge: "border-l-green/40" },
+  good: { label: "İyi Gidiyor", chip: "bg-green text-white border-green", edge: "border-t-green" },
+  mixed: { label: "Karışık", chip: "bg-orange/15 text-orange border-orange/40", edge: "border-t-orange" },
+  weak: { label: "Dikkat", chip: "bg-orange text-white border-orange", edge: "border-t-orange" },
+  neutral: { label: "Dengeli", chip: "bg-bg-deep text-green border-green/40", edge: "border-t-green/40" },
 };
 
 function OverviewGroup({ title, mark, markColor, lines }: { title: string; mark: string; markColor: string; lines: string[] }) {
@@ -380,7 +382,7 @@ function Overview({ data }: { data: AnalyticsData }) {
   const hasContent = ov.strengths.length + ov.push.length + ov.watch.length > 0;
 
   return (
-    <section className={`border-2 border-green bg-white p-5 border-l-8 ${tone.edge}`}>
+    <section className={`border-2 border-t-[6px] border-green bg-white p-5 shadow-hard ${tone.edge}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2">
           <span className="font-bowlby text-[13px] text-green leading-none">AI</span>
@@ -486,7 +488,7 @@ function AiInsights({
   const visible = expanded ? sorted : sorted.slice(0, VISIBLE_LIMIT);
 
   return (
-    <section className="border-2 border-green bg-white p-5">
+    <section className="border-2 border-green bg-white p-5 shadow-hard">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
         <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase">Yapay Zekâ Yorumu</h3>
         {configured && (
@@ -660,7 +662,7 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
   const buttonLabel = pending ? "Taranıyor…" : patterns !== null ? "Yeniden Tara" : "Kalıpları Bul";
 
   return (
-    <section className="border-2 border-ink bg-white p-5">
+    <section className="border-2 border-ink bg-white p-5 shadow-hard">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
         <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-ink/70 uppercase">Kalıplar</h3>
         <button
@@ -1041,6 +1043,51 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
   );
 }
 
+/**
+ * Section divider. Groups the ~24 flat cards into a handful of indexed, ruled
+ * zones so the page reads as a structured report, not an endless stack. Pure
+ * layout — it wraps existing content and touches no data.
+ */
+function Zone({
+  index,
+  title,
+  desc,
+  children,
+}: {
+  index: string;
+  title: string;
+  desc?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-5">
+        <span className="font-bowlby text-[13px] leading-none text-white bg-green px-2 py-1.5 tabular-nums shrink-0">
+          {index}
+        </span>
+        <h2 className="font-bowlby text-[17px] leading-none text-green uppercase tracking-[-0.3px] shrink-0">{title}</h2>
+        {desc && (
+          <span className="hidden sm:block text-[10px] tracking-[0.18em] font-bold text-green/45 uppercase truncate">
+            {desc}
+          </span>
+        )}
+        <span aria-hidden className="h-0.5 flex-1 min-w-4 bg-green/15" />
+      </div>
+      <div className="flex flex-col gap-6">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Masonry column flow. Variable-height cards pack tight with no ragged staircase
+ * and no orphaned half-rows — the two failures of the old `grid + items-start`
+ * layout. A card that renders `null` (empty section) simply leaves no gap.
+ * `cols` supplies the responsive column counts (e.g. "columns-1 lg:columns-2").
+ */
+function Masonry({ cols, children }: { cols: string; children: React.ReactNode }) {
+  return <div className={`${cols} gap-6 *:mb-6 *:break-inside-avoid`}>{children}</div>;
+}
+
 export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -1121,7 +1168,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     .join("|")}`;
 
   return (
-    <div className="relative flex flex-col gap-6" aria-busy={switching}>
+    <div className="relative" aria-busy={switching}>
       {/* Range-switch feedback: dim the dashboard and pin a loader while the
           server re-fetches. sticky keeps it visible however far down you are. */}
       {switching && (
@@ -1131,188 +1178,201 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           </div>
         </div>
       )}
-      {/* Controls bar — ignore-items menu + covers-estimate + auto-refresh, pinned */}
-      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg/90 backdrop-blur-sm flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <IgnoreItemsMenu options={data.itemOptions} excluded={data.excludedItems} />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* Only shown when Kişi is running on the estimate (no real covers entered) */}
-          {coversEst && <CoversMultiplier value={coversMult} onChange={pickCoversMult} />}
-          <AutoRefresh />
+
+      <div className="flex flex-col gap-12">
+        {/* CONTROL DECK — one pinned panel: date range (primary scope control) over
+            a hairline, then the utilities. Keeps every control reachable however
+            far you scroll, instead of two loose bars. */}
+        <div className="sticky top-0 z-10 -mx-1 px-1 pt-1 pb-2 bg-bg/90 backdrop-blur-sm">
+          <div className="border-2 border-green bg-white shadow-hard">
+            {/* Row 1 — date range */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {PRESETS.map((p) => {
+                  const active = activePreset === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setRange(p.key)}
+                      disabled={switching}
+                      className={[
+                        "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
+                        active ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
+                      ].join(" ")}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-1.5 sm:ml-auto min-w-0">
+                <input
+                  type="date"
+                  defaultValue={data.range.from}
+                  id="range-from"
+                  className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
+                />
+                <span className="text-green/60 text-[12px] shrink-0">→</span>
+                <input
+                  type="date"
+                  defaultValue={data.range.to}
+                  id="range-to"
+                  className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = (document.getElementById("range-from") as HTMLInputElement)?.value;
+                    const t = (document.getElementById("range-to") as HTMLInputElement)?.value;
+                    onCustom(f, t);
+                  }}
+                  disabled={switching}
+                  className={[
+                    "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait",
+                    activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
+                  ].join(" ")}
+                >
+                  Uygula
+                </button>
+              </div>
+            </div>
+
+            <div aria-hidden className="h-0.5 bg-green/12" />
+
+            {/* Row 2 — utilities: ignore items / covers estimate / auto-refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-3">
+              <IgnoreItemsMenu options={data.itemOptions} excluded={data.excludedItems} />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {/* Only shown when Kişi is running on the estimate (no real covers entered) */}
+                {coversEst && <CoversMultiplier value={coversMult} onChange={pickCoversMult} />}
+                <AutoRefresh />
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* 01 — the pulse: headline metrics for the period */}
+        <Zone index="01" title="Nabız" desc="dönem metrikleri">
+          {!data.posthogConfigured && (
+            <div className="bg-bg-deep border-2 border-green/30 text-green text-[11px] font-bold uppercase tracking-[0.1em] px-4 py-3">
+              Menü etkileşim takibi henüz bağlı değil — etkileşim grafikleri şimdilik boş görünecek.
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
+            <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
+            <Kpi
+              label="Kişi"
+              value={coversReal ? tl.format(kpis.totalCovers) : estimatedCovers != null ? tl.format(estimatedCovers) : "—"}
+              delta={coversReal ? data.deltas.totalCovers : undefined}
+              estimated={coversEst}
+            />
+            <Kpi
+              label="Kişi Başı"
+              value={spendReal ? money.format(kpis.avgSpendPerCover) : spendEst ? money.format(estimatedSpendPerCover as number) : "—"}
+              unit={spendReal || spendEst ? "₺" : undefined}
+              delta={spendReal ? data.deltas.avgSpendPerCover : undefined}
+              estimated={spendEst}
+            />
+            <Kpi label="Tekil Ziyaret" value={kpis.sessions ? tl.format(kpis.sessions) : "—"} delta={data.deltas.sessions} />
+            <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} />
+            <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} />
+            <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} />
+            <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} />
+          </div>
+        </Zone>
+
+        {/* 02 — what it means: deterministic verdict + LLM findings + mined patterns */}
+        <Zone index="02" title="Yapay Zekâ" desc="otomatik yorum & kalıplar">
+          {/* Deterministic verdict of the period — always on, derived from real numbers */}
+          <Overview data={data} />
+          <Masonry cols="columns-1 lg:columns-2">
+            {/* key remounts per range so stored findings seed cleanly and a same-range
+                refresh (from a recheck) doesn't wipe the component's own state */}
+            <AiInsights
+              key={`${aiScopeKey}`}
+              configured={data.insightsConfigured}
+              initial={data.initialInsights}
+              history={data.insightsHistory}
+            />
+            {/* Computed + validated patterns across every numeric signal. Keyed by range
+                AND the ignore list, so excluding an item remounts the card and it
+                regenerates without that item (matching the charts + Overview). */}
+            <PatternsCard key={`p_${aiScopeKey}`} aiConfigured={data.insightsConfigured} />
+          </Masonry>
+        </Zone>
+
+        {/* 03 — menu decisions: item-level, the most actionable views */}
+        <Zone index="03" title="Menü Kararları" desc="ürün bazında">
+          {/* Item funnel table — the strongest single view for menu decisions */}
+          <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
+            <ConversionTable rows={data.itemConversion} note={engagementNote} />
+          </ChartCard>
+          {/* Masonry, not a fixed 2-col grid: cards that render null (no data) leave
+              no orphaned half-row, and varying heights pack without a staircase. */}
+          <Masonry cols="columns-1 lg:columns-2">
+            <HiddenGems items={data.hiddenGems} />
+            <Momentum rising={data.momentum.rising} fading={data.momentum.fading} />
+            <BoughtTogether pairs={data.basket.pairs} orders={data.basket.orders} />
+            <PromoPerformance promo={data.promo} />
+          </Masonry>
+        </Zone>
+
+        {/* 04 — sales & engagement: the chart wall */}
+        <Zone index="04" title="Satış & Etkileşim" desc="grafikler">
+          {/* Headline comparison — full width */}
+          <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
+            <SalesVsEngagementChart data={data.comparison} />
+          </ChartCard>
+          <Masonry cols="columns-1 lg:columns-2">
+            <ChartCard title="Satış (Zaman İçinde)">
+              <RevenueAreaChart data={data.revenueOverTime} />
+            </ChartCard>
+            <ChartCard title="En Çok İncelenen Ürünler">
+              <HBarChart data={data.topViewed} note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="En Çok Satılan">
+              <HBarChart
+                data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))}
+                color="#243845"
+                note="Henüz gerçek satış girilmedi. Sağ üstten “Gerçek Satış Gir”."
+              />
+            </ChartCard>
+            <ChartCard title="Bakıp Almayanlar">
+              <AbandonedViewsChart data={data.abandonedViews} note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="Masa Aktivitesi (Garson + Hesap Çağrısı)">
+              <HBarChart data={data.tableActivity} note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="Etkileşim Hunisi">
+              <FunnelBars data={data.funnel} note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="Yoğun Saatler">
+              <PeakHoursChart data={data.peakHours} note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
+              <ConversionBars
+                data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
+                note={engagementNote}
+              />
+            </ChartCard>
+            <ChartCard title="Kategori Popülerliği">
+              <HBarChart data={data.categoryPopularity} color="#243845" note={engagementNote} />
+            </ChartCard>
+            <ChartCard title="Dil Dağılımı (en / tr)">
+              <HBarChart data={data.localeSplit} note={engagementNote} />
+            </ChartCard>
+          </Masonry>
+        </Zone>
+
+        {/* 05 — time & language: wide layouts that need the full width */}
+        <Zone index="05" title="Zaman & Dil" desc="yoğunluk & dağılım">
+          <LocalePrefs locales={data.localePrefs} />
+          <ChartCard title="Haftalık Yoğunluk Haritası (Gün × Saat)">
+            <WeekHeatmapChart data={data.weekHeatmap} note={engagementNote} />
+          </ChartCard>
+        </Zone>
       </div>
-
-      {/* Date range switcher */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {PRESETS.map((p) => {
-            const active = activePreset === p.key;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setRange(p.key)}
-                disabled={switching}
-                className={[
-                  "px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
-                  active ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
-                ].join(" ")}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-1.5 sm:ml-auto min-w-0">
-          <input
-            type="date"
-            defaultValue={data.range.from}
-            id="range-from"
-            className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
-          />
-          <span className="text-green/60 text-[12px] shrink-0">→</span>
-          <input
-            type="date"
-            defaultValue={data.range.to}
-            id="range-to"
-            className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const f = (document.getElementById("range-from") as HTMLInputElement)?.value;
-              const t = (document.getElementById("range-to") as HTMLInputElement)?.value;
-              onCustom(f, t);
-            }}
-            disabled={switching}
-            className={[
-              "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait",
-              activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
-            ].join(" ")}
-          >
-            Uygula
-          </button>
-        </div>
-      </div>
-
-      {!data.posthogConfigured && (
-        <div className="bg-bg-deep border-2 border-green/30 text-green text-[11px] font-bold uppercase tracking-[0.1em] px-4 py-3">
-          Menü etkileşim takibi henüz bağlı değil — etkileşim grafikleri şimdilik boş görünecek.
-        </div>
-      )}
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
-        <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
-        <Kpi
-          label="Kişi"
-          value={coversReal ? tl.format(kpis.totalCovers) : estimatedCovers != null ? tl.format(estimatedCovers) : "—"}
-          delta={coversReal ? data.deltas.totalCovers : undefined}
-          estimated={coversEst}
-        />
-        <Kpi
-          label="Kişi Başı"
-          value={spendReal ? money.format(kpis.avgSpendPerCover) : spendEst ? money.format(estimatedSpendPerCover as number) : "—"}
-          unit={spendReal || spendEst ? "₺" : undefined}
-          delta={spendReal ? data.deltas.avgSpendPerCover : undefined}
-          estimated={spendEst}
-        />
-        <Kpi label="Tekil Ziyaret" value={kpis.sessions ? tl.format(kpis.sessions) : "—"} delta={data.deltas.sessions} />
-        <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} />
-        <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} />
-        <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} />
-        <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} />
-      </div>
-
-      {/* Deterministic verdict of the period — always on, derived from real numbers */}
-      <Overview data={data} />
-
-      {/* key remounts per range so stored findings seed cleanly and a same-range
-          refresh (from a recheck) doesn't wipe the component's own state */}
-      <AiInsights
-        key={`${aiScopeKey}`}
-        configured={data.insightsConfigured}
-        initial={data.initialInsights}
-        history={data.insightsHistory}
-      />
-
-      {/* Computed + validated patterns across every numeric signal. Keyed by range
-          AND the ignore list, so excluding an item remounts the card and it
-          regenerates without that item (matching the charts + Overview). */}
-      <PatternsCard key={`p_${aiScopeKey}`} aiConfigured={data.insightsConfigured} />
-
-      {/* Item funnel table — the strongest single view for menu decisions */}
-      <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
-        <ConversionTable rows={data.itemConversion} note={engagementNote} />
-      </ChartCard>
-
-      {/* Actionable menu-decision insights: hidden gems + momentum */}
-      {(data.hiddenGems.length > 0 || data.momentum.rising.length > 0 || data.momentum.fading.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <HiddenGems items={data.hiddenGems} />
-          <Momentum rising={data.momentum.rising} fading={data.momentum.fading} />
-        </div>
-      )}
-
-      {/* Basket affinity + promo real-estate performance */}
-      {(data.basket.orders > 0 || data.promo.hasData) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <BoughtTogether pairs={data.basket.pairs} orders={data.basket.orders} />
-          <PromoPerformance promo={data.promo} />
-        </div>
-      )}
-
-      {/* Headline comparison */}
-      <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
-        <SalesVsEngagementChart data={data.comparison} />
-      </ChartCard>
-
-      {/* items-start so each card hugs its chart — a short chart (e.g. the sales
-          area) no longer stretches to a taller neighbor and show phantom padding. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <ChartCard title="Satış (Zaman İçinde)">
-          <RevenueAreaChart data={data.revenueOverTime} />
-        </ChartCard>
-        <ChartCard title="En Çok İncelenen Ürünler">
-          <HBarChart data={data.topViewed} note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="En Çok Satılan">
-          <HBarChart
-            data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))}
-            color="#243845"
-            note="Henüz gerçek satış girilmedi. Sağ üstten “Gerçek Satış Gir”."
-          />
-        </ChartCard>
-        <ChartCard title="Bakıp Almayanlar">
-          <AbandonedViewsChart data={data.abandonedViews} note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="Masa Aktivitesi (Garson + Hesap Çağrısı)">
-          <HBarChart data={data.tableActivity} note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="Etkileşim Hunisi">
-          <FunnelBars data={data.funnel} note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="Yoğun Saatler">
-          <PeakHoursChart data={data.peakHours} note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
-          <ConversionBars
-            data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
-            note={engagementNote}
-          />
-        </ChartCard>
-        <ChartCard title="Kategori Popülerliği">
-          <HBarChart data={data.categoryPopularity} color="#243845" note={engagementNote} />
-        </ChartCard>
-        <ChartCard title="Dil Dağılımı (en / tr)">
-          <HBarChart data={data.localeSplit} note={engagementNote} />
-        </ChartCard>
-      </div>
-
-      <LocalePrefs locales={data.localePrefs} />
-
-      <ChartCard title="Haftalık Yoğunluk Haritası (Gün × Saat)">
-        <WeekHeatmapChart data={data.weekHeatmap} note={engagementNote} />
-      </ChartCard>
     </div>
   );
 }

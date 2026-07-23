@@ -173,3 +173,14 @@ a {
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
+
+/* Analytics dashboard — hard-edged, offset "printed" elevation. Matches the
+   brutalist 2px-border / zero-radius card language; subtle enough for a wall
+   of cards, deepens on hover for tactility. Green-tinted, never pure black. */
+.shadow-hard {
+  box-shadow: 4px 4px 0 0 rgba(36, 56, 69, 0.07);
+  transition: box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-hard:hover {
+  box-shadow: 6px 6px 0 0 rgba(36, 56, 69, 0.12);
+}

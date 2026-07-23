@@ -49,8 +49,11 @@ const legendStyle = { fontSize: 11, fontWeight: 700, color: GREEN } as const;
 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-2 border-green bg-white p-5">
-      <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase mb-4">{title}</h3>
+    <section className="border-2 border-green bg-white p-5 shadow-hard">
+      <h3 className="flex items-center gap-2 text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase mb-4">
+        <span aria-hidden className="size-1.5 bg-orange shrink-0" />
+        {title}
+      </h3>
       {children}
     </section>
   );
