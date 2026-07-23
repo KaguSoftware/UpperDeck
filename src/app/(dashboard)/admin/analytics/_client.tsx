@@ -5,10 +5,8 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ChartCard,
   SalesVsEngagementChart,
-  RevenueAreaChart,
   HBarChart,
   FunnelBars,
-  PeakHoursChart,
   AbandonedViewsChart,
   ConversionBars,
   WeekHeatmapChart,
@@ -265,13 +263,15 @@ function Kpi({
   estimated?: boolean;
 }) {
   // The Bowlby display font is very wide, so long values (e.g. "1.234.567")
-  // overrun the narrow cards. Step the size down as the string grows.
+  // overrun the narrow cards. The "~"/₺ prefix eats width too, so fold it into
+  // the effective length. Step the size down as the string grows.
+  const eff = value.length + (unit ? 2 : 0) + (estimated ? 2 : 0);
   const size =
-    value.length > 11 ? "text-[20px]" : value.length > 9 ? "text-[26px]" : value.length > 6 ? "text-[32px]" : "text-[40px]";
+    eff > 11 ? "text-[18px]" : eff > 9 ? "text-[22px]" : eff > 6 ? "text-[28px]" : "text-[40px]";
   return (
-    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard">
+    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center">
       <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
-      <div className="flex items-baseline gap-1 mt-1.5 whitespace-nowrap">
+      <div className="flex items-baseline justify-center gap-1 mt-1.5 whitespace-nowrap">
         {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
         {estimated && <span className="font-ui font-extrabold text-[16px] text-green/50">~</span>}
         {unit && <span className="font-ui font-extrabold text-[16px] text-green/70">{unit}</span>}
@@ -1079,13 +1079,24 @@ function Zone({
 }
 
 /**
- * Masonry column flow. Variable-height cards pack tight with no ragged staircase
- * and no orphaned half-rows — the two failures of the old `grid + items-start`
- * layout. A card that renders `null` (empty section) simply leaves no gap.
- * `cols` supplies the responsive column counts (e.g. "columns-1 lg:columns-2").
+ * Responsive card grid. Cards sit two-up on wide screens and collapse to one on
+ * narrow. Two properties make it robust where the old layouts failed:
+ *   • the last / only card GROWS to fill its row, so a null sibling never leaves
+ *     an orphaned empty cell (the "one full, one empty" bug), and
+ *   • items-stretch keeps a paired row the same height, killing the staircase.
+ * Children stay in one flat flex container (never re-parented between columns),
+ * so cards with mount effects — AiInsights, PatternsCard — never remount.
+ *
+ * This replaces a CSS multi-column masonry that couldn't balance columns when a
+ * tall unbreakable card was present, stranding a large empty gap below the short
+ * column.
  */
-function Masonry({ cols, children }: { cols: string; children: React.ReactNode }) {
-  return <div className={`${cols} gap-6 *:mb-6 *:break-inside-avoid`}>{children}</div>;
+function CardGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap gap-6 items-stretch *:grow *:basis-[calc(50%-0.75rem)] *:min-w-[min(20rem,100%)]">
+      {children}
+    </div>
+  );
 }
 
 export function AnalyticsClient({ data }: { data: AnalyticsData }) {
@@ -1286,7 +1297,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         <Zone index="02" title="Yapay Zekâ" desc="otomatik yorum & kalıplar">
           {/* Deterministic verdict of the period — always on, derived from real numbers */}
           <Overview data={data} />
-          <Masonry cols="columns-1 lg:columns-2">
+          <CardGrid>
             {/* key remounts per range so stored findings seed cleanly and a same-range
                 refresh (from a recheck) doesn't wipe the component's own state */}
             <AiInsights
@@ -1299,7 +1310,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 AND the ignore list, so excluding an item remounts the card and it
                 regenerates without that item (matching the charts + Overview). */}
             <PatternsCard key={`p_${aiScopeKey}`} aiConfigured={data.insightsConfigured} />
-          </Masonry>
+          </CardGrid>
         </Zone>
 
         {/* 03 — menu decisions: item-level, the most actionable views */}
@@ -1308,14 +1319,14 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
             <ConversionTable rows={data.itemConversion} note={engagementNote} />
           </ChartCard>
-          {/* Masonry, not a fixed 2-col grid: cards that render null (no data) leave
-              no orphaned half-row, and varying heights pack without a staircase. */}
-          <Masonry cols="columns-1 lg:columns-2">
+          {/* A card that renders null (no data) simply drops out — the survivors
+              re-flow and grow, so there's never an orphaned empty half-row. */}
+          <CardGrid>
             <HiddenGems items={data.hiddenGems} />
             <Momentum rising={data.momentum.rising} fading={data.momentum.fading} />
             <BoughtTogether pairs={data.basket.pairs} orders={data.basket.orders} />
             <PromoPerformance promo={data.promo} />
-          </Masonry>
+          </CardGrid>
         </Zone>
 
         {/* 04 — sales & engagement: the chart wall */}
@@ -1324,13 +1335,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
           <ChartCard title="Gerçek Satış vs Menü Etkileşimi">
             <SalesVsEngagementChart data={data.comparison} />
           </ChartCard>
-          <Masonry cols="columns-1 lg:columns-2">
-            <ChartCard title="Satış (Zaman İçinde)">
-              <RevenueAreaChart data={data.revenueOverTime} />
-            </ChartCard>
-            <ChartCard title="En Çok İncelenen Ürünler">
-              <HBarChart data={data.topViewed} note={engagementNote} />
-            </ChartCard>
+          {/* "Satış (Zaman İçinde)", "En Çok İncelenen", "Yoğun Saatler" and
+              "Dil Dağılımı" were removed as duplicates: their exact data lives in
+              (respectively) the combo chart above, the Ürün Dönüşümü table, the
+              weekly heatmap, and "Turist vs Yerli". Their source fields are still
+              fetched and still feed the AI Overview / insights. */}
+          <CardGrid>
             <ChartCard title="En Çok Satılan">
               <HBarChart
                 data={data.bestSellers.map((b) => ({ name: b.item_name, count: b.qty }))}
@@ -1347,9 +1357,6 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             <ChartCard title="Etkileşim Hunisi">
               <FunnelBars data={data.funnel} note={engagementNote} />
             </ChartCard>
-            <ChartCard title="Yoğun Saatler">
-              <PeakHoursChart data={data.peakHours} note={engagementNote} />
-            </ChartCard>
             <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
               <ConversionBars
                 data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
@@ -1359,10 +1366,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             <ChartCard title="Kategori Popülerliği">
               <HBarChart data={data.categoryPopularity} color="#243845" note={engagementNote} />
             </ChartCard>
-            <ChartCard title="Dil Dağılımı (en / tr)">
-              <HBarChart data={data.localeSplit} note={engagementNote} />
-            </ChartCard>
-          </Masonry>
+          </CardGrid>
         </Zone>
 
         {/* 05 — time & language: wide layouts that need the full width */}

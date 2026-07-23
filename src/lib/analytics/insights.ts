@@ -97,22 +97,41 @@ carted a lot, and never call it a failure for low carts if it sold well.
 Every finding must cite a specific number from the data AND carry a concrete takeaway or action —
 never just restate a number. No greetings, no fluff. Write IN TURKISH.
 
+WRITE FOR A RESTAURANT OWNER, NOT AN ANALYST. NEVER name the internal data fields or tables in your output —
+the reader has never heard of "priceBands", "itemConversion", "abandonedViews", "discountSplit", "deltas",
+"funnel", "topViewed", "topCarted", "bestSellers", "categoryPopularity" or "KPIs", and a phrase like
+"priceBands verilerine göre" is meaningless to them. NEVER open a finding with "X verilerine göre". Say the
+thing in plain restaurant Turkish instead: not "priceBands'e göre 400+ bandı" but "400₺ ve üzeri ürünler";
+not "itemConversion düşük" but "çok görüntülenmesine rağmen az satılıyor".
+
+DO NOT restate what the owner already sees at a glance. The dashboard already shows them, as their own tables
+and charts, the most-viewed items, the most-added-to-cart items, the best-sellers, category popularity, and
+each item's view/cart/sale figures. So a finding that merely names a ranking — "X en çok satan", "X en çok
+görüntülenen", "X hem çok görüntüleniyor hem çok satıyor" — is worthless; they can read it themselves. Never
+point out that something obviously-working is working; a positive confirmation of the expected is not a
+finding. Each finding must expose a TENSION or non-obvious relationship they would NOT catch from those
+tables — e.g. heavily viewed but rarely SOLD, a price band that kills add-to-cart, a dwell-time signal, a
+period-over-period reversal, a discount that isn't moving anything — and pair it with a concrete action.
+
 Include ONLY strong, material findings. A finding qualifies only if ALL hold:
 - it rests on a meaningful sample — ignore items with very few views or sales (roughly under 5), a couple of
   data points prove nothing;
 - it cites a concrete number and the movement is material (skip deltas smaller than ~10% and rounding-noise);
-- it leads to a clear, non-obvious action.
-Drop anything weak, speculative, marginal, or merely restating an obvious fact. Fewer strong findings are far
-better than many thin ones — never pad the list to look thorough.`;
+- it is non-obvious — NOT something visible by glancing at the dashboard's own rankings/charts;
+- it leads to a clear action.
+Drop anything weak, speculative, marginal, obvious, or merely restating a ranking. Fewer strong findings are
+far better than many thin ones — never pad the list to look thorough.`;
 
 const GENERATE_SYSTEM = `${DATA_CONTEXT}
 
 Extract EVERY distinct, well-supported finding the data justifies — do NOT cap the count, but never pad:
-skip anything you can't tie to a real number. Cover, where supported: best/worst sellers and shared traits
-(ingredients, category, price band); items viewed a lot but rarely SOLD (low views→sale rate); dwell-time patterns per
-the bucket meanings above, with the matching fix; meaningful period-over-period movement (deltas) — what
-improved, what declined; whether discounts and price bands actually change behavior; and follow-ups on
-previousInsights.
+skip anything you can't tie to a real number, and skip anything the owner already sees in the dashboard's
+own rankings. Do NOT simply announce who the best or worst sellers are — that is already on screen. Instead
+look for the non-obvious tension, where supported: a shared trait uniting the winners or losers (ingredient,
+category, price band) that the owner wouldn't spot item-by-item; items viewed a lot but rarely SOLD (low
+views→sale rate); dwell-time patterns per the bucket meanings above, with the matching fix; meaningful
+period-over-period movement (deltas) — what improved, what declined; whether discounts and price bands
+actually change behavior; and follow-ups on previousInsights.
 
 The user message includes "alreadyFound": findings already produced in earlier passes. Do NOT repeat or
 rephrase any of them — return ONLY genuinely new, distinct findings. If nothing new remains, return [].
