@@ -128,8 +128,16 @@ export type HiddenGem = { name: string; views: number; sold: number; convPct: nu
  * little exposure — few diners find them, yet most who do buy. The inverse of the
  * dead-item list, and a direct menu-placement lever: move these up / feature them.
  */
-export async function getHiddenGems(range: DateRange, limit = 6): Promise<HiddenGem[]> {
-  const rows = await getItemConversion(range, 80); // deep pool so low-view items are kept
+export async function getHiddenGems(
+  range: DateRange,
+  limit = 6,
+  // Optional pre-computed deep-pool conversion rows. The page already computes
+  // getItemConversion with a deep pool for the conversion table; passing those in
+  // avoids a second full run (and a second getRealBestSellers round-trip) here.
+  // Must be a DEEP pool (≥80) or low-view gems get truncated before this filter.
+  precomputed?: ItemConversion[]
+): Promise<HiddenGem[]> {
+  const rows = precomputed ?? (await getItemConversion(range, 80)); // deep pool so low-view items are kept
   const maxViews = Math.max(...rows.map((r) => r.views), 1);
   return rows
     // sells for real, has a usable sample, converts well, yet seen far less than the

@@ -53,8 +53,16 @@ export default async function AnalyticsPage({
   // Owner-configured "ignore" list. Read first so item-level metrics (and the
   // basket pairing, which filters at query time) all honor it. Money/amount
   // aggregates are intentionally left whole.
+  //
+  // This stays a serial pre-fetch (not folded into the wave below) on purpose:
+  // getBoughtTogether filters items by `keep` DURING its pairing aggregation, so a
+  // filtered item never forms a pair — it genuinely needs the ignore list up front.
+  // The insights-history reads, which have no such dependency, ARE folded in.
   const excludedItems = await getExcludedItemNames(supabase);
   const keep = makeKeepFilter(excludedItems);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
 
   const [
     summary,
@@ -71,10 +79,9 @@ export default async function AnalyticsPage({
     sessions,
     peakHours,
     abandonedViews,
-    itemConversion,
+    itemConversionDeep,
     priceBands,
     weekHeatmap,
-    hiddenGems,
     momentum,
     promo,
     basket,
@@ -84,6 +91,8 @@ export default async function AnalyticsPage({
     prevFunnel,
     prevSessions,
     prevCartConversion,
+    historyResult,
+    currentResult,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealSalesOverTime(range),
@@ -99,10 +108,11 @@ export default async function AnalyticsPage({
     getSessionStats(range),
     getPeakHours(range),
     getAbandonedViewsNet(range),
-    getItemConversion(range),
+    // Deep pool (80): feeds both the conversion table (sliced to its own limit in
+    // the client) AND hidden gems below, so the funnel is aggregated once, not twice.
+    getItemConversion(range, 80),
     getPriceBands(range),
     getWeekHeatmap(range),
-    getHiddenGems(range),
     getItemMomentum(range),
     getPromoPerformance(range),
     getBoughtTogether(range, keep),
@@ -113,17 +123,8 @@ export default async function AnalyticsPage({
     getEngagementFunnel(prev),
     getSessionStats(prev),
     getCartConversion(prev),
-  ]);
-
-  const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
-    f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
-  const views = funnelCount(funnel, "Görüntü");
-  const waiterCalls = funnelCount(funnel, "Garson");
-
-  // Recent AI analyses for the history list. Non-fatal if the table is missing.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const s = supabase as any;
-  const [{ data: historyRows }, { data: currentRows }] = await Promise.all([
+    // Folded in from a former second wave — no dependency on any result above.
+    // Recent AI analyses for the history list. Non-fatal if the table is missing.
     s.from("analytics_insights")
       .select("created_at, range_from, range_to, insights")
       .order("created_at", { ascending: false })
@@ -139,6 +140,20 @@ export default async function AnalyticsPage({
       .order("created_at", { ascending: false })
       .limit(1),
   ]);
+  const { data: historyRows } = historyResult;
+  const { data: currentRows } = currentResult;
+
+  // Derive both item-funnel views from the single deep-pool conversion run above,
+  // instead of a second full getItemConversion + getHiddenGems pass. Slicing the
+  // deep pool to 15 yields the same top-15 the shallow call did (sorted by views).
+  const itemConversion = itemConversionDeep.slice(0, 15);
+  const hiddenGems = await getHiddenGems(range, 6, itemConversionDeep);
+
+  const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
+    f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
+  const views = funnelCount(funnel, "Görüntü");
+  const waiterCalls = funnelCount(funnel, "Garson");
+
   const storedRow = currentRows?.[0];
   const initialInsights: string[] | null =
     isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
