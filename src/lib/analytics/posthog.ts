@@ -112,6 +112,14 @@ function bounds(range: DateRange) {
 
 export type NamedCount = { name: string; count: number };
 
+// The menu is small (well under 200 items), so every "top N" primitive fetches
+// one fixed generous pool and slices to `limit` in JS. This keeps the HogQL query
+// string IDENTICAL regardless of the caller's `limit`, so the query cache dedupes
+// the many callers that ask for the same list at different pool sizes (10/50/60/80)
+// into ONE ClickHouse query per render — the callers already sort-then-slice, so
+// results are unchanged. Raise this only if the menu ever approaches 200 items.
+const TOP_POOL = 200;
+
 /**
  * Most-viewed menu items by distinct diners. `item_viewed` fires on every modal
  * open, so counting raw events lets one curious diner inflate an item; counting
@@ -125,9 +133,9 @@ export async function getTopViewedItems(range: DateRange, limit = 10): Promise<N
     WHERE event = 'item_viewed'
       AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
       AND name != ''
-    GROUP BY name ORDER BY c DESC LIMIT ${limit}
+    GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
-  return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
+  return rows.slice(0, limit).map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
 }
 
 /**
@@ -143,9 +151,9 @@ export async function getTopCartedItems(range: DateRange, limit = 10): Promise<N
     WHERE event = 'item_added_to_cart'
       AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
       AND name != ''
-    GROUP BY name ORDER BY c DESC LIMIT ${limit}
+    GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
-  return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
+  return rows.slice(0, limit).map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
 }
 
 export type AbandonedView = {
