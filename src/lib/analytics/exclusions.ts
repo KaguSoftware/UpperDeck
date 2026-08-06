@@ -1,5 +1,5 @@
 import "server-only";
-import { normalizeItemName } from "@/lib/analytics/clean-sales";
+import { canonicalItemName } from "@/lib/analytics/clean-sales";
 
 /**
  * Owner-configured "ignore these items" list for the analytics tab.
@@ -20,10 +20,17 @@ import { normalizeItemName } from "@/lib/analytics/clean-sales";
 export const EXCLUDED_ITEMS_SETTINGS_KEY = "analytics_excluded_items";
 
 /**
- * Shared match key — same normalization compare.ts uses to line up PostHog menu
- * names with POS item names, so an exclusion entered once matches both sources.
+ * Shared match key — same CANONICAL key compare.ts / price-bands.ts / patterns.ts
+ * use to line up PostHog menu names with POS item names, so an exclusion entered
+ * once matches both sources.
+ *
+ * It folds kitchen-name aliases too (`canonicalItemName`, not just
+ * `normalizeItemName`): several callers hand `keep()` a RAW sheet name
+ * ("Oklahoma Smash") while the charts and patterns display the canonical menu
+ * name ("Oklahoma Onion"). Keying on the normalized form alone let the raw
+ * variant slip past an exclusion the owner had already ticked.
  */
-export const itemKey = (name: string) => normalizeItemName(name).toLocaleLowerCase("tr");
+export const itemKey = (name: string) => canonicalItemName(name).toLocaleLowerCase("tr");
 
 /** Read the configured item names to ignore. Safe ([]) on any failure. */
 export async function getExcludedItemNames(

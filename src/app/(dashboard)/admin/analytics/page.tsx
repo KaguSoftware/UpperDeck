@@ -34,6 +34,17 @@ import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Upper bound on the sold-item tail collected for the ignore dropdown — far above
+ * any real menu's item count, but bounded so a bad import can't build a huge list.
+ *
+ * Safe as a coverage guarantee because the list is sorted by quantity: an item
+ * only enters a Kalıplar item pattern after clearing a real qty floor (6+ units in
+ * the loosest level), so it would take 500 distinct products each selling that
+ * much for a pattern subject to fall outside this pool.
+ */
+const ITEM_POOL = 500;
+
 /** Percent change vs previous period; null when there's no baseline. */
 function pctDelta(cur: number, prev: number): number | null {
   if (!prev) return null;
@@ -83,7 +94,7 @@ export default async function AnalyticsPage({
   const [
     summary,
     revenueOverTime,
-    bestSellers,
+    bestSellersDeep,
     comparison,
     topViewed,
     topCarted,
@@ -112,7 +123,12 @@ export default async function AnalyticsPage({
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealSalesOverTime(range),
-    getRealBestSellers(range),
+    // Deep pool: the query already reads every sale row of the range and slices in
+    // memory, so asking for the long tail costs nothing extra. The chart still
+    // shows the top 10 (sliced below); the tail exists so the ignore dropdown can
+    // offer EVERY sold product — Kalıplar mines the whole tail, so a pattern can
+    // name an item that never reaches any top-N list.
+    getRealBestSellers(range, ITEM_POOL),
     getSalesVsEngagement(range),
     getTopViewedItems(range),
     getTopCartedItems(range),
@@ -169,6 +185,7 @@ export default async function AnalyticsPage({
   // instead of a second full getItemConversion + getHiddenGems pass. Slicing the
   // deep pool to 15 yields the same top-15 the shallow call did (sorted by views).
   const itemConversion = itemConversionDeep.slice(0, 15);
+  const bestSellers = bestSellersDeep.slice(0, 10);
   const hiddenGems = await getHiddenGems(range, 6, itemConversionDeep);
 
   const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
@@ -203,13 +220,26 @@ export default async function AnalyticsPage({
 
   // Options for the ignore dropdown: every item name seen this range, unioned with
   // already-excluded names (so they can be toggled back on even with no data now).
+  //
+  // This must be the FULL universe, not the top-N lists the charts render. Kalıplar
+  // mines the whole tail — daily-share co-movement and weekday skew run over every
+  // sold item, basket lift over every ordered item — so a pattern regularly names a
+  // product that reaches no chart's top 10. Sourcing the options from the charts
+  // left exactly those products with no checkbox: visible in Kalıplar, impossible
+  // to ignore. Each list below is already fetched above, so this costs no queries:
+  //   bestSellersDeep  → every POS-sold item  (co-move + weekday + price-band families)
+  //   basket.itemNames → every app-ordered item (basket family)
+  //   localePrefs      → per-locale favourites (locale segment family)
+  //   viewed/carted/conversion/abandoned → PostHog-side names with no sales
   const optionMap = new Map<string, string>(); // match key -> display name
   for (const name of [
     ...topViewed.map((x) => x.name),
     ...topCarted.map((x) => x.name),
-    ...bestSellers.map((x) => x.item_name),
-    ...itemConversion.map((x) => x.name),
+    ...bestSellersDeep.map((x) => x.item_name),
+    ...itemConversionDeep.map((x) => x.name),
     ...abandonedViews.map((x) => x.name),
+    ...basket.itemNames,
+    ...localePrefs.flatMap((l) => l.topItems.map((i) => i.name)),
     ...excludedItems,
   ]) {
     const k = itemKey(name);
@@ -268,7 +298,10 @@ export default async function AnalyticsPage({
       fading: momentum.fading.filter((x) => keep(x.name)),
     },
     promo: { ...promo, topSuggested: promo.topSuggested.filter((x) => keep(x.name)) },
-    basket, // already filtered at query time via `keep`
+    // Already filtered at query time via `keep`. `itemNames` is deliberately not
+    // forwarded — it feeds `itemOptions` above and would otherwise ship the whole
+    // ordered-item universe to the client twice.
+    basket: { pairs: basket.pairs, orders: basket.orders },
     localePrefs: localePrefs.map((l) => ({ ...l, topItems: l.topItems.filter((x) => keep(x.name)) })),
     excludedItems,
     itemOptions,

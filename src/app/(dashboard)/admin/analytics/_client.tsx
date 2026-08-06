@@ -748,16 +748,28 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
  *
  * The selection persists server-side (settings table); each toggle saves and
  * refreshes the dashboard so the charts and insights update immediately.
+ *
+ * `options` is the FULL set of products seen in the range (not just the ones the
+ * charts show), because Kalıplar mines the whole tail and can name any of them —
+ * so the list is long by design and gets a search box. Ticked items sort to the
+ * top so an existing selection never gets lost in the tail.
  */
 function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(excluded);
+  const [query, setQuery] = useState("");
   const [saving, startSaving] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
   const selectedKeys = new Set(selected.map((s) => s.trim().toLocaleLowerCase("tr")));
   const isOn = (name: string) => selectedKeys.has(name.trim().toLocaleLowerCase("tr"));
+
+  const needle = query.trim().toLocaleLowerCase("tr");
+  const shown = options
+    .filter((n) => !needle || n.toLocaleLowerCase("tr").includes(needle))
+    // Ticked first, then the incoming alphabetical order (sort is stable).
+    .sort((a, b) => Number(isOn(b)) - Number(isOn(a)));
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -827,11 +839,24 @@ function IgnoreItemsMenu({ options, excluded }: { options: string[]; excluded: s
           <p className="px-3 pt-2 text-[10px] leading-relaxed text-green/50 font-bold">
             Seçilenler en çok satan / incelenen listelerinden ve yapay zekâ yorumundan çıkarılır. Satış ve tutar toplamları değişmez.
           </p>
+          {options.length > 0 && (
+            <div className="px-3 pt-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Ürün ara…"
+                className="w-full px-2 py-1.5 border-2 border-green/30 bg-white text-[12px] text-ink placeholder:text-green/40 focus:outline-none focus:border-green"
+              />
+            </div>
+          )}
           <div className="max-h-64 overflow-y-auto py-1.5">
             {options.length === 0 ? (
               <p className="px-3 py-3 text-[11px] text-green/50">Henüz ürün verisi yok.</p>
+            ) : shown.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-green/50">Eşleşen ürün yok.</p>
             ) : (
-              options.map((name) => (
+              shown.map((name) => (
                 <label
                   key={name}
                   className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-ink hover:bg-bg-deep cursor-pointer"
