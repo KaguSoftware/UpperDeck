@@ -126,7 +126,7 @@ function trDate(iso: string, withYear = false): string {
 
 // Guest-count estimate factor: people per unique visit (menu session). Used only
 // when no real covers were entered for the period. Picker persists in localStorage.
-const COVERS_MULT_OPTIONS = [1.5, 2, 2.5, 3];
+const COVERS_MULT_OPTIONS = [1, 1.5, 2, 2.5, 3];
 const COVERS_MULT_DEFAULT = 2;
 const COVERS_MULT_KEY = "analytics-covers-multiplier";
 
