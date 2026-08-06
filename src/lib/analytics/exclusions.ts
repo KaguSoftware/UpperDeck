@@ -1,5 +1,6 @@
 import "server-only";
 import { canonicalItemName } from "@/lib/analytics/clean-sales";
+import { buildMenuMatcher, type MenuMatcher } from "@/lib/analytics/menu-match";
 
 /**
  * Owner-configured "ignore these items" rules for the analytics tab.
@@ -11,13 +12,17 @@ import { canonicalItemName } from "@/lib/analytics/clean-sales";
  *     Upgrade" tops views/carts/best-sellers on every range but tells the owner
  *     nothing.
  *  2. An AUTO toggle that additionally ignores every item that is no longer on the
- *     menu. Delisted products keep showing up in the historical sales/engagement
- *     data forever, so without this the charts and the AI keep analysing dishes
- *     the kitchen stopped serving.
+ *     menu (see `menu-match.ts` for how loosely "on the menu" is matched).
+ *     Delisted products keep showing up in the historical sales/engagement data
+ *     forever, so without this the charts and the AI keep analysing dishes the
+ *     kitchen stopped serving.
+ *  3. Per-item OVERRIDES of that rule — the escape hatch for a product the matcher
+ *     called delisted but the owner knows is live. Cleared whenever the toggle is
+ *     flipped, so switching it off and on re-applies the rule from scratch.
  *
- * Both omit items from the INSIGHT-level views (top viewed/carted, conversion,
- * abandoned, best-sellers → and therefore the deterministic Overview and the AI
- * insights) so the analysis focuses on products actually being sold.
+ * All of them omit items from the INSIGHT-level views (top viewed/carted,
+ * conversion, abandoned, best-sellers → and therefore the deterministic Overview
+ * and the AI insights) so the analysis focuses on products actually being sold.
  *
  * They deliberately do NOT touch money/amount aggregates (total sales, covers,
  * average spend, total views, funnel counts): those stay complete.
@@ -25,6 +30,7 @@ import { canonicalItemName } from "@/lib/analytics/clean-sales";
 
 export const EXCLUDED_ITEMS_SETTINGS_KEY = "analytics_excluded_items";
 export const AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY = "analytics_auto_exclude_offmenu";
+export const OFFMENU_OVERRIDES_SETTINGS_KEY = "analytics_offmenu_overrides";
 
 /**
  * Shared match key — same CANONICAL key compare.ts / price-bands.ts / patterns.ts
@@ -45,12 +51,14 @@ export type ExclusionRules = {
   manual: string[];
   /** "Also ignore anything no longer on the menu" toggle. */
   autoOffMenu: boolean;
+  /** Names the owner force-kept despite the auto rule calling them off-menu. */
+  overrides: string[];
   /**
-   * Match keys of every name currently on the menu (items + add-on options, en and
-   * tr). EMPTY means "unknown" — the auto rule then does nothing, so a failed or
+   * Matcher over every name currently on the menu (items + add-on options, en and
+   * tr). null means "unknown" — the auto rule then does nothing, so a failed or
    * empty menu read can never blank out the whole dashboard.
    */
-  menuKeys: Set<string>;
+  menu: MenuMatcher | null;
 };
 
 /** Parse the stored JSON array of ignored names. Safe ([]) on any failure. */
@@ -65,42 +73,40 @@ function parseExcludedItems(raw: unknown): string[] {
 }
 
 /**
- * Every name that currently exists on the menu, as match keys.
+ * Matcher over every name that currently exists on the menu.
  *
  * Add-on option labels count as "on the menu" too: extras like "Ekstra Kaşar" are
- * sold and exported by the POS as their own item lines, so keying only on
+ * sold and exported by the POS as their own item lines, so reading only
  * `menu_items` would auto-ignore products the kitchen still serves.
  */
-async function getMenuNameKeys(
+async function getMenuMatcher(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
-): Promise<Set<string>> {
+): Promise<MenuMatcher | null> {
   const [{ data: items, error: itemsError }, { data: options }] = await Promise.all([
     supabase.from("menu_items").select("name_en, name_tr"),
     supabase.from("addon_options").select("label_en, label_tr"),
   ]);
   if (itemsError) {
     console.warn("[analytics] menu name read failed — auto ignore disabled", itemsError.message);
-    return new Set();
+    return null;
   }
-  const keys = new Set<string>();
-  const add = (name: unknown) => {
-    if (typeof name === "string" && name.trim()) keys.add(itemKey(name));
-  };
+  const names: string[] = [];
   for (const r of (items ?? []) as { name_en: string; name_tr: string }[]) {
-    add(r.name_en);
-    add(r.name_tr);
+    names.push(r.name_en, r.name_tr);
   }
   for (const r of (options ?? []) as { label_en: string; label_tr: string }[]) {
-    add(r.label_en);
-    add(r.label_tr);
+    names.push(r.label_en, r.label_tr);
   }
-  return keys;
+  const matcher = buildMenuMatcher(names.filter((n) => typeof n === "string" && n.trim()));
+  // An empty menu is indistinguishable from a menu we failed to read, and acting
+  // on it would hide every product. Treat it as unknown.
+  return matcher.size > 0 ? matcher : null;
 }
 
 /**
- * Read both ignore rules in one settings query. The menu snapshot is only fetched
- * when the auto rule is on, so the default path costs exactly what it used to.
+ * Read all three ignore rules in one settings query. The menu snapshot is only
+ * fetched when the auto rule is on, so the default path costs what it used to.
  */
 export async function getExclusionRules(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,49 +115,69 @@ export async function getExclusionRules(
   const { data } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", [EXCLUDED_ITEMS_SETTINGS_KEY, AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY]);
+    .in("key", [
+      EXCLUDED_ITEMS_SETTINGS_KEY,
+      AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY,
+      OFFMENU_OVERRIDES_SETTINGS_KEY,
+    ]);
   const rows = (data ?? []) as { key: string; value: string }[];
   const valueOf = (key: string) => rows.find((r) => r.key === key)?.value;
 
   const manual = parseExcludedItems(valueOf(EXCLUDED_ITEMS_SETTINGS_KEY));
   const autoOffMenu = valueOf(AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY) === "1";
+  const overrides = autoOffMenu ? parseExcludedItems(valueOf(OFFMENU_OVERRIDES_SETTINGS_KEY)) : [];
 
   return {
     manual,
     autoOffMenu,
-    menuKeys: autoOffMenu ? await getMenuNameKeys(supabase) : new Set<string>(),
+    overrides,
+    menu: autoOffMenu ? await getMenuMatcher(supabase) : null,
   };
 }
 
 /** True when the auto rule is on AND we actually know what's on the menu. */
-function autoActive(rules: ExclusionRules): boolean {
-  return rules.autoOffMenu && rules.menuKeys.size > 0;
+function autoActive(rules: ExclusionRules): rules is ExclusionRules & { menu: MenuMatcher } {
+  return rules.autoOffMenu && rules.menu !== null;
 }
 
 /** Predicate that keeps only item names no rule ignores (by match key). */
 export function makeKeepFilter(rules: ExclusionRules): (name: string) => boolean {
   const manualKeys = new Set(rules.manual.map(itemKey));
-  const auto = autoActive(rules);
+  if (!autoActive(rules)) return (name: string) => !manualKeys.has(itemKey(name));
+
+  const overrideKeys = new Set(rules.overrides.map(itemKey));
+  const { menu } = rules;
   return (name: string) => {
     const k = itemKey(name);
     if (manualKeys.has(k)) return false;
-    return !(auto && !rules.menuKeys.has(k));
+    return overrideKeys.has(k) || menu.onMenu(name);
   };
 }
 
 /**
- * The names from `universe` that the AUTO rule drops (off the menu, and not already
- * ticked manually). Needed wherever an actual name list is required rather than a
- * predicate — the dropdown's "menü dışı" markers and the AI mention filter.
+ * The names from `universe` that the AUTO rule applies to — off the menu, and not
+ * already ticked manually. Needed wherever an actual name list is required rather
+ * than a predicate: the dropdown's "menü dışı" markers and the AI mention filter.
+ *
+ * By default these are the names actually being dropped; `includeOverridden` also
+ * returns the ones the owner force-kept, which is what lets the dropdown show a
+ * live product as off-menu-but-included rather than silently unmarked.
  */
-export function pickOffMenu(rules: ExclusionRules, universe: string[]): string[] {
+export function pickOffMenu(
+  rules: ExclusionRules,
+  universe: string[],
+  { includeOverridden = false } = {}
+): string[] {
   if (!autoActive(rules)) return [];
   const manualKeys = new Set(rules.manual.map(itemKey));
+  const overrideKeys = new Set(rules.overrides.map(itemKey));
   const seen = new Set<string>();
   const out: string[] = [];
   for (const name of universe) {
     const k = itemKey(name);
-    if (seen.has(k) || manualKeys.has(k) || rules.menuKeys.has(k)) continue;
+    if (seen.has(k) || manualKeys.has(k)) continue;
+    if (!includeOverridden && overrideKeys.has(k)) continue;
+    if (rules.menu.onMenu(name)) continue;
     seen.add(k);
     out.push(name);
   }
@@ -169,15 +195,16 @@ function digest(s: string): string {
 }
 
 /**
- * Cache-key fragment identifying the active rules, so a change to either one
- * regenerates instead of serving findings/patterns built under the old rules.
- * The auto rule folds in a digest of the menu snapshot: editing the menu changes
- * what it ignores, and that has to invalidate too.
+ * Cache-key fragment identifying the active rules, so a change to any of them
+ * regenerates instead of serving findings/patterns built under the old ones.
+ * The auto rule folds in a digest of the menu snapshot and the overrides: editing
+ * either changes what it ignores, and that has to invalidate too.
  */
 export function exclusionSignature(rules: ExclusionRules): string {
   const manual = rules.manual.length ? `|x:${rules.manual.map(itemKey).sort().join(",")}` : "";
-  const auto = autoActive(rules) ? `|offmenu:${digest([...rules.menuKeys].sort().join(","))}` : "";
-  return `${manual}${auto}`;
+  if (!autoActive(rules)) return manual;
+  const overrides = rules.overrides.length ? `|keep:${rules.overrides.map(itemKey).sort().join(",")}` : "";
+  return `${manual}|offmenu:${digest(rules.menu.digest)}${overrides}`;
 }
 
 /**

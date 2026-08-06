@@ -16,6 +16,7 @@ import {
   generatePatternsAction,
   setExcludedItemsAction,
   setAutoExcludeOffMenuAction,
+  setOffMenuOverridesAction,
   type PatternItem,
 } from "./actions";
 import { Loader } from "@/components/Loader/components";
@@ -86,8 +87,10 @@ export type AnalyticsData = {
   excludedItems: string[];
   /** "Also ignore anything no longer on the menu" rule — owner toggle. */
   autoExcludeOffMenu: boolean;
-  /** Names that rule is currently dropping this range (empty when it's off). */
-  autoExcludedItems: string[];
+  /** Names that rule reads as off-menu this range, INCLUDING overridden ones. */
+  offMenuItems: string[];
+  /** Off-menu names the owner put back into the analysis by hand. */
+  offMenuOverrides: string[];
   /** Candidate item names for the ignore dropdown (seen this range ∪ excluded). */
   itemOptions: string[];
   /** Latest persisted AI finding set for the current range; null when none yet. */
@@ -759,10 +762,12 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
  * Above the list sits the AUTO rule: one switch that ignores every product no
  * longer on the menu, so delisted dishes stop occupying the charts without the
  * owner re-ticking them by hand after each menu change. Auto-hidden rows stay
- * visible in the list, checked-and-locked with a "menü dışı" tag — the switch
- * says how many it caught, and flipping it off brings them all back.
+ * visible in the list with a "menü dışı" tag, and stay UNTICKABLE — the name match
+ * is fuzzy, so the owner has to be able to say "no, we still sell that" for the one
+ * it got wrong. Those exceptions are wiped whenever the switch is flipped, so off
+ * and on re-applies the rule from scratch.
  *
- * Both settings persist server-side (settings table); each change saves and
+ * All three settings persist server-side (settings table); each change saves and
  * refreshes the dashboard so the charts and insights update immediately.
  *
  * `options` is the FULL set of products seen in the range (not just the ones the
@@ -774,17 +779,20 @@ function IgnoreItemsMenu({
   options,
   excluded,
   autoOn,
-  autoExcluded,
+  offMenu,
+  overrides,
 }: {
   options: string[];
   excluded: string[];
   autoOn: boolean;
-  autoExcluded: string[];
+  offMenu: string[];
+  overrides: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(excluded);
   const [auto, setAuto] = useState(autoOn);
+  const [included, setIncluded] = useState<string[]>(overrides);
   const [query, setQuery] = useState("");
   const [saving, startSaving] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
@@ -795,15 +803,22 @@ function IgnoreItemsMenu({
 
   // Server-computed for the CURRENT rule state, so an optimistic switch flip has
   // no names to show yet — the refreshed props fill them in a moment later.
-  const autoKeys = new Set(autoExcluded.map(nameKey));
-  const isAuto = (name: string) => auto && autoKeys.has(nameKey(name));
+  const offMenuKeys = new Set(offMenu.map(nameKey));
+  const includedKeys = new Set(included.map(nameKey));
+  /** Matched as off-menu — whether or not it's currently being dropped. */
+  const isOffMenu = (name: string) => auto && offMenuKeys.has(nameKey(name));
+  /** Off-menu but kept in the analysis by an explicit override. */
+  const isKept = (name: string) => isOffMenu(name) && includedKeys.has(nameKey(name));
+  /** Actually dropped by the rule right now. */
+  const isAuto = (name: string) => isOffMenu(name) && !includedKeys.has(nameKey(name));
 
   const needle = query.trim().toLocaleLowerCase("tr");
   const shown = options
     .filter((n) => !needle || n.toLocaleLowerCase("tr").includes(needle))
     // Ignored first (ticked or auto-hidden), then the incoming alphabetical order
-    // (sort is stable).
-    .sort((a, b) => Number(isOn(b) || isAuto(b)) - Number(isOn(a) || isAuto(a)));
+    // (sort is stable). Overridden items rank with them so the exception stays
+    // next to the rule that caught it.
+    .sort((a, b) => Number(isOn(b) || isOffMenu(b)) - Number(isOn(a) || isOffMenu(a)));
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -829,20 +844,44 @@ function IgnoreItemsMenu({
     });
   };
 
-  const saveAuto = (next: boolean) => {
-    setAuto(next); // optimistic — the switch reacts instantly
+  const saveOverrides = (next: string[]) => {
+    setIncluded(next); // optimistic — checkbox reacts instantly
     startSaving(async () => {
-      const res = await setAutoExcludeOffMenuAction(next);
+      const res = await setOffMenuOverridesAction(next);
       if (res.ok) router.refresh();
-      else setAuto(!next); // save failed — don't leave the switch lying
     });
   };
 
-  const toggle = (name: string) =>
-    save(isOn(name) ? selected.filter((s) => nameKey(s) !== nameKey(name)) : [...selected, name]);
+  const saveAuto = (next: boolean) => {
+    // Flipping the switch drops the exceptions server-side; mirror that here so the
+    // list doesn't show stale "dahil" markers until the refresh lands.
+    setAuto(next);
+    setIncluded([]);
+    startSaving(async () => {
+      const res = await setAutoExcludeOffMenuAction(next);
+      if (res.ok) router.refresh();
+      else {
+        setAuto(!next); // save failed — don't leave the switch lying
+        setIncluded(overrides);
+      }
+    });
+  };
 
+  const toggle = (name: string) => {
+    // Off-menu rows toggle the RULE's exception, not the manual ignore list:
+    // unticking one means "we still sell this, keep analysing it".
+    if (isOffMenu(name)) {
+      saveOverrides(
+        isKept(name) ? included.filter((s) => nameKey(s) !== nameKey(name)) : [...included, name]
+      );
+      return;
+    }
+    save(isOn(name) ? selected.filter((s) => nameKey(s) !== nameKey(name)) : [...selected, name]);
+  };
+
+  const autoHidden = auto ? offMenu.filter((n) => !includedKeys.has(nameKey(n))).length : 0;
   // Everything currently left out, so the badge matches what the charts dropped.
-  const count = selected.length + (auto ? autoExcluded.length : 0);
+  const count = selected.length + autoHidden;
 
   return (
     <div className="flex flex-col items-start gap-1">
@@ -899,9 +938,11 @@ function IgnoreItemsMenu({
               </span>
               <span className="block mt-0.5 text-[10px] leading-relaxed text-green/50 font-bold">
                 {auto
-                  ? autoExcluded.length > 0
-                    ? `Menüden kaldırılmış ${autoExcluded.length} ürün bu dönemde gizlendi.`
-                    : "Bu dönemde menü dışı ürün bulunamadı."
+                  ? autoHidden > 0
+                    ? `Menüde bulunmayan ${autoHidden} ürün bu dönemde gizlendi. Hâlâ satılan bir ürün varsa işaretini kaldırıp geri alabilirsin.`
+                    : included.length > 0
+                      ? `Menü dışı ürünlerin hepsi elle geri alındı (${included.length}).`
+                      : "Bu dönemde menü dışı ürün bulunamadı."
                   : "Menüden kaldırılan ürünler listelerde kalmaya devam eder."}
               </span>
             </span>
@@ -925,30 +966,42 @@ function IgnoreItemsMenu({
               <p className="px-3 py-3 text-[11px] text-green/50">Eşleşen ürün yok.</p>
             ) : (
               shown.map((name) => {
-                // Auto-hidden rows read as already ignored and can't be unticked —
-                // the switch above owns them, and un-ignoring one item would need a
-                // per-item exception the rule deliberately doesn't have.
+                // Rows the rule caught stay tickable: unticking one overrides the
+                // rule for that product ("we still sell this"), reticking hands it
+                // back to the rule.
                 const byRule = isAuto(name);
+                const kept = isKept(name);
                 return (
                   <label
                     key={name}
                     className={[
-                      "flex items-center gap-2 px-3 py-1.5 text-[12px] text-ink",
-                      byRule ? "opacity-60 cursor-default" : "hover:bg-bg-deep cursor-pointer",
+                      "flex items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-bg-deep cursor-pointer",
+                      kept ? "text-ink/70" : "text-ink",
                     ].join(" ")}
-                    title={byRule ? `${name} — menüde yok, otomatik yoksayıldı` : name}
+                    title={
+                      byRule
+                        ? `${name} — menüde bulunamadı, yoksayıldı. Hâlâ satılıyorsa işareti kaldır.`
+                        : kept
+                          ? `${name} — menüde bulunamadı ama analize dahil edildi`
+                          : name
+                    }
                   >
                     <input
                       type="checkbox"
                       checked={byRule || isOn(name)}
-                      disabled={saving || byRule}
+                      disabled={saving}
                       onChange={() => toggle(name)}
                       className="size-3.5 accent-green shrink-0"
                     />
                     <span className="truncate">{name}</span>
-                    {byRule && (
-                      <span className="ml-auto shrink-0 px-1 py-0.5 bg-orange/10 text-orange font-ui font-extrabold text-[8px] tracking-[0.1em] uppercase">
-                        menü dışı
+                    {(byRule || kept) && (
+                      <span
+                        className={[
+                          "ml-auto shrink-0 px-1 py-0.5 font-ui font-extrabold text-[8px] tracking-[0.1em] uppercase",
+                          kept ? "bg-green/10 text-green/70" : "bg-orange/10 text-orange",
+                        ].join(" ")}
+                      >
+                        {kept ? "menü dışı · dahil" : "menü dışı"}
                       </span>
                     )}
                   </label>
@@ -1305,13 +1358,17 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     ? "Bu dönemde menü etkileşimi kaydedilmedi."
     : "Etkileşim verisi yok (PostHog gerekli).";
 
-  // Scope key for the AI cards: range + both ignore rules (the auto rule folds in
-  // the names it caught, so a menu edit that changes them counts as a change).
-  // Any of these remounts the cards so they regenerate over the same filtered data
-  // the charts already show.
+  // Scope key for the AI cards: range + every ignore rule (the auto rule folds in
+  // the names it caught and the ones overridden back in, so a menu edit or a new
+  // exception counts as a change). Any of these remounts the cards so they
+  // regenerate over the same filtered data the charts already show.
   const aiScopeKey = `${data.range.from}_${data.range.to}__${[...data.excludedItems]
     .sort()
-    .join("|")}__${data.autoExcludeOffMenu ? [...data.autoExcludedItems].sort().join("|") : "off"}`;
+    .join("|")}__${
+    data.autoExcludeOffMenu
+      ? `${[...data.offMenuItems].sort().join("|")}__keep:${[...data.offMenuOverrides].sort().join("|")}`
+      : "off"
+  }`;
 
   return (
     <div className="relative" aria-busy={switching}>
@@ -1392,7 +1449,8 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 options={data.itemOptions}
                 excluded={data.excludedItems}
                 autoOn={data.autoExcludeOffMenu}
-                autoExcluded={data.autoExcludedItems}
+                offMenu={data.offMenuItems}
+                overrides={data.offMenuOverrides}
               />
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 {/* Only shown when Kişi is running on the estimate (no real covers entered) */}

@@ -247,10 +247,14 @@ export default async function AnalyticsPage({
   }
   const itemOptions = [...optionMap.values()].sort((a, b) => a.localeCompare(b, "tr"));
 
-  // Which of those the auto rule is currently dropping — the dashboard's only
-  // honest way to say WHAT a single toggle just hid, so the dropdown can mark each
-  // one "menü dışı" instead of silently shrinking every chart. Empty when the rule
-  // is off (or when the menu read came back empty, which disarms it).
+  // What the auto rule reads as off-menu — the dashboard's only honest way to say
+  // WHAT a single toggle just hid, so the dropdown can mark each one "menü dışı"
+  // instead of silently shrinking every chart. Empty when the rule is off (or when
+  // the menu read came back empty, which disarms it).
+  //
+  // Two lists: everything the rule matched (so an overridden item still carries its
+  // marker) and the subset actually being dropped right now.
+  const offMenuItems = pickOffMenu(rules, itemOptions, { includeOverridden: true });
   const autoExcludedItems = pickOffMenu(rules, itemOptions);
 
   const storedRow = currentRows?.[0];
@@ -322,7 +326,8 @@ export default async function AnalyticsPage({
     localePrefs: localePrefs.map((l) => ({ ...l, topItems: l.topItems.filter((x) => keep(x.name)) })),
     excludedItems,
     autoExcludeOffMenu: rules.autoOffMenu,
-    autoExcludedItems,
+    offMenuItems,
+    offMenuOverrides: rules.overrides,
     itemOptions,
     initialInsights,
     insightsHistory: ((historyRows ?? []) as {

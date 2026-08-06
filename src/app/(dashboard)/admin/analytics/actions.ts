@@ -34,6 +34,7 @@ import {
   type ExclusionRules,
   EXCLUDED_ITEMS_SETTINGS_KEY,
   AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY,
+  OFFMENU_OVERRIDES_SETTINGS_KEY,
 } from "@/lib/analytics/exclusions";
 
 const RangeSchema = z.object({
@@ -138,7 +139,7 @@ async function loadStoredSet(
  * the default path costs nothing extra.
  */
 async function ignoredItemNames(rules: ExclusionRules, range: DateRange): Promise<string[]> {
-  if (!rules.autoOffMenu || rules.menuKeys.size === 0) return rules.manual;
+  if (!rules.autoOffMenu || rules.menu === null) return rules.manual;
   const sold = await getRealBestSellers(range, 500);
   return [...rules.manual, ...pickOffMenu(rules, sold.map((s) => s.item_name))];
 }
@@ -548,10 +549,14 @@ export async function setExcludedItemsAction(names: string[]): Promise<{ ok: boo
 
 /**
  * Flip the "also ignore items that are no longer on the menu" rule. On, every item
- * name with no matching `menu_items` / add-on entry drops out of the item-level
+ * name that doesn't match a `menu_items` / add-on entry drops out of the item-level
  * views and the AI the same way a manually ticked one does — so delisted dishes
  * stop occupying the charts — and turning it off brings them all straight back.
  * Money/amount totals are untouched either way.
+ *
+ * Flipping it also clears the per-item overrides: switching the rule off and on is
+ * the documented way to re-apply it from scratch, which means the exceptions
+ * collected under the previous run must not survive the cycle.
  */
 export async function setAutoExcludeOffMenuAction(on: boolean): Promise<{ ok: boolean }> {
   const parsed = z.boolean().safeParse(on);
@@ -560,11 +565,41 @@ export async function setAutoExcludeOffMenuAction(on: boolean): Promise<{ ok: bo
   const { supabase } = await requireRole(["owner", "dev"]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
-  const { error } = await s
-    .from("settings")
-    .upsert({ key: AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY, value: parsed.data ? "1" : "0" }, { onConflict: "key" });
+  const { error } = await s.from("settings").upsert(
+    [
+      { key: AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY, value: parsed.data ? "1" : "0" },
+      { key: OFFMENU_OVERRIDES_SETTINGS_KEY, value: "[]" },
+    ],
+    { onConflict: "key" }
+  );
   if (error) {
     console.warn("[analytics] setAutoExcludeOffMenu failed", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+/**
+ * Persist the per-item exceptions to the auto rule — products the matcher read as
+ * delisted that the owner knows are live (a POS spelling too far from the menu
+ * entry, a seasonal item off the menu but still sold). An override puts the item
+ * back into every item-level view; it does not touch the manual ignore list, and
+ * it is wiped whenever the auto rule is toggled.
+ */
+export async function setOffMenuOverridesAction(names: string[]): Promise<{ ok: boolean }> {
+  const parsed = z.array(z.string().max(200)).max(300).safeParse(names);
+  if (!parsed.success) return { ok: false };
+
+  const { supabase } = await requireRole(["owner", "dev"]);
+  const clean = normalizeExclusionList(parsed.data);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const { error } = await s
+    .from("settings")
+    .upsert({ key: OFFMENU_OVERRIDES_SETTINGS_KEY, value: JSON.stringify(clean) }, { onConflict: "key" });
+  if (error) {
+    console.warn("[analytics] setOffMenuOverrides failed", error.message);
     return { ok: false };
   }
   return { ok: true };
