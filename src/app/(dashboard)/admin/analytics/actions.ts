@@ -24,12 +24,16 @@ import {
 } from "@/lib/analytics/insights";
 import { minePatterns, MAX_PATTERN_LEVEL, type PatternKind } from "@/lib/analytics/patterns";
 import {
-  getExcludedItemNames,
+  getExclusionRules,
   makeKeepFilter,
   normalizeExclusionList,
   dropExcludedMentions,
+  pickOffMenu,
+  exclusionSignature,
   itemKey,
+  type ExclusionRules,
   EXCLUDED_ITEMS_SETTINGS_KEY,
+  AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY,
 } from "@/lib/analytics/exclusions";
 
 const RangeSchema = z.object({
@@ -119,6 +123,26 @@ async function loadStoredSet(
   };
 }
 
+/**
+ * The ignored items of a range as actual NAMES, for the two places that reuse a
+ * stored set and so need names rather than the `keep` predicate: stripping AI
+ * findings that quote an ignored item, and dropping patterns about one.
+ *
+ * The manual list is already names. The auto (off-menu) rule is a predicate, so it
+ * gets resolved against a universe — the range's sold items, deep enough to cover
+ * the tail. Resolving through a real universe is also what keeps the auto rule off
+ * a pattern's NON-item subjects (price bands, "İndirim"): those never appear in the
+ * sold list, so they are never treated as delisted products.
+ *
+ * The read only happens when the rule is on and a stored set exists to reuse, so
+ * the default path costs nothing extra.
+ */
+async function ignoredItemNames(rules: ExclusionRules, range: DateRange): Promise<string[]> {
+  if (!rules.autoOffMenu || rules.menuKeys.size === 0) return rules.manual;
+  const sold = await getRealBestSellers(range, 500);
+  return [...rules.manual, ...pickOffMenu(rules, sold.map((s) => s.item_name))];
+}
+
 /** Assemble everything the model sees for a range (shared by generate + recheck). */
 async function buildInsightsInput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,11 +151,12 @@ async function buildInsightsInput(
 ): Promise<InsightsInput> {
   const prev = previousRange(range);
 
-  // Drop owner-ignored items from the item-level lists the model reasons over, so
-  // its findings match the (filtered) charts. Aggregate KPIs/funnel stay whole.
-  // Read first: the price-band and discount aggregates are now built FROM item-level
-  // data, so they need the filter at aggregation time, not after.
-  const keep = makeKeepFilter(await getExcludedItemNames(supabase));
+  // Drop ignored items (manually ticked + off-menu when that rule is on) from the
+  // item-level lists the model reasons over, so its findings match the (filtered)
+  // charts. Aggregate KPIs/funnel stay whole. Read first: the price-band and
+  // discount aggregates are built FROM item-level data, so they need the filter at
+  // aggregation time, not after.
+  const keep = makeKeepFilter(await getExclusionRules(supabase));
 
   const [
     summary,
@@ -251,14 +276,17 @@ export async function generateInsightsAction(params: {
   if (!insightsConfigured()) return FAIL;
 
   const { range } = resolveRange(parsed.data);
-  // Fold the ignore-list into the cache key so changing it regenerates rather than
-  // serving cached findings that still mention an item the owner just excluded.
+  // Fold the ignore rules into the cache key so changing either one regenerates
+  // rather than serving cached findings that still mention an item now ignored.
   // (The range-keyed DB set is filtered at build time on the next recheck.)
-  const excluded = await getExcludedItemNames(supabase);
-  const exclSig = excluded.length ? `|x:${excluded.map(itemKey).sort().join(",")}` : "";
-  const key = `${range.from}_${range.to}${exclSig}`;
+  const rules = await getExclusionRules(supabase);
+  const key = `${range.from}_${range.to}${exclusionSignature(rules)}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
+
+  // Resolved at most once per call, and only where a stored set is actually reused.
+  let blocklist: string[] | null = null;
+  const ignoredNames = async () => (blocklist ??= await ignoredItemNames(rules, range));
 
   // Load mode reuses a cached/persisted set — this is what keeps the findings
   // stable across page loads instead of re-rolling a new random set each time.
@@ -268,12 +296,14 @@ export async function generateInsightsAction(params: {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return toResult(hit.findings, [], new Set(), true);
     const stored = await loadStoredSet(s, range);
-    // The DB set is keyed by range only, so it can predate the current ignore list —
-    // strip any finding that names a now-excluded item before reusing it.
-    const storedInsights = dropExcludedMentions(stored.insights, excluded);
-    if (storedInsights.length && isInsightFresh(stored.createdAt)) {
-      cache.set(key, { at: Date.now(), findings: storedInsights });
-      return toResult(storedInsights, [], new Set(), true);
+    if (stored.insights.length && isInsightFresh(stored.createdAt)) {
+      // The DB set is keyed by range only, so it can predate the current rules —
+      // strip any finding that names a now-ignored item before reusing it.
+      const storedInsights = dropExcludedMentions(stored.insights, await ignoredNames());
+      if (storedInsights.length) {
+        cache.set(key, { at: Date.now(), findings: storedInsights });
+        return toResult(storedInsights, [], new Set(), true);
+      }
     }
   }
 
@@ -286,12 +316,10 @@ export async function generateInsightsAction(params: {
 
   if (mode === "recheck") {
     // Recheck validates the current set no matter its age (the user asked for it).
-    // Filter first so a stored set predating the ignore list doesn't feed excluded
+    // Filter first so a stored set predating the ignore rules doesn't feed ignored
     // items back into the revalidation prompt.
-    const existing = dropExcludedMentions(
-      cache.get(key)?.findings ?? (await loadStoredSet(s, range)).insights,
-      excluded
-    );
+    const cached = cache.get(key)?.findings;
+    const existing = cached ?? dropExcludedMentions((await loadStoredSet(s, range)).insights, await ignoredNames());
     baseline = existing;
     if (existing.length) {
       const r = await revalidateFindings(input, existing);
@@ -444,10 +472,9 @@ export async function generatePatternsAction(params: {
 
   const { supabase, profile } = await requireRole(["owner", "dev"]);
   const { range } = resolveRange(parsed.data);
-  const excluded = await getExcludedItemNames(supabase);
-  const keep = makeKeepFilter(excluded);
-  const exclSig = excluded.length ? `|x:${excluded.map(itemKey).sort().join(",")}` : "";
-  const key = `${range.from}_${range.to}${exclSig}`;
+  const rules = await getExclusionRules(supabase);
+  const keep = makeKeepFilter(rules);
+  const key = `${range.from}_${range.to}${exclusionSignature(rules)}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
   const usedAI = insightsConfigured();
@@ -458,13 +485,18 @@ export async function generatePatternsAction(params: {
     const hit = patternsCache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return { ok: true, patterns: hit.patterns, cached: true, usedAI };
     const stored = await loadStoredPatterns(s, range);
-    // Patterns carry their subjects, so honoring the ignore list on reuse is exact:
-    // drop any pattern whose items include a now-excluded one (aggregate patterns —
-    // price band, discount — have non-item subjects and are kept).
-    const storedPatterns = stored.patterns.filter((p) => p.subjects.every((sub) => keep(sub)));
-    if (storedPatterns.length && isInsightFresh(stored.createdAt)) {
-      patternsCache.set(key, { at: Date.now(), patterns: storedPatterns });
-      return { ok: true, patterns: storedPatterns, cached: true, usedAI };
+    if (stored.patterns.length && isInsightFresh(stored.createdAt)) {
+      // Patterns carry their subjects, so honoring the ignore rules on reuse is
+      // exact: drop any pattern whose items include a now-ignored one. Matched
+      // against a NAME list rather than `keep`, because aggregate patterns (price
+      // band, discount) have non-item subjects that the off-menu rule would
+      // otherwise read as delisted products and wipe out the whole family.
+      const ignoredKeys = new Set((await ignoredItemNames(rules, range)).map(itemKey));
+      const storedPatterns = stored.patterns.filter((p) => p.subjects.every((sub) => !ignoredKeys.has(itemKey(sub))));
+      if (storedPatterns.length) {
+        patternsCache.set(key, { at: Date.now(), patterns: storedPatterns });
+        return { ok: true, patterns: storedPatterns, cached: true, usedAI };
+      }
     }
   }
 
@@ -509,6 +541,30 @@ export async function setExcludedItemsAction(names: string[]): Promise<{ ok: boo
     .upsert({ key: EXCLUDED_ITEMS_SETTINGS_KEY, value: JSON.stringify(clean) }, { onConflict: "key" });
   if (error) {
     console.warn("[analytics] setExcludedItems failed", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+/**
+ * Flip the "also ignore items that are no longer on the menu" rule. On, every item
+ * name with no matching `menu_items` / add-on entry drops out of the item-level
+ * views and the AI the same way a manually ticked one does — so delisted dishes
+ * stop occupying the charts — and turning it off brings them all straight back.
+ * Money/amount totals are untouched either way.
+ */
+export async function setAutoExcludeOffMenuAction(on: boolean): Promise<{ ok: boolean }> {
+  const parsed = z.boolean().safeParse(on);
+  if (!parsed.success) return { ok: false };
+
+  const { supabase } = await requireRole(["owner", "dev"]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const { error } = await s
+    .from("settings")
+    .upsert({ key: AUTO_EXCLUDE_OFFMENU_SETTINGS_KEY, value: parsed.data ? "1" : "0" }, { onConflict: "key" });
+  if (error) {
+    console.warn("[analytics] setAutoExcludeOffMenu failed", error.message);
     return { ok: false };
   }
   return { ok: true };

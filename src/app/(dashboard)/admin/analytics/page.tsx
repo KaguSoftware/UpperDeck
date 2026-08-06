@@ -29,7 +29,13 @@ import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
 import { getRealFoodFilter } from "@/lib/analytics/food";
 import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
-import { getExcludedItemNames, makeKeepFilter, dropExcludedMentions, itemKey } from "@/lib/analytics/exclusions";
+import {
+  getExclusionRules,
+  makeKeepFilter,
+  dropExcludedMentions,
+  pickOffMenu,
+  itemKey,
+} from "@/lib/analytics/exclusions";
 import { AnalyticsClient, type AnalyticsData } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -77,16 +83,18 @@ export default async function AnalyticsPage({
   // `pctDelta` already expresses with null.
   const engagementComparable = !engPrev.empty && engPrev.days === engNow.days;
 
-  // Owner-configured "ignore" list. Read first so item-level metrics (and the
-  // basket pairing, which filters at query time) all honor it. Money/amount
-  // aggregates are intentionally left whole.
+  // Owner-configured "ignore" rules: the manually ticked list plus, when the auto
+  // rule is on, everything no longer on the menu. Read first so item-level metrics
+  // (and the basket pairing, which filters at query time) all honor them.
+  // Money/amount aggregates are intentionally left whole.
   //
   // This stays a serial pre-fetch (not folded into the wave below) on purpose:
   // getBoughtTogether filters items by `keep` DURING its pairing aggregation, so a
-  // filtered item never forms a pair — it genuinely needs the ignore list up front.
+  // filtered item never forms a pair — it genuinely needs the rules up front.
   // The insights-history reads, which have no such dependency, ARE folded in.
-  const excludedItems = await getExcludedItemNames(supabase);
-  const keep = makeKeepFilter(excludedItems);
+  const rules = await getExclusionRules(supabase);
+  const excludedItems = rules.manual;
+  const keep = makeKeepFilter(rules);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
@@ -210,14 +218,6 @@ export default async function AnalyticsPage({
       ? revenueOverTime.filter((d) => d.date >= engNow.from).reduce((sum, d) => sum + d.revenue, 0)
       : summary.totalSales;
 
-  const storedRow = currentRows?.[0];
-  const initialInsights: string[] | null =
-    isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
-      ? // The stored set is range-keyed, so it can predate the ignore list — strip any
-        // finding naming a now-excluded item so the AI card never shows one.
-        dropExcludedMentions(storedRow.insights.map(String).filter(Boolean), excludedItems)
-      : null;
-
   // Options for the ignore dropdown: every item name seen this range, unioned with
   // already-excluded names (so they can be toggled back on even with no data now).
   //
@@ -246,6 +246,23 @@ export default async function AnalyticsPage({
     if (!optionMap.has(k)) optionMap.set(k, name);
   }
   const itemOptions = [...optionMap.values()].sort((a, b) => a.localeCompare(b, "tr"));
+
+  // Which of those the auto rule is currently dropping — the dashboard's only
+  // honest way to say WHAT a single toggle just hid, so the dropdown can mark each
+  // one "menü dışı" instead of silently shrinking every chart. Empty when the rule
+  // is off (or when the menu read came back empty, which disarms it).
+  const autoExcludedItems = pickOffMenu(rules, itemOptions);
+
+  const storedRow = currentRows?.[0];
+  const initialInsights: string[] | null =
+    isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
+      ? // The stored set is range-keyed, so it can predate the current rules — strip
+        // any finding naming a now-ignored item so the AI card never shows one.
+        dropExcludedMentions(storedRow.insights.map(String).filter(Boolean), [
+          ...excludedItems,
+          ...autoExcludedItems,
+        ])
+      : null;
 
   const data: AnalyticsData = {
     preset,
@@ -304,6 +321,8 @@ export default async function AnalyticsPage({
     basket: { pairs: basket.pairs, orders: basket.orders },
     localePrefs: localePrefs.map((l) => ({ ...l, topItems: l.topItems.filter((x) => keep(x.name)) })),
     excludedItems,
+    autoExcludeOffMenu: rules.autoOffMenu,
+    autoExcludedItems,
     itemOptions,
     initialInsights,
     insightsHistory: ((historyRows ?? []) as {
