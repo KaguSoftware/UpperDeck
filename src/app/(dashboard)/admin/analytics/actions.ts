@@ -7,14 +7,12 @@ import { getRealSalesSummary, getRealBestSellers, type DateRange } from "@/lib/a
 import { getItemConversion, getAbandonedViewsNet } from "@/lib/analytics/compare";
 import {
   getTopViewedItems,
-  getTopCartedItems,
   getEngagementFunnel,
   getSessionStats,
   getCartConversion,
   getCategoryPopularity,
-  getPriceBands,
-  getDiscountSplit,
 } from "@/lib/analytics/posthog";
+import { getPriceBandSales, getDiscountSalesSplit } from "@/lib/analytics/price-bands";
 import {
   generateFindingsBatch,
   revalidateFindings,
@@ -128,11 +126,17 @@ async function buildInsightsInput(
   range: DateRange
 ): Promise<InsightsInput> {
   const prev = previousRange(range);
+
+  // Drop owner-ignored items from the item-level lists the model reasons over, so
+  // its findings match the (filtered) charts. Aggregate KPIs/funnel stay whole.
+  // Read first: the price-band and discount aggregates are now built FROM item-level
+  // data, so they need the filter at aggregation time, not after.
+  const keep = makeKeepFilter(await getExcludedItemNames(supabase));
+
   const [
     summary,
     bestSellers,
     topViewed,
-    topCarted,
     funnel,
     sessions,
     cartConversion,
@@ -148,15 +152,14 @@ async function buildInsightsInput(
     getRealSalesSummary(range),
     getRealBestSellers(range),
     getTopViewedItems(range),
-    getTopCartedItems(range),
     getEngagementFunnel(range),
     getSessionStats(range),
     getCartConversion(range),
     getCategoryPopularity(range),
     getAbandonedViewsNet(range),
     getItemConversion(range),
-    getPriceBands(range),
-    getDiscountSplit(range),
+    getPriceBandSales(range, keep),
+    getDiscountSalesSplit(range, keep),
     getRealSalesSummary(prev),
     getEngagementFunnel(prev),
     getSessionStats(prev),
@@ -166,10 +169,6 @@ async function buildInsightsInput(
     f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
   const views = funnelCount(funnel, "Görüntü");
   const waiterCalls = funnelCount(funnel, "Garson");
-
-  // Drop owner-ignored items from the item-level lists the model reasons over, so
-  // its findings match the (filtered) charts. Aggregate KPIs/funnel stay whole.
-  const keep = makeKeepFilter(await getExcludedItemNames(supabase));
 
   // Earlier analyses (may be empty; table might not exist yet — that's fine).
   const { data: historyRows } = await supabase
@@ -195,14 +194,26 @@ async function buildInsightsInput(
       cartConversion,
     },
     topViewed: topViewed.filter((x) => keep(x.name)),
-    topCarted: topCarted.filter((x) => keep(x.name)),
     bestSellers: bestSellers.filter((x) => keep(x.item_name)),
-    funnel,
+    // The "Sepete Eklenen" step is withheld from the model (the chart still shows
+    // it to the owner): given a views count and a cart count side by side it kept
+    // reading the ratio as demand, which is exactly the wrong verdict here.
+    funnel: funnel.filter((f) => !f.step.startsWith("Sepete")),
     abandonedViews: abandonedViews.filter((x) => keep(x.name)),
     categoryPopularity,
-    itemConversion: itemConversion.filter((x) => keep(x.name)),
-    priceBands,
-    discountSplit,
+    // Cart counts are dropped here on purpose: the model kept reading views→carts
+    // as demand. It sees views, real sold quantity and the views→sale rate only.
+    itemConversion: itemConversion
+      .filter((x) => keep(x.name))
+      .map(({ name, views, sold, convPct }) => ({ name, views, sold, convPct })),
+    priceBands: priceBands.map((b) => ({
+      ...b,
+      convPct: b.views > 0 ? Math.round((b.sold / b.views) * 100) : 0,
+    })),
+    discountSplit: discountSplit.map((d) => ({
+      ...d,
+      convPct: d.views > 0 ? Math.round((d.sold / d.views) * 100) : 0,
+    })),
     deltas: {
       totalSales: pctDelta(summary.totalSales, prevSummary.totalSales),
       totalCovers: pctDelta(summary.totalCovers, prevSummary.totalCovers),

@@ -53,14 +53,17 @@ export type InsightsInput = {
     cartConversion: number;
   };
   topViewed: { name: string; count: number }[];
-  topCarted: { name: string; count: number }[];
   bestSellers: { item_name: string; qty: number; revenue: number }[];
   funnel: { step: string; count: number }[];
   abandonedViews: { name: string; b5to10: number; b10to20: number; b20plus: number; total: number }[];
   categoryPopularity: { name: string; count: number }[];
-  itemConversion: { name: string; views: number; carts: number; sold: number; convPct: number }[];
-  priceBands: { band: string; views: number; carts: number }[];
-  discountSplit: { group: string; views: number; carts: number }[];
+  /** Per item: views, real POS quantity sold, and views→SALE rate. No cart column
+   *  on purpose — it only ever tempted the model into cart-based verdicts. */
+  itemConversion: { name: string; views: number; sold: number; convPct: number }[];
+  /** Per price band: views, real POS quantity + revenue, and views→SALE rate. */
+  priceBands: { band: string; views: number; sold: number; revenue: number; convPct: number }[];
+  /** Discounted vs full-price, measured on real sales (not cart adds). */
+  discountSplit: { group: string; views: number; sold: number; convPct: number }[];
   /** KPI deltas vs the previous period of equal length, in percent (null = no baseline). */
   deltas: Record<string, number | null>;
   /** Earlier generated insight sets, newest first — lets the model follow up on past advice. */
@@ -78,40 +81,47 @@ export type RevalidateResult = {
 };
 
 const DATA_CONTEXT = `You are a restaurant menu analytics advisor for a QR-code menu.
-You receive engagement data (item views, add-to-carts, waiter calls) and real POS sales for a date range,
-plus an "abandonedViews" table: items whose detail page was opened and closed WITHOUT adding to cart,
+You receive engagement data (item views, waiter calls) and real POS sales for a date range,
+plus an "abandonedViews" table: items whose detail page was opened and closed WITHOUT ordering,
 bucketed by how long the diner looked — 5-10s (photo/appeal likely weak), 10-20s (description not convincing),
 20s+ (read everything and still didn't buy: content or price problem).
-You also receive: "itemConversion" (per item: views, cart adds, actually sold, and convPct =
-views→SALE rate in percent), "priceBands" (view→cart conversion by price range),
-"discountSplit" (discounted vs full-price conversion),
+You also receive: "itemConversion" (per item: views, quantity actually SOLD, and convPct =
+views→SALE rate in percent), "priceBands" (per price range: views, quantity SOLD, revenue, and convPct =
+views→SALE rate), "discountSplit" (discounted vs full-price items, same views/sold/convPct shape),
 "deltas" (percent change of each KPI vs the previous period of equal length),
 and "previousInsights" (your earlier analyses, newest first).
 
-IMPORTANT — real POS SALES are the ground truth for demand. This menu has NO checkout, so many
-diners order verbally without ever adding to cart; add-to-cart is only a weak intent proxy. Judge an
-item's success or failure on how much it actually SOLD (and its views→sale rate), NOT on cart adds.
-Only fall back to cart data when sales figures are absent. Never call an item a winner because it was
-carted a lot, and never call it a failure for low carts if it sold well.
+IMPORTANT — real POS SALES are the ground truth for demand, and EVERY conversion figure you are given is
+already views→SALE. This menu has NO checkout: the cart is an optional scratchpad most diners skip before
+ordering verbally, so per-item and per-band add-to-cart counts are NOT provided and must never be invented
+or inferred. Judge an item, a price band or a discount ONLY on what it actually SOLD and its views→sale rate.
+Never describe an item, band or discount in terms of "sepete eklenme" / "sepete ekleme oranı" — that data
+does not exist here. (The single exception is the KPI "cartConversion": the share of sessions that opened the
+cart and went on to call the waiter. It is a whole-restaurant engagement rate — usable for a period-over-period
+observation, NEVER as evidence about any item, price band or discount.)
+A convPct above 100 is normal and means the item sells more than its detail page is opened (ordered without
+being looked up), not an error.
+When sold figures are entirely absent for the period, say so plainly instead of substituting an engagement
+proxy for demand.
 
 Every finding must cite a specific number from the data AND carry a concrete takeaway or action —
 never just restate a number. No greetings, no fluff. Write IN TURKISH.
 
 WRITE FOR A RESTAURANT OWNER, NOT AN ANALYST. NEVER name the internal data fields or tables in your output —
 the reader has never heard of "priceBands", "itemConversion", "abandonedViews", "discountSplit", "deltas",
-"funnel", "topViewed", "topCarted", "bestSellers", "categoryPopularity" or "KPIs", and a phrase like
+"funnel", "topViewed", "bestSellers", "categoryPopularity" or "KPIs", and a phrase like
 "priceBands verilerine göre" is meaningless to them. NEVER open a finding with "X verilerine göre". Say the
 thing in plain restaurant Turkish instead: not "priceBands'e göre 400+ bandı" but "400₺ ve üzeri ürünler";
 not "itemConversion düşük" but "çok görüntülenmesine rağmen az satılıyor".
 
 DO NOT restate what the owner already sees at a glance. The dashboard already shows them, as their own tables
-and charts, the most-viewed items, the most-added-to-cart items, the best-sellers, category popularity, and
-each item's view/cart/sale figures. So a finding that merely names a ranking — "X en çok satan", "X en çok
+and charts, the most-viewed items, the best-sellers, category popularity, and each item's view/sale figures.
+So a finding that merely names a ranking — "X en çok satan", "X en çok
 görüntülenen", "X hem çok görüntüleniyor hem çok satıyor" — is worthless; they can read it themselves. Never
 point out that something obviously-working is working; a positive confirmation of the expected is not a
 finding. Each finding must expose a TENSION or non-obvious relationship they would NOT catch from those
-tables — e.g. heavily viewed but rarely SOLD, a price band that kills add-to-cart, a dwell-time signal, a
-period-over-period reversal, a discount that isn't moving anything — and pair it with a concrete action.
+tables — e.g. heavily viewed but rarely SOLD, a price band whose items barely sell per view, a dwell-time
+signal, a period-over-period reversal, a discount that isn't moving sales — and pair it with a concrete action.
 
 Include ONLY strong, material findings. A finding qualifies only if ALL hold:
 - it rests on a meaningful sample — ignore items with very few views or sales (roughly under 5), a couple of
@@ -131,7 +141,7 @@ look for the non-obvious tension, where supported: a shared trait uniting the wi
 category, price band) that the owner wouldn't spot item-by-item; items viewed a lot but rarely SOLD (low
 views→sale rate); dwell-time patterns per the bucket meanings above, with the matching fix; meaningful
 period-over-period movement (deltas) — what improved, what declined; whether discounts and price bands
-actually change behavior; and follow-ups on previousInsights.
+actually change real SALES; and follow-ups on previousInsights.
 
 The user message includes "alreadyFound": findings already produced in earlier passes. Do NOT repeat or
 rephrase any of them — return ONLY genuinely new, distinct findings. If nothing new remains, return [].
@@ -232,6 +242,11 @@ const VALIDATE_SYSTEM = `You are the quality gate for a restaurant-menu "pattern
 You receive an array "candidates": each is a REAL statistical pattern already computed from the data
 (correlation, market-basket lift, weekday over-indexing, or a segment skew). The numbers are ground truth —
 NEVER recompute, doubt, or adjust them. Your ONLY job is judgment + phrasing.
+
+Every quantity in these candidates comes from REAL sales (owner-entered POS quantities) or from item views.
+This menu has NO checkout and add-to-cart data is deliberately not part of any candidate, so a "conversion"
+here always means views → actually SOLD. Never phrase a pattern as being about "sepete ekleme" / adding to
+cart, and never present a sales rate as an intent or cart rate.
 
 KEEP a candidate only if a smart restaurant owner would find it genuinely NON-OBVIOUS and ACTIONABLE.
 REJECT (keep=false) anything that is:

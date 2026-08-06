@@ -20,10 +20,11 @@ import {
   getEngagementFunnel,
   getSessionStats,
   getPeakHours,
-  getPriceBands,
   getWeekHeatmap,
   getLocalePreferences,
+  engagementWindow,
 } from "@/lib/analytics/posthog";
+import { getPriceBandSales } from "@/lib/analytics/price-bands";
 import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
 import { getRealFoodFilter } from "@/lib/analytics/food";
@@ -49,6 +50,21 @@ export default async function AnalyticsPage({
   const sp = await searchParams;
   const { preset, range } = resolveRange(sp);
   const prev = previousRange(range);
+
+  // Engagement (PostHog) has a hard data floor, so the window it can actually
+  // answer for is often SHORTER than the one the owner picked, while real sales
+  // (Supabase) always cover the full pick. Two KPI-row consequences, both fixed
+  // below — see `salesInEngagementWindow` and `engDelta`.
+  const engNow = engagementWindow(range);
+  const engPrev = engagementWindow(prev);
+
+  // A period-over-period delta is only meaningful between windows of equal
+  // length. The floor can shorten the PREVIOUS one without shortening the
+  // current one (e.g. "30 gün" today compares 30 days of views against the 3
+  // days of the previous window that clear the floor), which reads as a ~10x
+  // jump that never happened. No comparable baseline → no delta, which is what
+  // `pctDelta` already expresses with null.
+  const engagementComparable = !engPrev.empty && engPrev.days === engNow.days;
 
   // Owner-configured "ignore" list. Read first so item-level metrics (and the
   // basket pairing, which filters at query time) all honor it. Money/amount
@@ -111,18 +127,24 @@ export default async function AnalyticsPage({
     // Deep pool (80): feeds both the conversion table (sliced to its own limit in
     // the client) AND hidden gems below, so the funnel is aggregated once, not twice.
     getItemConversion(range, 80),
-    getPriceBands(range),
+    // Views AND real sales per price band — the band chart is a views→SALE rate,
+    // never views→cart. Honors the ignore list because it is built from item-level
+    // data (an ignored upsell would otherwise carry its whole band).
+    getPriceBandSales(range, keep),
     getWeekHeatmap(range),
     getItemMomentum(range),
     getPromoPerformance(range),
     getBoughtTogether(range, keep),
     getLocalePreferences(range),
     getRealFoodFilter(),
-    // Previous period of equal length, for the KPI deltas.
+    // Previous period of equal length, for the KPI deltas. Sales always have a
+    // real baseline; the engagement three are skipped outright when the floor
+    // makes the previous window non-comparable — their deltas would be dropped
+    // anyway, so this also spares three ClickHouse queries per render.
     getRealSalesSummary(prev),
-    getEngagementFunnel(prev),
-    getSessionStats(prev),
-    getCartConversion(prev),
+    engagementComparable ? getEngagementFunnel(prev) : Promise.resolve([]),
+    engagementComparable ? getSessionStats(prev) : Promise.resolve({ sessions: 0, avgSeconds: 0 }),
+    engagementComparable ? getCartConversion(prev) : Promise.resolve(0),
     // Folded in from a former second wave — no dependency on any result above.
     // Recent AI analyses for the history list. Non-fatal if the table is missing.
     s.from("analytics_insights")
@@ -154,6 +176,23 @@ export default async function AnalyticsPage({
   const views = funnelCount(funnel, "Görüntü");
   const waiterCalls = funnelCount(funnel, "Garson");
 
+  /** Delta for an engagement KPI — null unless both windows are the same length. */
+  const engDelta = (cur: number, previous: number) => (engagementComparable ? pctDelta(cur, previous) : null);
+
+  // The covers estimate is sessions × a multiplier, and per-cover spend divides
+  // real sales BY that estimate. Sessions stop at the data floor, so on a range
+  // that starts before it the numerator spanned the full period while the
+  // denominator spanned only the tail — "Kişi Başı" came out inflated by the
+  // ratio of the two (roughly 3x on "90 gün"). Restricting the numerator to the
+  // engagement window puts both sides on the same days. Identical to
+  // `summary.totalSales` whenever nothing was clipped, and free: it re-uses the
+  // daily series already fetched above rather than adding a query.
+  const salesInEngagementWindow = engNow.empty
+    ? 0
+    : engNow.clipped
+      ? revenueOverTime.filter((d) => d.date >= engNow.from).reduce((sum, d) => sum + d.revenue, 0)
+      : summary.totalSales;
+
   const storedRow = currentRows?.[0];
   const initialInsights: string[] | null =
     isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
@@ -183,10 +222,12 @@ export default async function AnalyticsPage({
     range,
     posthogConfigured: posthogConfigured(),
     insightsConfigured: insightsConfigured(),
+    engagement: engNow,
     kpis: {
       totalSales: summary.totalSales,
       totalCovers: summary.totalCovers,
       avgSpendPerCover: summary.avgSpendPerCover,
+      salesInEngagementWindow,
       sessions: sessions.sessions,
       avgSeconds: sessions.avgSeconds,
       waiterCalls,
@@ -199,11 +240,11 @@ export default async function AnalyticsPage({
       // dropped 100%" in the deterministic overview; the estimate is display-only).
       totalCovers: summary.totalCovers > 0 ? pctDelta(summary.totalCovers, prevSummary.totalCovers) : null,
       avgSpendPerCover: summary.totalCovers > 0 ? pctDelta(summary.avgSpendPerCover, prevSummary.avgSpendPerCover) : null,
-      views: pctDelta(views, funnelCount(prevFunnel, "Görüntü")),
-      avgSeconds: pctDelta(sessions.avgSeconds, prevSessions.avgSeconds),
-      waiterCalls: pctDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
-      cartConversion: pctDelta(cartConversion, prevCartConversion),
-      sessions: pctDelta(sessions.sessions, prevSessions.sessions),
+      views: engDelta(views, funnelCount(prevFunnel, "Görüntü")),
+      avgSeconds: engDelta(sessions.avgSeconds, prevSessions.avgSeconds),
+      waiterCalls: engDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
+      cartConversion: engDelta(cartConversion, prevCartConversion),
+      sessions: engDelta(sessions.sessions, prevSessions.sessions),
     },
     comparison,
     revenueOverTime,

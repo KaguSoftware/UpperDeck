@@ -1,7 +1,8 @@
 import "server-only";
 import { getServerClient } from "@/lib/supabase/server";
 import { listSalesEntries, getSoldItemsByDay, type DateRange } from "@/lib/analytics/sales";
-import { getPriceBands, getDiscountSplit, getLocalePreferences } from "@/lib/analytics/posthog";
+import { getLocalePreferences } from "@/lib/analytics/posthog";
+import { getPriceBandSales, getDiscountSalesSplit } from "@/lib/analytics/price-bands";
 import { canonicalItemName } from "@/lib/analytics/clean-sales";
 
 /**
@@ -65,13 +66,17 @@ type Thresholds = {
   minLift: number; // lift floor (1 = independent → obvious)
   minWeekdayQty: number; // qty on a weekday to call it an over-index
   minWeekdayIndex: number; // observed/expected share to flag a weekday skew
-  minSegmentViews: number; // views floor for price/discount/locale skews
+  // Views floor for the price/discount skews. Counted in DISTINCT-SESSION item
+  // views (one per diner per item) since the price/discount families moved to
+  // real sales — a cleaner unit than the raw modal-open events the old cart-based
+  // query used, so the floors below sit ~25% lower for the same confidence.
+  minSegmentViews: number;
 };
 
 const LEVELS: Thresholds[] = [
-  { minDays: 8, minItemDays: 4, minItemQty: 12, minShareCorr: 0.55, minBasketSupport: 5, minLift: 1.6, minWeekdayQty: 8, minWeekdayIndex: 1.7, minSegmentViews: 40 },
-  { minDays: 6, minItemDays: 3, minItemQty: 8, minShareCorr: 0.5, minBasketSupport: 4, minLift: 1.45, minWeekdayQty: 6, minWeekdayIndex: 1.55, minSegmentViews: 25 },
-  { minDays: 5, minItemDays: 3, minItemQty: 6, minShareCorr: 0.45, minBasketSupport: 3, minLift: 1.35, minWeekdayQty: 5, minWeekdayIndex: 1.45, minSegmentViews: 18 },
+  { minDays: 8, minItemDays: 4, minItemQty: 12, minShareCorr: 0.55, minBasketSupport: 5, minLift: 1.6, minWeekdayQty: 8, minWeekdayIndex: 1.7, minSegmentViews: 30 },
+  { minDays: 6, minItemDays: 3, minItemQty: 8, minShareCorr: 0.5, minBasketSupport: 4, minLift: 1.45, minWeekdayQty: 6, minWeekdayIndex: 1.55, minSegmentViews: 20 },
+  { minDays: 5, minItemDays: 3, minItemQty: 6, minShareCorr: 0.45, minBasketSupport: 3, minLift: 1.35, minWeekdayQty: 5, minWeekdayIndex: 1.45, minSegmentViews: 14 },
 ];
 
 export const MAX_PATTERN_LEVEL = LEVELS.length;
@@ -372,44 +377,67 @@ function mineWeekdaySkew(
 
 // ---------- family 4: segment skews (price band / discount / locale) ----------
 
-/** Aggregate skews that don't fit the item×item shape: price cliffs, discount lift, locale divergence. */
+/**
+ * Aggregate skews that don't fit the item×item shape: price cliffs, discount lift,
+ * locale divergence.
+ *
+ * The price and discount families are measured on views → REAL SALES, never
+ * views → add-to-cart. With no checkout in this menu the cart is an optional
+ * scratchpad, so a cart-based "conversion" says which items get tapped, not which
+ * ones get sold — and a price band that sells fine could read as a disaster.
+ */
 async function mineSegmentSkews(range: DateRange, keep: (n: string) => boolean, t: Thresholds): Promise<PatternCandidate[]> {
   const [priceBands, discount, locales] = await Promise.all([
-    getPriceBands(range),
-    getDiscountSplit(range),
+    getPriceBandSales(range, keep),
+    getDiscountSalesSplit(range, keep),
     getLocalePreferences(range),
   ]);
   const out: PatternCandidate[] = [];
-  const conv = (v: { views: number; carts: number }) => (v.views > 0 ? v.carts / v.views : 0);
+  /** Views → real sold quantity, the only demand rate this system can trust. */
+  const conv = (v: { views: number; sold: number }) => (v.views > 0 ? v.sold / v.views : 0);
 
-  // Price cliff: best- vs worst-converting band with enough traffic.
+  // Price cliff: best- vs worst-selling band with enough traffic. Requires actual
+  // sales somewhere — without entered POS items every band converts 0 and the
+  // "cliff" would be pure noise.
   const bands = priceBands.filter((b) => b.views >= t.minSegmentViews);
-  if (bands.length >= 2) {
+  if (bands.length >= 2 && bands.some((b) => b.sold > 0)) {
     const best = bands.reduce((m, b) => (conv(b) > conv(m) ? b : m));
     const worst = bands.reduce((m, b) => (conv(b) < conv(m) ? b : m));
     const ratio = conv(worst) > 0 ? conv(best) / conv(worst) : Infinity;
-    if (best.band !== worst.band && (ratio >= 1.5 || conv(worst) === 0)) {
+    if (best.band !== worst.band && conv(best) > 0 && (ratio >= 1.5 || conv(worst) === 0)) {
       const subjects = ["price", best.band, worst.band];
       out.push({
         id: idKey("segment", subjects),
         kind: "segment",
         subjects: [best.band, worst.band],
-        metrics: { bestBand: best.band, bestConvPct: pct(conv(best)), worstBand: worst.band, worstConvPct: pct(conv(worst)) },
+        metrics: {
+          bestBand: best.band,
+          bestSalesPerViewPct: pct(conv(best)),
+          bestSold: best.sold,
+          worstBand: worst.band,
+          worstSalesPerViewPct: pct(conv(worst)),
+          worstSold: worst.sold,
+        },
         sampleSize: best.views + worst.views,
         strength: Math.min(1, (isFinite(ratio) ? ratio : 3) / 4),
         score: Math.min(1, (isFinite(ratio) ? ratio : 3) / 4) * Math.log2(best.views + worst.views + 2),
         desc:
-          `Price-band view→cart conversion: "${best.band}" converts ${pct(conv(best))}% vs "${worst.band}" ` +
-          `at ${pct(conv(worst))}% (${best.views}/${worst.views} views). Diners act on price band.`,
-        fallbackText: `${best.band} ürünleri sepete %${pct(conv(best))} oranında eklenirken ${worst.band} yalnızca %${pct(conv(worst))} — fiyat bandı davranışı değiştiriyor.`,
+          `Price-band view→SALE conversion (real POS quantities, not cart adds): "${best.band}" turns ` +
+          `${pct(conv(best))}% of its views into sales (${best.sold} sold on ${best.views} views) vs "${worst.band}" ` +
+          `at ${pct(conv(worst))}% (${worst.sold} sold on ${worst.views} views). Diners act on price band.`,
+        fallbackText: `${best.band} ürünleri her 100 görüntülemede ${pct(conv(best))} satışa dönüşürken ${worst.band} yalnızca ${pct(conv(worst))} — fiyat bandı gerçek satışı değiştiriyor.`,
       });
     }
   }
 
-  // Discount lift: does a discount actually change view→cart conversion?
+  // Discount lift: does a discount actually SELL more (not just get carted more)?
   const disc = discount.find((d) => d.group === "discounted");
   const reg = discount.find((d) => d.group === "regular");
-  if (disc && reg && disc.views >= t.minSegmentViews && reg.views >= t.minSegmentViews) {
+  if (
+    disc && reg &&
+    disc.views >= t.minSegmentViews && reg.views >= t.minSegmentViews &&
+    disc.sold + reg.sold > 0
+  ) {
     const dc = conv(disc), rc = conv(reg);
     const ratio = rc > 0 ? dc / rc : Infinity;
     if (ratio >= 1.4 || ratio <= 0.7) {
@@ -419,16 +447,23 @@ async function mineSegmentSkews(range: DateRange, keep: (n: string) => boolean, 
         id: idKey("segment", subjects),
         kind: "segment",
         subjects: ["İndirim"],
-        metrics: { discountedConvPct: pct(dc), regularConvPct: pct(rc), ratio: round1(isFinite(ratio) ? ratio : 0) },
+        metrics: {
+          discountedSalesPerViewPct: pct(dc),
+          discountedSold: disc.sold,
+          regularSalesPerViewPct: pct(rc),
+          regularSold: reg.sold,
+          ratio: round1(isFinite(ratio) ? ratio : 0),
+        },
         sampleSize: disc.views + reg.views,
         strength: Math.min(1, Math.abs(Math.log2(isFinite(ratio) && ratio > 0 ? ratio : 2))),
         score: Math.min(1, Math.abs(Math.log2(isFinite(ratio) && ratio > 0 ? ratio : 2))) * Math.log2(disc.views + reg.views + 2),
         desc:
-          `Discounted items convert ${pct(dc)}% view→cart vs ${pct(rc)}% for full-price ` +
-          `(${disc.views}/${reg.views} views) — discounts ${better ? "clearly lift" : "do NOT lift (and may hurt)"} intent.`,
+          `Discounted items turn ${pct(dc)}% of views into real SALES (${disc.sold} sold on ${disc.views} views) vs ` +
+          `${pct(rc)}% for full-price (${reg.sold} sold on ${reg.views} views) — discounts ` +
+          `${better ? "clearly lift" : "do NOT lift (and may hurt)"} actual sales.`,
         fallbackText: better
-          ? `İndirimli ürünler sepete %${pct(dc)} eklenirken normal fiyatlılar %${pct(rc)} — indirim işe yarıyor, seçici kullanın.`
-          : `İndirim sepete ekleme oranını artırmıyor (indirimli %${pct(dc)} vs normal %${pct(rc)}) — indirim yerine sunumu gözden geçirin.`,
+          ? `İndirimli ürünler her 100 görüntülemede ${pct(dc)} satışa dönüşüyor, normal fiyatlılar ${pct(rc)} — indirim gerçekten satış getiriyor, seçici kullanın.`
+          : `İndirim satışı artırmıyor (indirimlide 100 görüntülemede ${pct(dc)} satış, normalde ${pct(rc)}) — indirim yerine sunumu gözden geçirin.`,
       });
     }
   }

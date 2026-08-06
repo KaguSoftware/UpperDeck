@@ -98,15 +98,45 @@ const LOCAL_TS = `toTimeZone(timestamp, '${TZ}')`;
 // unreliable (waiter/bill calls from the bell sheet weren't tracked until
 // 2026-07-05, and dwell tracking didn't exist), so it would skew every chart.
 // Real sales (Supabase) are NOT affected — this floor is engagement-only.
-const DATA_FLOOR = "2026-07-05";
+export const ENGAGEMENT_DATA_FLOOR = "2026-07-05";
+
+/**
+ * The slice of `range` that actually has engagement data behind it.
+ *
+ * The floor silently SHORTENS the asked-for window, so any caller that mixes an
+ * engagement number with a whole-range one (real sales) — or that compares two
+ * windows — has to know it happened, otherwise it divides/compares across two
+ * different spans. `days` is the inclusive usable length; `empty` means the
+ * whole range predates the floor and every query returns zero rows.
+ */
+export type EngagementWindow = {
+  from: string;
+  to: string;
+  /** `range.from` predates the floor — the usable window is shorter than asked. */
+  clipped: boolean;
+  /** The entire range predates the floor — no engagement data at all. */
+  empty: boolean;
+  /** Inclusive day count of the usable window; 0 when empty. */
+  days: number;
+};
+
+export function engagementWindow(range: DateRange): EngagementWindow {
+  const clipped = range.from < ENGAGEMENT_DATA_FLOOR;
+  const from = clipped ? ENGAGEMENT_DATA_FLOOR : range.from;
+  const empty = from > range.to;
+  const days = empty
+    ? 0
+    : Math.round((Date.parse(`${range.to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000) + 1;
+  return { from, to: range.to, clipped, empty, days };
+}
 
 // HogQL date bounds (inclusive), interpreted in local time. `to` is end-of-day.
-// `from` is clamped to DATA_FLOOR; a range entirely before it yields no rows.
+// `from` is clamped to the data floor; a range entirely before it yields no rows.
 function bounds(range: DateRange) {
-  const from = range.from < DATA_FLOOR ? DATA_FLOOR : range.from;
+  const { from, to } = engagementWindow(range);
   return {
     from: `'${from} 00:00:00'`,
-    to: `'${range.to} 23:59:59'`,
+    to: `'${to} 23:59:59'`,
   };
 }
 
@@ -365,63 +395,62 @@ export async function getDailyEngagement(range: DateRange) {
   }));
 }
 
-export type PriceBand = { band: string; views: number; carts: number };
-
-// Band edges in ₺. Labels are built client-side from the same constant.
-const PRICE_BANDS = [200, 400];
+export type ItemViewPrice = { name: string; price: number; views: number };
 
 /**
- * View→cart conversion by price band — answers "are diners bouncing off
- * expensive items specifically?". Uses the `price` property carried on both
- * item_viewed and item_added_to_cart.
+ * Distinct-session views per item, carrying the price on the view event.
+ *
+ * Raw material for the price-band analysis in `lib/analytics/price-bands.ts`,
+ * which bands these views AND real POS sales on the same per-item price so the
+ * two are directly comparable. The tracked price is only a fallback there (for
+ * names no longer on the menu); the menu's own price wins when it exists.
+ *
+ * Deliberately NOT a view→cart conversion: the menu has no checkout, so a price
+ * band's success has to be judged on what actually sold.
  */
-export async function getPriceBands(range: DateRange): Promise<PriceBand[]> {
+export async function getItemViewsWithPrice(range: DateRange): Promise<ItemViewPrice[]> {
   const b = bounds(range);
-  const [lo, hi] = PRICE_BANDS;
   const rows = await hogql(`
-    SELECT multiIf(toFloat(properties.price) < ${lo}, '0–${lo} ₺',
-                   toFloat(properties.price) < ${hi}, '${lo}–${hi} ₺',
-                   '${hi}+ ₺') AS band,
-           countIf(event = 'item_viewed') AS views,
-           countIf(event = 'item_added_to_cart') AS carts
+    SELECT properties.item_name AS name,
+           median(toFloat(properties.price)) AS price,
+           count(DISTINCT $session_id) AS c
     FROM events
-    WHERE event IN ('item_viewed','item_added_to_cart')
+    WHERE event = 'item_viewed'
       AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
-      AND properties.price IS NOT NULL
-    GROUP BY band
+      AND name != ''
+    GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
-  const byBand = new Map(rows.map((r) => [String(r[0]), { views: Number(r[1]), carts: Number(r[2]) }]));
-  // Fixed order regardless of which bands have data.
-  return [`0–${lo} ₺`, `${lo}–${hi} ₺`, `${hi}+ ₺`].map((band) => ({
-    band,
-    views: byBand.get(band)?.views ?? 0,
-    carts: byBand.get(band)?.carts ?? 0,
-  }));
+  return rows.map((r) => ({ name: String(r[0]), price: Number(r[1]) || 0, views: Number(r[2]) }));
 }
 
-export type DiscountSplit = { group: "discounted" | "regular"; views: number; carts: number };
+export type ItemDiscountDay = { name: string; date: string; views: number; discounted: boolean };
 
 /**
- * Do discounts actually move behavior? Compares view→cart conversion of
- * discounted vs full-price items. Relies on the `discount_pct` event property
- * (added 2026-07-05), so it only covers data from then on.
+ * Per item PER DAY: distinct-session views and whether the item was discounted
+ * that day (`discount_pct` property, added 2026-07-05).
+ *
+ * Day granularity is what makes a SALES-based discount comparison possible —
+ * POS sales are day-level, so `getDiscountSalesSplit` can join on (item, day)
+ * and total what each group actually sold instead of what it got carted.
  */
-export async function getDiscountSplit(range: DateRange): Promise<DiscountSplit[]> {
+export async function getItemViewDiscountDays(range: DateRange): Promise<ItemDiscountDay[]> {
   const b = bounds(range);
   const rows = await hogql(`
-    SELECT if(toFloat(coalesce(properties.discount_pct, '0')) > 0, 'discounted', 'regular') AS grp,
-           countIf(event = 'item_viewed') AS views,
-           countIf(event = 'item_added_to_cart') AS carts
+    SELECT properties.item_name AS name,
+           toDate(${LOCAL_TS}) AS d,
+           count(DISTINCT $session_id) AS c,
+           max(toFloat(coalesce(properties.discount_pct, '0'))) AS disc
     FROM events
-    WHERE event IN ('item_viewed','item_added_to_cart')
+    WHERE event = 'item_viewed'
       AND ${LOCAL_TS} >= ${b.from} AND ${LOCAL_TS} <= ${b.to}
-    GROUP BY grp
+      AND name != ''
+    GROUP BY name, d
   `);
-  const byGroup = new Map(rows.map((r) => [String(r[0]), { views: Number(r[1]), carts: Number(r[2]) }]));
-  return (["discounted", "regular"] as const).map((group) => ({
-    group,
-    views: byGroup.get(group)?.views ?? 0,
-    carts: byGroup.get(group)?.carts ?? 0,
+  return rows.map((r) => ({
+    name: String(r[0]),
+    date: String(r[1]),
+    views: Number(r[2]),
+    discounted: Number(r[3]) > 0,
   }));
 }
 

@@ -14,7 +14,8 @@ import {
 import { generateInsightsAction, generatePatternsAction, setExcludedItemsAction, type PatternItem } from "./actions";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
-import type { NamedCount, AbandonedView, PriceBand, LocalePref } from "@/lib/analytics/posthog";
+import type { NamedCount, AbandonedView, LocalePref, EngagementWindow } from "@/lib/analytics/posthog";
+import type { PriceBandSales } from "@/lib/analytics/price-bands";
 import type { ItemConversion, HiddenGem, ItemMomentum } from "@/lib/analytics/compare";
 import type { PromoPerformance } from "@/lib/analytics/promo";
 import type { ItemPair } from "@/lib/analytics/basket";
@@ -24,10 +25,17 @@ export type AnalyticsData = {
   range: { from: string; to: string };
   posthogConfigured: boolean;
   insightsConfigured: boolean;
+  /**
+   * The sub-window of `range` that engagement metrics actually cover — shorter
+   * than `range` when it reaches back past the tracking data floor.
+   */
+  engagement: EngagementWindow;
   kpis: {
     totalSales: number;
     totalCovers: number;
     avgSpendPerCover: number;
+    /** `totalSales` restricted to `engagement` — the only figure safe to divide by a session-derived count. */
+    salesInEngagementWindow: number;
     sessions: number;
     avgSeconds: number;
     waiterCalls: number;
@@ -56,7 +64,7 @@ export type AnalyticsData = {
   bestSellers: { item_name: string; qty: number; revenue: number }[];
   abandonedViews: AbandonedView[];
   itemConversion: ItemConversion[];
-  priceBands: PriceBand[];
+  priceBands: PriceBandSales[];
   weekHeatmap: { day: number; hour: number; count: number }[];
   /** Converts views→sales well but under-exposed — promote candidates. */
   hiddenGems: HiddenGem[];
@@ -101,6 +109,19 @@ function saleRatio(sold: number, views: number): string {
   const r = sold / views;
   if (r < 0.1) return "<0,1×";
   return `${ratioFmt.format(r)}×`;
+}
+
+// "8 Tem" / "8 Tem 2026" — for the engagement-window note. yyyy-mm-dd is parsed
+// at UTC noon so no timezone can slide the rendered day.
+const dayMonth = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" });
+const dayMonthYear = new Intl.DateTimeFormat("tr-TR", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+function trDate(iso: string, withYear = false): string {
+  return (withYear ? dayMonthYear : dayMonth).format(new Date(`${iso}T12:00:00Z`));
 }
 
 // Guest-count estimate factor: people per unique visit (menu session). Used only
@@ -1162,8 +1183,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const coversReal = kpis.totalCovers > 0;
   const coversEst = !coversReal && kpis.sessions > 0;
   const estimatedCovers = coversEst ? Math.round(kpis.sessions * coversMult) : null;
+  // Sales from the SAME days the sessions came from — see page.tsx. Dividing the
+  // full-period total by a floor-clipped session count overstated this.
   const estimatedSpendPerCover =
-    estimatedCovers && kpis.totalSales > 0 ? kpis.totalSales / estimatedCovers : null;
+    estimatedCovers && kpis.salesInEngagementWindow > 0
+      ? kpis.salesInEngagementWindow / estimatedCovers
+      : null;
   const spendReal = coversReal && kpis.avgSpendPerCover > 0;
   const spendEst = coversEst && (estimatedSpendPerCover ?? 0) > 0;
 
@@ -1270,6 +1295,27 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               Menü etkileşim takibi henüz bağlı değil — etkileşim grafikleri şimdilik boş görünecek.
             </div>
           )}
+          {/* Engagement tracking starts later than the sales history, so a range
+              reaching further back mixes two spans in one row. Say which cards
+              cover which, instead of letting them read as one period. */}
+          {data.posthogConfigured && data.engagement.clipped && (
+            <div className="bg-bg-deep border-2 border-green/30 text-green text-[11px] font-bold px-4 py-3 leading-relaxed">
+              Etkileşim takibi {trDate(data.engagement.from, true)} tarihinde başladı.{" "}
+              {data.engagement.empty ? (
+                <>
+                  Seçilen dönem tamamen bundan önce kaldığı için Tekil Ziyaret, Menü Görüntüleme, Medyan
+                  Süre, Garson Çağrısı ve Sepet → Çağrı boş. Gerçek Satış seçilen dönemin tamamını kapsar.
+                </>
+              ) : (
+                <>
+                  Tekil Ziyaret, Menü Görüntüleme, Medyan Süre, Garson Çağrısı, Sepet → Çağrı ve tahmini
+                  Kişi / Kişi Başı yalnızca {trDate(data.engagement.from)} – {trDate(data.engagement.to)}{" "}
+                  aralığını kapsar ({tl.format(data.engagement.days)} gün). Gerçek Satış seçilen dönemin
+                  tamamını kapsar.
+                </>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
             <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
             <Kpi
@@ -1357,9 +1403,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             <ChartCard title="Etkileşim Hunisi">
               <FunnelBars data={data.funnel} note={engagementNote} />
             </ChartCard>
-            <ChartCard title="Fiyat Aralığına Göre Dönüşüm">
+            <ChartCard title="Fiyat Aralığına Göre Satış Dönüşümü">
               <ConversionBars
-                data={data.priceBands.map((b) => ({ label: b.band, views: b.views, carts: b.carts }))}
+                data={data.priceBands.map((b) => ({ label: b.band, views: b.views, sold: b.sold, revenue: b.revenue }))}
                 note={engagementNote}
               />
             </ChartCard>

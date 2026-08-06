@@ -230,30 +230,33 @@ export function FunnelBars({ data, note }: { data: { step: string; count: number
 }
 
 /**
- * View→cart conversion per group (price bands, discount split). Rows of
- * "label — conversion bar — % + raw counts"; a plain HBar would hide the
- * conversion rate, which is the point of these charts.
+ * Views → REAL SALES per group (price bands). Rows of "label — rate bar — % +
+ * sold/views"; a plain HBar would hide the rate, which is the point of the chart.
+ *
+ * Deliberately NOT view→cart: the menu has no checkout, so add-to-cart says which
+ * items get tapped, not which get sold. The rate can exceed 100% (an item ordered
+ * more often than its detail page is opened), so bars are scaled to the row max.
  */
 export function ConversionBars({
   data,
   note,
 }: {
-  data: { label: string; views: number; carts: number }[];
+  data: { label: string; views: number; sold: number; revenue?: number }[];
   note?: string;
 }) {
-  if (!data.some((d) => d.views > 0)) return <Empty note={note ?? "Veri yok."} />;
-  const maxPct = Math.max(...data.map((d) => (d.views > 0 ? d.carts / d.views : 0)), 0.01);
+  if (!data.some((d) => d.views > 0 || d.sold > 0)) return <Empty note={note ?? "Veri yok."} />;
+  const maxPct = Math.max(...data.map((d) => (d.views > 0 ? d.sold / d.views : 0)), 0.01);
   return (
     <div className="flex flex-col gap-3 py-2">
       {data.map((d) => {
-        const pct = d.views > 0 ? (d.carts / d.views) * 100 : 0;
+        const pct = d.views > 0 ? (d.sold / d.views) * 100 : 0;
         return (
           <div key={d.label}>
             <div className="flex justify-between text-[11px] font-bold text-green mb-1">
               <span>{d.label}</span>
               <span>
                 <span className="text-orange">{Math.round(pct)}%</span>
-                <span className="text-green/50 ml-2">{tl.format(d.carts)}/{tl.format(d.views)}</span>
+                <span className="text-green/50 ml-2">{tl.format(d.sold)}/{tl.format(d.views)}</span>
               </span>
             </div>
             <div className="h-5 bg-bg-deep">
@@ -262,7 +265,9 @@ export function ConversionBars({
           </div>
         );
       })}
-      <p className="text-[10px] text-green/50 font-bold">Görüntüleme → sepete ekleme oranı</p>
+      <p className="text-[10px] text-green/50 font-bold">
+        Görüntüleme → gerçek satış oranı (satılan adet / görüntüleme)
+      </p>
     </div>
   );
 }
