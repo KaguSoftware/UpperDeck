@@ -17,19 +17,62 @@ import {
   setExcludedItemsAction,
   setAutoExcludeOffMenuAction,
   setOffMenuOverridesAction,
+  setBusinessDayStartAction,
   type PatternItem,
 } from "./actions";
+import { ConversionTable } from "./_conversion-table";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
+import { BUSINESS_DAY_START_OPTIONS, businessDayLabel } from "@/lib/analytics/business-day";
+import type { SalesCoverage, CompareBasis } from "@/lib/analytics/range";
+import { COMPARE_BASES } from "@/lib/analytics/range";
+import type { MenuEngineering, MenuQuadrant } from "@/lib/analytics/menu-matrix";
+import { describeBasis, isThinPeriod, thinWeekdays, type DataBasis } from "@/lib/analytics/confidence";
 import type { NamedCount, AbandonedView, LocalePref, EngagementWindow } from "@/lib/analytics/posthog";
 import type { PriceBandSales } from "@/lib/analytics/price-bands";
-import type { ItemConversion, HiddenGem, ItemMomentum } from "@/lib/analytics/compare";
+import type { ItemConversion, HiddenGem, ItemMomentum, MomentumResult } from "@/lib/analytics/compare";
 import type { PromoPerformance } from "@/lib/analytics/promo";
 import type { ItemPair } from "@/lib/analytics/basket";
 
 export type AnalyticsData = {
   preset: string;
   range: { from: string; to: string };
+  /**
+   * What every % badge on the page is measured against, and its window. The basis
+   * is the owner's choice (`cmp` in the URL): the preceding period, four weeks
+   * earlier, or the same weekdays last year. `hasData` is false when the baseline
+   * window holds no POS entries at all, which is why the badges are blank.
+   */
+  compare: {
+    basis: CompareBasis;
+    label: string;
+    range: { from: string; to: string };
+    hasData: boolean;
+  };
+  /** How much of the range the POS log covers — drives the banner + muted badges. */
+  salesCoverage: SalesCoverage;
+  /**
+   * Popularity × margin per item, from `menu_items.cost`. `hasData: false` until a
+   * cost is entered anywhere, in which case the card shows a setup prompt and no
+   * margin figure appears anywhere on the page.
+   */
+  menuEngineering: MenuEngineering;
+  /**
+   * The sample every claim on this page rests on. Printed under the AI card so a
+   * reader sees the basis at the same moment as the claim, and used server-side to
+   * reject findings whose sample can't support them.
+   */
+  dataBasis: DataBasis;
+  /** False when either window is missing enough days to make a % change fiction. */
+  salesDeltaReliable: boolean;
+  /** Hour a business day starts (0 = calendar day). Stated on the page. */
+  businessDayStart: number;
+  /**
+   * True while the range still reaches the current business day — i.e. its
+   * numbers can still change. Computed on the server so the client never has to
+   * derive "today" and risk a hydration mismatch across a date boundary.
+   */
+  live: boolean;
   posthogConfigured: boolean;
   insightsConfigured: boolean;
   /**
@@ -75,10 +118,12 @@ export type AnalyticsData = {
   weekHeatmap: { day: number; hour: number; count: number }[];
   /** Converts views→sales well but under-exposed — promote candidates. */
   hiddenGems: HiddenGem[];
-  /** Per-item view momentum vs the previous period. */
-  momentum: { rising: ItemMomentum[]; fading: ItemMomentum[] };
+  /** Per-item view momentum vs the previous period, and whether it's comparable. */
+  momentum: MomentumResult;
   /** Featured-banner / suggested-rail engagement + follow-through. */
   promo: PromoPerformance;
+  /** Whether that promo real estate is set up at all — "0 clicks" needs it. */
+  promoConfig: { featured: boolean; suggested: boolean };
   /** Bought-together item pairs from real orders. */
   basket: { pairs: ItemPair[]; orders: number };
   /** Behavior split by menu language (tr / en). */
@@ -110,20 +155,6 @@ const tl = new Intl.NumberFormat("tr-TR");
 // we render the amount in Bowlby and the ₺ separately in the UI font — see Kpi.
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
-// Sold-per-view as a ratio ("1,2×"), not a probability ("120%"). Views count
-// distinct phone sessions that opened the item; sold counts real POS units — two
-// different populations, so this is an index, not "% of viewers who bought".
-// Framing it as a multiplier makes >1× ("sells more than it's browsed" — staples
-// ordered verbally) read as a signal instead of a broken over-100% conversion.
-const ratioFmt = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-function saleRatio(sold: number, views: number): string {
-  if (views === 0) return "—";
-  if (sold === 0) return "0×";
-  const r = sold / views;
-  if (r < 0.1) return "<0,1×";
-  return `${ratioFmt.format(r)}×`;
-}
-
 // "8 Tem" / "8 Tem 2026" — for the engagement-window note. yyyy-mm-dd is parsed
 // at UTC noon so no timezone can slide the rendered day.
 const dayMonth = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -139,7 +170,13 @@ function trDate(iso: string, withYear = false): string {
 
 // Guest-count estimate factor: people per unique visit (menu session). Used only
 // when no real covers were entered for the period. Picker persists in localStorage.
-const COVERS_MULT_OPTIONS = [1, 1.5, 2, 2.5, 3];
+//
+// Quarter steps between 1 and 2: in practice one phone gets scanned per TABLE, not
+// per guest, so the realistic range is "one diner scanned for a party of two" —
+// the old 2,5 / 3 options were multiplying an already table-level count.
+// A previously saved 2,5 / 3 no longer matches the list and falls back to the
+// default, which is the intended outcome — those values are off the scale now.
+const COVERS_MULT_OPTIONS = [1, 1.25, 1.5, 1.75, 2];
 const COVERS_MULT_DEFAULT = 2;
 const COVERS_MULT_KEY = "analytics-covers-multiplier";
 
@@ -158,8 +195,13 @@ const REFRESH_STORAGE_KEY = "analytics-auto-refresh";
  * pill, and the dashboard silently re-fetches when it hits zero. The choice
  * persists in localStorage. Refreshes are skipped while the tab is hidden —
  * they'd be wasted work the user never sees.
+ *
+ * Only offered on a LIVE range. A countdown ticking over a finished period
+ * (5–20 July) is polling for a number that can no longer change, and the
+ * re-render it triggers interrupts reading for nothing. `live` is false for every
+ * range whose last day is in the past.
  */
-function AutoRefresh() {
+function AutoRefresh({ live }: { live: boolean }) {
   const router = useRouter();
   const [seconds, setSeconds] = useState(0);
   const [left, setLeft] = useState(0);
@@ -167,12 +209,18 @@ function AutoRefresh() {
   const [refreshing, startRefreshing] = useTransition();
 
   useEffect(() => {
+    if (!live) {
+      // Historical range: hold the stored preference, just don't run it.
+      setSeconds(0);
+      setLeft(0);
+      return;
+    }
     const saved = Number(localStorage.getItem(REFRESH_STORAGE_KEY));
     if (REFRESH_OPTIONS.some((o) => o.seconds === saved && saved > 0)) {
       setSeconds(saved);
       setLeft(saved);
     }
-  }, []);
+  }, [live]);
 
   const pick = (s: number) => {
     setSeconds(s);
@@ -198,6 +246,17 @@ function AutoRefresh() {
     }
     setLeft(seconds);
   }, [left, seconds, router]);
+
+  if (!live) {
+    return (
+      <span
+        className="text-[10px] tracking-[0.18em] font-extrabold text-green/40 uppercase"
+        title="Bu dönem sona erdi — verisi değişmeyeceği için otomatik yenileme kapalı"
+      >
+        Oto Yenile · geçmiş dönem
+      </span>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">
@@ -239,6 +298,114 @@ function AutoRefresh() {
 }
 
 /**
+ * "Compared to" picker — what every % badge on the page is measured against.
+ *
+ * "The period before this one" was the only option, and it is the wrong default
+ * for most restaurant questions: the 30 days before a 30-day window are a
+ * different part of the season, and on short windows they aren't even the same
+ * days of the week, so a Sat+Sun window compared against Tue+Wed reads as a
+ * collapse that never happened. Both alternatives are weekday-aligned (28 and 364
+ * days back), which is what makes them answer "is this normal for us?".
+ *
+ * Lives in the URL (`cmp`), not local state: the deltas are computed on the server
+ * and the AI card must cite the same baseline the badges show.
+ */
+function ComparePicker({
+  basis,
+  hasData,
+  onChange,
+  disabled,
+}: {
+  basis: CompareBasis;
+  hasData: boolean;
+  onChange: (b: CompareBasis) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
+        title="Yüzde değişimlerin karşılaştırıldığı dönem"
+      >
+        Karşılaştır
+      </span>
+      <div className="flex items-center">
+        {COMPARE_BASES.map((b) => {
+          const active = basis === b.key;
+          return (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => onChange(b.key)}
+              disabled={disabled}
+              title={b.hint}
+              className={[
+                "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
+                active ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
+              ].join(" ")}
+            >
+              {b.short}
+            </button>
+          );
+        })}
+      </div>
+      {/* An empty baseline is why the badges vanished — say so instead of leaving
+          the owner to wonder whether the numbers broke. */}
+      {!hasData && (
+        <span className="text-[10px] font-extrabold text-orange" title="Karşılaştırma döneminde POS satış verisi yok">
+          veri yok
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Business day starts at" picker. Sits next to the range controls because it
+ * silently redefines what a "day" is for every figure below — a restaurant
+ * serving past midnight needs to know whether a 01:30 order lands on Friday or
+ * Saturday, and until this existed nothing on the page said.
+ */
+function BusinessDayPicker({ value }: { value: number }) {
+  const router = useRouter();
+  const [hour, setHour] = useState(value);
+  const [saving, startSaving] = useTransition();
+
+  const pick = (h: number) => {
+    const prevHour = hour;
+    setHour(h);
+    startSaving(async () => {
+      const res = await setBusinessDayStartAction(h);
+      if (res.ok) router.refresh();
+      else setHour(prevHour);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
+        title="Gün hangi saatte başlasın — gece yarısını geçen siparişler bir önceki güne yazılır. Günlük, haftalık ve saat bazlı tüm dağılımları etkiler."
+      >
+        Gün Başlangıcı
+      </span>
+      <select
+        value={hour}
+        disabled={saving}
+        onChange={(e) => pick(Number(e.target.value))}
+        className="border-2 border-green/40 bg-white px-2 py-1.5 text-[11px] font-extrabold text-green tabular-nums cursor-pointer disabled:opacity-50"
+      >
+        {BUSINESS_DAY_START_OPTIONS.map((h) => (
+          <option key={h} value={h}>
+            {businessDayLabel(h)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
  * People-per-visit picker for the guest-count estimate. Only relevant when no
  * real covers were entered — the parent renders it in that case. Pure client
  * state persisted in localStorage (like AutoRefresh); changing it re-derives the
@@ -275,11 +442,15 @@ function CoversMultiplier({ value, onChange }: { value: number; onChange: (v: nu
   );
 }
 
+/**
+ * "2 dk 21 sn", never "2d 21s" — the short form is ambiguous in Turkish (dakika
+ * vs. gün) and reads as "2 days" to an English speaker.
+ */
 function duration(sec: number): string {
   if (!sec) return "—";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m > 0 ? `${m}d ${s}s` : `${s}s`;
+  return m > 0 ? `${m} dk ${s} sn` : `${s} sn`;
 }
 
 function Kpi({
@@ -287,12 +458,20 @@ function Kpi({
   value,
   unit,
   delta,
+  deltaNote,
+  muted,
+  mutedReason,
   estimated,
 }: {
   label: string;
   value: string;
   unit?: string;
   delta?: number | null;
+  /** What the delta is measured against, printed under it — e.g. "19 Haz – 4 Tem". */
+  deltaNote?: string;
+  /** Grey the delta out: the underlying period is missing days, so it isn't real. */
+  muted?: boolean;
+  mutedReason?: string;
   /** Renders a "~" prefix + "tahmini" note (used for the sessions-based cover estimate). */
   estimated?: boolean;
 }) {
@@ -304,7 +483,11 @@ function Kpi({
     eff > 11 ? "text-[18px]" : eff > 9 ? "text-[22px]" : eff > 6 ? "text-[28px]" : "text-[40px]";
   return (
     <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center">
-      <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate">{label}</div>
+      {/* title so a label the card is too narrow to show ("Menü Görüntüleme")
+          is still readable instead of ending in a dead ellipsis. */}
+      <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate" title={label}>
+        {label}
+      </div>
       <div className="flex items-baseline justify-center gap-1 mt-1.5 whitespace-nowrap">
         {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
         {estimated && <span className="font-ui font-extrabold text-[16px] text-green/50">~</span>}
@@ -319,59 +502,30 @@ function Kpi({
           tahmini
         </div>
       ) : (
-        // vs previous period of equal length; hidden when there's no baseline
         delta != null && (
           <div
-            className={`mt-1.5 text-[11px] font-extrabold ${delta > 0 ? "text-green" : delta < 0 ? "text-orange" : "text-green/50"}`}
-            title="Önceki döneme göre"
+            className={`mt-1.5 text-[11px] font-extrabold ${
+              muted
+                ? "text-green/30"
+                : delta > 0
+                  ? "text-green"
+                  : delta < 0
+                    ? "text-orange"
+                    : "text-green/50"
+            }`}
+            title={muted ? mutedReason : deltaNote ? `${deltaNote} dönemine göre` : "Önceki döneme göre"}
           >
             {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
             {delta}%
+            {/* Never leave a percentage without saying what it is a percentage OF. */}
+            {deltaNote && (
+              <span className="block mt-0.5 text-[9px] font-bold text-green/40 leading-tight normal-case">
+                {muted ? "eksik veri" : `vs ${deltaNote}`}
+              </span>
+            )}
           </div>
         )
       )}
-    </div>
-  );
-}
-
-/**
- * The whole funnel per item in one place: viewed → carted → actually sold.
- * "Looked at a lot, never bought" cases stand out without cross-referencing
- * three separate charts.
- */
-function ConversionTable({ rows, note }: { rows: ItemConversion[]; note: string }) {
-  if (!rows.length) {
-    return <div className="h-30 grid place-items-center text-[12px] text-green/50 text-center px-4">{note}</div>;
-  }
-  const th = "text-[10px] tracking-[0.14em] font-extrabold text-green/60 uppercase text-right py-2 px-3";
-  const td = "text-[13px] font-bold text-ink text-right py-2 px-3 tabular-nums";
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="border-b-2 border-green">
-            <th className={`${th} text-left`}>Ürün</th>
-            <th className={th}>Görüntüleme</th>
-            <th className={th}>Sepet</th>
-            <th className={th}>Satılan</th>
-            <th className={th}>Satış/Görünt.</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name} className="border-b border-green/15">
-              <td className={`${td} text-left whitespace-nowrap max-w-45 truncate`} title={r.name}>{r.name}</td>
-              <td className={td}>{tl.format(r.views)}</td>
-              <td className={td}>{tl.format(r.carts)}</td>
-              <td className={td}>{r.sold ? tl.format(r.sold) : "—"}</td>
-              <td className={`${td} ${r.views >= 5 && r.sold === 0 ? "text-orange" : r.views > 0 && r.sold / r.views >= 1 ? "text-green" : ""}`}>{saleRatio(r.sold, r.views)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="mt-2 text-[10px] text-green/50 font-bold">
-        Satılan = girilen gerçek satışlardan · Satış/Görünt. = her görüntülemeye düşen satış (1× = görüntülendiği kadar satılıyor, 1×+ = menüde bakılmadan da sipariş ediliyor) · turuncu = çok görüntülenip hiç satılmayan
-      </p>
     </div>
   );
 }
@@ -465,10 +619,13 @@ function AiInsights({
   configured,
   initial,
   history,
+  basis,
 }: {
   configured: boolean;
   initial: string[] | null;
   history: InsightsHistoryEntry[];
+  /** The sample these findings rest on — printed with them, not behind a tooltip. */
+  basis: DataBasis;
 }) {
   const params = useSearchParams();
   const router = useRouter();
@@ -477,7 +634,6 @@ function AiInsights({
   );
   const [resolved, setResolved] = useState<string[]>([]);
   const [error, setError] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const run = useCallback(
@@ -488,6 +644,9 @@ function AiInsights({
           range: params.get("range") ?? undefined,
           from: params.get("from") ?? undefined,
           to: params.get("to") ?? undefined,
+          // Same baseline the KPI badges show, so a finding can't cite one window
+          // while the cards above it show another.
+          cmp: params.get("cmp") ?? undefined,
           mode,
         });
         if (res.ok) {
@@ -515,11 +674,11 @@ function AiInsights({
   const hasFindings = findings !== null && findings.length > 0;
   const buttonLabel = pending ? "Kontrol ediliyor…" : hasFindings ? "Tekrar Kontrol Et" : "Yorum Oluştur";
 
-  // Newest (recheck-added) findings float to the top so they aren't hidden below
-  // the fold; the rest keep their order. Collapsed to the first 4 with a toggle.
-  const VISIBLE_LIMIT = 4;
-  const sorted = findings ? [...findings].sort((a, b) => Number(b.isNew) - Number(a.isNew)) : [];
-  const visible = expanded ? sorted : sorted.slice(0, VISIBLE_LIMIT);
+  // The server already caps and ranks the set by money at stake (see
+  // rankFindings), so everything it returns is shown — no "show more" toggle,
+  // which is what used to reflow the whole column on click. Newest
+  // (recheck-added) findings float to the top; the rest keep their ranking.
+  const visible = findings ? [...findings].sort((a, b) => Number(b.isNew) - Number(a.isNew)) : [];
 
   return (
     <section className="border-2 border-green bg-white p-5 shadow-hard">
@@ -541,6 +700,10 @@ function AiInsights({
           </button>
         )}
       </div>
+      {/* Height floor for the state that swaps in place (placeholder → "üretiliyor"
+          → findings). Without it the card grew by ~200px the moment generation
+          finished and shoved everything below it down mid-read. */}
+      <div className="min-h-40">
       {!configured ? (
         <p className="text-[12px] text-green/50 py-3">
           Yapay zekâ yorumu için GROQ_API_KEY ortam değişkeni gerekli.
@@ -564,15 +727,6 @@ function AiInsights({
               </li>
             ))}
           </ul>
-          {sorted.length > VISIBLE_LIMIT && (
-            <button
-              type="button"
-              onClick={() => setExpanded((e) => !e)}
-              className="mt-3 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase text-orange hover:text-orange/70 cursor-pointer transition-colors"
-            >
-              {expanded ? "Daha az göster" : `Daha fazla göster (+${sorted.length - VISIBLE_LIMIT})`}
-            </button>
-          )}
           {resolved.length > 0 && (
             <div className="mt-4 border-t-2 border-green/15 pt-3">
               <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase mb-2">
@@ -593,10 +747,41 @@ function AiInsights({
         <p className="text-[12px] text-green/50 py-3">Veriler yoruma çevriliyor…</p>
       ) : (
         <p className="text-[12px] text-green/50 py-3">
-          Seçili dönemin verilerini Türkçe bulgulara çevirir: en çok/az satanlar, bakılıp alınmayanlar,
-          içerik sorunları. Bulgular kalıcıdır; “Tekrar Kontrol Et” mevcut bulguları doğrular ve yenilerini ekler.
+          Seçili dönemin verilerinden en fazla <b>5 bulgu</b> çıkarır — para etkisi en büyük olandan başlayarak,
+          her biri tahmini aylık ₺ karşılığıyla. Yukarıdaki Genel Bakış’ta yazan şeyleri tekrar etmez. Bulgular
+          kalıcıdır; “Tekrar Kontrol Et” mevcut bulguları doğrular ve yenilerini ekler.
         </p>
       )}
+      </div>
+
+      {/* DATA BASIS — the sample behind the sentences above, printed at the same
+          size as they are. A reader who can see "3/30 gün satış verisi" under a
+          confident finding can judge it for themselves; one who can't has to take
+          it on faith, and gets burned once before never trusting the card again.
+          The same numbers gate what the model may claim (lib/analytics/confidence). */}
+      {configured && (
+        <div className="mt-3 border-t-2 border-green/15 pt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="text-[10px] tracking-[0.16em] font-extrabold text-green/50 uppercase">Veri temeli</span>
+          <span className="text-[11px] font-bold text-green/60 tabular-nums">{describeBasis(basis)}</span>
+          {isThinPeriod(basis) && (
+            <span
+              className="px-1.5 py-0.5 bg-orange/12 text-orange font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase"
+              title="Bu dönemde satış verisi az — bulgular eğilim değil, ilk sinyal olarak okunmalı"
+            >
+              Sınırlı veri
+            </span>
+          )}
+          {thinWeekdays(basis).length > 0 && thinWeekdays(basis).length < 7 && (
+            <span
+              className="text-[10px] font-bold text-green/40"
+              title="Bu günler dönemde yeterince tekrar etmiyor — o günlere dair bulgular üretilmez"
+            >
+              {thinWeekdays(basis).join(", ")} için gün sayısı yetersiz
+            </span>
+          )}
+        </div>
+      )}
+
       {history.length > 0 && (
         <details className="mt-3 border-t-2 border-green/15 pt-3">
           <summary className="cursor-pointer text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase select-none">
@@ -630,6 +815,7 @@ const PATTERN_KIND: Record<PatternItem["kind"], { label: string; chip: string }>
   basket: { label: "Sepet İlişkisi", chip: "bg-orange text-white" },
   time: { label: "Zaman Kalıbı", chip: "bg-ink text-white" },
   segment: { label: "Segment", chip: "bg-green/70 text-white" },
+  margin: { label: "Kâr Marjı", chip: "bg-orange/80 text-white" },
 };
 
 /** Compact "the numbers behind it" line, phrased per pattern kind. */
@@ -642,6 +828,12 @@ function patternEvidence(p: PatternItem): string {
       return `lift ${m.lift} · ${m.support} sipariş · %${m.confidencePct}`;
     case "time":
       return `${m.weekday} · normalin ${m.index}×`;
+    case "margin":
+      // Margin patterns come in two shapes (period shift, weekday gap); show the
+      // point movement when it's there, else fall back to the leading figures.
+      return m.shiftPoints != null
+        ? `%${m.earlyMarginPct} → %${m.lateMarginPct} · ${m.days} gün`
+        : Object.values(m).slice(0, 2).join(" · ");
     case "segment": {
       // Prefer the rate/percentage metrics (keys ending in "Pct") so locale/price/
       // discount patterns read as comparable rates, not raw counts.
@@ -722,10 +914,32 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
                 <span className="text-ink/40 font-extrabold shrink-0">◆</span>
                 <div className="flex flex-col gap-1">
                   <span>{p.text}</span>
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     <span className={`px-1.5 py-0.5 font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase ${PATTERN_KIND[p.kind].chip}`}>
                       {PATTERN_KIND[p.kind].label}
                     </span>
+                    {/* SAMPLE, next to the claim. "Çarşamba 5,3×" means nothing
+                        until you know whether it's four Wednesdays or two — and the
+                        thin ones never get here at all (patterns.ts drops them),
+                        so this chip separates "solid" from "early signal". */}
+                    {p.confidence && p.sampleLabel && (
+                      <span
+                        className={[
+                          "px-1.5 py-0.5 font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase border",
+                          p.confidence === "high"
+                            ? "border-green/40 bg-green/10 text-green"
+                            : "border-orange/40 bg-orange/8 text-orange",
+                        ].join(" ")}
+                        title={
+                          p.confidence === "high"
+                            ? `Sağlam örneklem: ${p.sampleLabel}`
+                            : `Sınırlı örneklem (${p.sampleLabel}) — erken sinyal olarak okuyun, geri dönüşü zor kararlar için bekleyin`
+                        }
+                      >
+                        {p.sampleLabel}
+                        {p.confidence === "medium" && " · erken"}
+                      </span>
+                    )}
                     <span className="text-[11px] text-ink/45 font-mono">{patternEvidence(p)}</span>
                   </span>
                 </div>
@@ -746,7 +960,7 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
           Tüm satış/etkileşim verisini tarayıp sayılarla görünen gerçek kalıpları bulur: birlikte hareket eden
           ürünler (yoğun gün etkisi arındırılmış), beklentinin üstünde birlikte alınan çiftler, güne özel satışlar
           ve segment farkları. Bariz olanlar ({aiConfigured ? "yapay zekâ + " : ""}istatistik eşikleriyle) elenir.
-          Yeterli veri yoksa kalıp gösterilmez.
+          Her kalıp, dayandığı veri miktarıyla birlikte gösterilir; örneklemi yetersiz olanlar hiç gösterilmez.
         </p>
       )}
     </section>
@@ -1035,6 +1249,229 @@ function StatRow({ name, children }: { name: string; children: React.ReactNode }
   );
 }
 
+/**
+ * Menu engineering matrix — popularity × margin, the framework restaurant owners
+ * already think in. Four quadrants, each with the one action it implies.
+ *
+ * This is the payoff of a single database column. Every other card on this page
+ * measures attention and revenue; only this one answers "does it make money", which
+ * is the question the buyer actually asks. Each quadrant carries its instruction in
+ * the header rather than in a legend below, because the instruction IS the product:
+ * an owner who sees "çok satıyor, kâr bırakmıyor" next to three item names knows
+ * what to do this afternoon.
+ */
+/** Matrix reading order: protect, fix, promote, cut. */
+const QUADRANTS_ORDER: MenuQuadrant[] = ["star", "plowhorse", "puzzle", "dog"];
+
+const QUADRANT_META: Record<
+  MenuQuadrant,
+  { mark: string; title: string; action: string; border: string; chip: string }
+> = {
+  star: {
+    mark: "★",
+    title: "Yıldızlar",
+    action: "Koru — indirime sokma, porsiyonu küçültme",
+    border: "border-green",
+    chip: "bg-green text-white",
+  },
+  plowhorse: {
+    mark: "◆",
+    title: "Yük Atları",
+    action: "Çok satıyor, kâr bırakmıyor — fiyatı ayarla ya da maliyeti düşür",
+    border: "border-orange",
+    chip: "bg-orange text-white",
+  },
+  puzzle: {
+    mark: "?",
+    title: "Bilmeceler",
+    action: "Kârlı ama az satıyor — menüde öne çıkar, personele hatırlat",
+    border: "border-green/50",
+    chip: "bg-green/70 text-white",
+  },
+  dog: {
+    mark: "×",
+    title: "Yorgunlar",
+    action: "Az satıyor, az kâr — menüden çıkarmayı değerlendir",
+    border: "border-ink/40",
+    chip: "bg-ink/70 text-white",
+  },
+};
+
+function MenuMatrix({ me }: { me: MenuEngineering }) {
+  // No cost anywhere yet: say what the field unlocks and where to enter it, rather
+  // than rendering an empty grid that looks broken.
+  if (!me.hasData) {
+    return (
+      <ChartCard title="Menü Kârlılık Matrisi (Popülerlik × Kâr Marjı)">
+        <div className="py-2">
+          <p className="text-[13px] text-ink leading-relaxed">
+            Ürün <b>maliyetleri</b> girildiğinde bu bölüm her ürünü popülerlik ve kâr marjına göre dört gruba
+            ayırır: <b>koru</b>, <b>fiyatı ayarla</b>, <b>öne çıkar</b>, <b>menüden çıkar</b>. Ciro değil{" "}
+            <b>kâr</b> üzerinden okunur.
+          </p>
+          <p className="mt-2 text-[12px] text-green/60 font-bold leading-relaxed">
+            {me.coverage.soldItems > 0
+              ? `Bu dönemde ${tl.format(me.coverage.soldItems)} ürün satıldı, hiçbirinin maliyeti girilmemiş.`
+              : "Bu dönem için ürün bazında gerçek satış verisi yok."}{" "}
+            <a href="/admin/menu" className="text-orange underline font-extrabold">
+              Menüden maliyet gir →
+            </a>
+          </p>
+        </div>
+      </ChartCard>
+    );
+  }
+
+  const cell = (q: MenuQuadrant) => {
+    const meta = QUADRANT_META[q];
+    const items = me.items.filter((i) => i.quadrant === q);
+    const profit = items.reduce((s, i) => s + i.profit, 0);
+    return (
+      <div key={q} className={`border-2 ${meta.border} p-3 min-w-0`}>
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span
+              className={`px-1.5 py-0.5 font-ui font-extrabold text-[10px] leading-none ${meta.chip}`}
+              aria-hidden
+            >
+              {meta.mark}
+            </span>
+            <span className="text-[11px] tracking-[0.14em] font-extrabold text-ink uppercase truncate">
+              {meta.title}
+            </span>
+            <span className="text-[11px] font-bold text-green/40 tabular-nums shrink-0">({items.length})</span>
+          </span>
+          <span className="text-[11px] font-extrabold text-green/60 tabular-nums shrink-0">
+            {money.format(Math.round(profit))} ₺
+          </span>
+        </div>
+        <p className="text-[10px] leading-snug text-green/55 font-bold mb-2">{meta.action}</p>
+        {items.length === 0 ? (
+          <p className="text-[11px] text-green/35">—</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-green/10">
+            {items.slice(0, 6).map((i) => (
+              <li key={i.name} className="flex items-center justify-between gap-2 py-1">
+                <span className="text-[12px] font-bold text-ink truncate min-w-0" title={i.name}>
+                  {i.losingMoney && (
+                    <span className="text-orange mr-1" title="Maliyetinin altında satılıyor">
+                      ⚠
+                    </span>
+                  )}
+                  {i.name}
+                </span>
+                <span className="shrink-0 text-[11px] tabular-nums">
+                  <span className="text-green/45">{tl.format(i.qty)} ad.</span>
+                  <span className={`ml-2 font-extrabold ${i.unitMargin < 0 ? "text-orange" : "text-green"}`}>
+                    {money.format(Math.round(i.unitMargin))} ₺
+                  </span>
+                </span>
+              </li>
+            ))}
+            {items.length > 6 && (
+              <li className="pt-1 text-[10px] font-bold text-green/40">
+                +{tl.format(items.length - 6)} ürün daha
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <ChartCard title="Menü Kârlılık Matrisi (Popülerlik × Kâr Marjı)">
+      {/* Profit headline first: the whole point is restating the period in profit
+          rather than revenue, so the ₺ kâr figure leads. */}
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 mb-3 pb-3 border-b-2 border-green/15">
+        <div>
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Brüt Kâr</div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-ui font-extrabold text-[15px] text-green/70">₺</span>
+            <span className="font-bowlby text-[26px] leading-none text-green">
+              {money.format(Math.round(me.totals.profit))}
+            </span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Kâr Marjı</div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-bowlby text-[26px] leading-none text-green">{me.totals.marginPct}</span>
+            <span className="font-ui font-extrabold text-[15px] text-green/70">%</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Ortalama Birim Kâr</div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-ui font-extrabold text-[15px] text-green/70">₺</span>
+            <span className="font-bowlby text-[26px] leading-none text-green">
+              {money.format(Math.round(me.avgUnitMargin))}
+            </span>
+          </div>
+        </div>
+        {/* Coverage, always stated: a matrix over a fifth of the revenue is a
+            sample, and presenting it as the menu would be the dishonest version
+            of this feature. */}
+        <div className="min-w-0">
+          <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase">Kapsam</div>
+          <div
+            className={`text-[12px] font-extrabold tabular-nums ${me.coverage.reliable ? "text-green/70" : "text-orange"}`}
+            title="Maliyeti girili ürünlerin, dönemin gerçek cirosundaki payı"
+          >
+            {tl.format(me.coverage.costedItems)}/{tl.format(me.coverage.soldItems)} ürün · cironun %
+            {Math.round(me.coverage.revenueRatio * 100)}’i
+          </div>
+        </div>
+      </div>
+
+      {!me.coverage.reliable && (
+        <p className="mb-3 text-[11px] font-bold text-orange leading-relaxed">
+          Maliyeti girilmemiş ürünler bu matriste yok — rakamlar tüm menüyü değil, yalnızca yukarıdaki kapsamı
+          anlatır.{" "}
+          <a href="/admin/menu" className="underline font-extrabold">
+            Eksik maliyetleri gir →
+          </a>
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{QUADRANTS_ORDER.map(cell)}</div>
+
+      <p className="mt-3 text-[10px] text-green/50 font-bold leading-relaxed">
+        “Popüler” = satış adedinin menü ortalamasının %70’i ve üzeri · “Yüksek marj” = birim kârı menü
+        ortalamasının üzerinde · birim kâr, ürünün gerçek satış tutarından (indirimler dâhil) maliyeti
+        çıkarılarak bulunur · ⚠ = maliyetinin altında satılıyor.
+      </p>
+    </ChartCard>
+  );
+}
+
+/** The period's biggest profit contributors — revenue rank is not profit rank. */
+function TopProfit({ me }: { me: MenuEngineering }) {
+  if (!me.hasData || me.items.length < 3) return null;
+  const top = me.items.slice(0, 8);
+  return (
+    <ChartCard title="En Kârlı Ürünler">
+      <StatList>
+        {top.map((i) => (
+          <StatRow key={i.name} name={i.name}>
+            <span className="flex items-center gap-3 shrink-0 text-[12px] tabular-nums">
+              <span className="text-green/45">{tl.format(i.qty)} adet</span>
+              <span className="text-green/45">%{i.marginPct} marj</span>
+              <span className="font-bowlby text-green text-[15px] leading-none">
+                {money.format(Math.round(i.profit))}
+              </span>
+            </span>
+          </StatRow>
+        ))}
+      </StatList>
+      <p className="mt-2 text-[10px] text-green/50 font-bold">
+        Ciro sıralaması değil <b>kâr</b> sıralaması — en çok satan ürün genellikle en çok kazandıran ürün
+        değildir.
+      </p>
+    </ChartCard>
+  );
+}
+
 /** Converts views into real sales at a high rate, but few diners see it → promote. */
 function HiddenGems({ items }: { items: HiddenGem[] }) {
   if (!items.length) return null;
@@ -1058,8 +1495,32 @@ function HiddenGems({ items }: { items: HiddenGem[] }) {
   );
 }
 
-/** Rising and fading items by view momentum vs the previous period. */
-function Momentum({ rising, fading }: { rising: ItemMomentum[]; fading: ItemMomentum[] }) {
+/**
+ * Rising and fading items by view momentum vs the comparison period.
+ *
+ * Refuses to render a comparison it can't make. When the baseline window has no
+ * engagement data (a custom range whose predecessor predates tracking, most
+ * often), every item's "previous" is 0 — so every single product came out as
+ * "0→X YENİ" and nothing could ever fade. Six fake rising stars is worse than an
+ * empty module, so the module says why instead.
+ */
+function Momentum({ momentum }: { momentum: MomentumResult }) {
+  const { rising, fading, comparable, previous } = momentum;
+
+  if (!comparable) {
+    return (
+      <ChartCard title="Yükselenler / Düşenler (görüntülenme ivmesi)">
+        <div className="min-h-24 grid place-items-center px-4 text-center">
+          <p className="text-[12px] text-green/60 leading-relaxed">
+            Karşılaştırma dönemi ({trDate(previous.from)} – {trDate(previous.to)}) için etkileşim verisi yok,
+            bu yüzden ivme hesaplanamıyor — her ürün “yeni” görünürdü. Etkileşim takibinin başladığı tarihten
+            sonrasını kapsayan bir dönem seçin.
+          </p>
+        </div>
+      </ChartCard>
+    );
+  }
+
   if (!rising.length && !fading.length) return null;
   const Row = ({ m, up }: { m: ItemMomentum; up: boolean }) => (
     <StatRow name={m.name}>
@@ -1092,7 +1553,8 @@ function Momentum({ rising, fading }: { rising: ItemMomentum[]; fading: ItemMome
         </div>
       </div>
       <p className="mt-2 text-[10px] text-green/50 font-bold">
-        Önceki döneme göre görüntülenme değişimi. “Yeni” = geçen dönem yokken bu dönem öne çıkan.
+        {trDate(previous.from)} – {trDate(previous.to)} dönemine göre görüntülenme değişimi. “Yeni” = geçen
+        dönem yokken bu dönem öne çıkan.
       </p>
     </ChartCard>
   );
@@ -1133,26 +1595,87 @@ function BoughtTogether({ pairs, orders }: { pairs: ItemPair[]; orders: number }
   );
 }
 
-/** Is the featured banner / suggested rail earning its prime menu real estate? */
-function PromoPerformance({ promo }: { promo: PromoPerformance }) {
-  if (!promo.hasData) return null;
-  const Block = ({ label, s }: { label: string; s: { clicks: number; sessions: number; convPct: number } }) => (
+/**
+ * Is the featured banner / suggested rail earning its prime menu real estate?
+ *
+ * "0 tıklama · %0 sepete ekledi" describes two opposite situations — a banner
+ * nobody clicks, and a banner that was never set up — and used to render both
+ * identically. `configured` separates them: an unconfigured slot gets a
+ * set-it-up prompt instead of a zero that looks like failure.
+ */
+function PromoPerformance({
+  promo,
+  config,
+}: {
+  promo: PromoPerformance;
+  config: { featured: boolean; suggested: boolean };
+}) {
+  // Nothing configured and nothing recorded — there is genuinely nothing to say.
+  if (!promo.hasData && !config.featured && !config.suggested) return null;
+
+  const Block = ({
+    label,
+    s,
+    configured,
+    setupHref,
+    setupLabel,
+  }: {
+    label: string;
+    s: { clicks: number; sessions: number; convPct: number };
+    configured: boolean;
+    setupHref: string;
+    setupLabel: string;
+  }) => (
     <div className="border-2 border-green/30 p-3">
       <div className="text-[10px] tracking-[0.16em] font-extrabold text-green/60 uppercase truncate">{label}</div>
-      <div className="flex items-baseline gap-1.5 mt-1">
-        <span className="font-bowlby text-[26px] text-green leading-none">{tl.format(s.clicks)}</span>
-        <span className="text-[11px] font-bold text-green/50">tıklama</span>
-      </div>
-      <div className="mt-1.5 text-[11px] font-bold text-green/60">
-        {tl.format(s.sessions)} oturum · <span className="text-orange">{s.convPct}%</span> sepete ekledi
-      </div>
+      {!configured ? (
+        <>
+          <div className="mt-1 text-[13px] font-extrabold text-green/50">Kurulmadı</div>
+          <a
+            href={setupHref}
+            className="mt-1.5 inline-block text-[11px] font-extrabold text-orange hover:text-orange/70 underline"
+          >
+            {setupLabel}
+          </a>
+        </>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-1.5 mt-1">
+            <span className="font-bowlby text-[26px] text-green leading-none">{tl.format(s.clicks)}</span>
+            <span className="text-[11px] font-bold text-green/50">tıklama</span>
+          </div>
+          <div className="mt-1.5 text-[11px] font-bold text-green/60">
+            {s.clicks === 0 ? (
+              // Configured but untouched — say so in those words, and give the
+              // denominator, which is the number that makes it actionable.
+              <>Kurulu ama bu dönemde hiç tıklanmadı.</>
+            ) : (
+              <>
+                {tl.format(s.sessions)} oturum · <span className="text-orange">{s.convPct}%</span> sepete ekledi
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
   return (
     <ChartCard title="Öne Çıkan / Öneri Performansı">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Block label="Öne Çıkan (Başlık)" s={promo.featured} />
-        <Block label="Öneri Rayı" s={promo.suggested} />
+        <Block
+          label="Öne Çıkan (Başlık)"
+          s={promo.featured}
+          configured={config.featured}
+          setupHref="/admin/settings"
+          setupLabel="Öne çıkan ürün seç →"
+        />
+        <Block
+          label="Öneri Rayı"
+          s={promo.suggested}
+          configured={config.suggested}
+          setupHref="/admin/suggested"
+          setupLabel="Öneri grubu oluştur →"
+        />
       </div>
       {promo.topSuggested.length > 0 && (
         <div className="mt-3">
@@ -1265,9 +1788,14 @@ function Zone({
  * narrow. Two properties make it robust where the old layouts failed:
  *   • the last / only card GROWS to fill its row, so a null sibling never leaves
  *     an orphaned empty cell (the "one full, one empty" bug), and
- *   • items-stretch keeps a paired row the same height, killing the staircase.
+ *   • cards size to their CONTENT rather than to their tallest neighbour.
  * Children stay in one flat flex container (never re-parented between columns),
  * so cards with mount effects — AiInsights, PatternsCard — never remount.
+ *
+ * `items-start` replaced `items-stretch`: matching a 3-row price-band card to a
+ * 10-row table beside it padded roughly half the page with empty white. A short
+ * card is now short, and the row's own height is the taller card's — no
+ * staircase, no filler.
  *
  * This replaces a CSS multi-column masonry that couldn't balance columns when a
  * tall unbreakable card was present, stranding a large empty gap below the short
@@ -1275,7 +1803,7 @@ function Zone({
  */
 function CardGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap gap-6 items-stretch *:grow *:basis-[calc(50%-0.75rem)] *:min-w-[min(20rem,100%)]">
+    <div className="flex flex-wrap gap-6 items-start *:grow *:basis-[calc(50%-0.75rem)] *:min-w-[min(20rem,100%)]">
       {children}
     </div>
   );
@@ -1307,12 +1835,31 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const onCustom = useCallback(
     (from: string, to: string) => {
       if (!from || !to) return;
+      // Preserve the comparison basis: switching to a custom window shouldn't
+      // silently reset "geçen yıl" back to "önceki dönem".
+      const cmp = params.get("cmp");
+      const q = new URLSearchParams({ range: "custom", from, to });
+      if (cmp) q.set("cmp", cmp);
       startSwitching(() => {
-        router.push(`/admin/analytics?range=custom&from=${from}&to=${to}`);
+        router.push(`/admin/analytics?${q.toString()}`);
         router.refresh();
       });
     },
-    [router]
+    [params, router]
+  );
+
+  /** Change what the % badges compare against; the server recomputes every delta. */
+  const setCompare = useCallback(
+    (basis: CompareBasis) => {
+      const q = new URLSearchParams(params.toString());
+      if (basis === "prev") q.delete("cmp");
+      else q.set("cmp", basis);
+      startSwitching(() => {
+        router.push(`/admin/analytics?${q.toString()}`);
+        router.refresh();
+      });
+    },
+    [params, router]
   );
 
   // Derive the active preset from the live URL (not the possibly-cached server
@@ -1357,6 +1904,11 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const engagementNote = data.posthogConfigured
     ? "Bu dönemde menü etkileşimi kaydedilmedi."
     : "Etkileşim verisi yok (PostHog gerekli).";
+
+  // What every % badge is measured against, printed under each one.
+  const compareNote = `${trDate(data.compare.range.from)} – ${trDate(data.compare.range.to)}`;
+  const coverageReason = `Seçili dönemin ${data.salesCoverage.days - data.salesCoverage.daysWithData} gününde POS verisi yok — bu yüzdeler eksik veri üzerinden hesaplanıyor.`;
+
 
   // Scope key for the AI cards: range + every ignore rule (the auto rule folds in
   // the names it caught and the ones overridden back in, so a menu edit or a new
@@ -1453,13 +2005,46 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 overrides={data.offMenuOverrides}
               />
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <ComparePicker
+                  basis={data.compare.basis}
+                  hasData={data.compare.hasData}
+                  onChange={setCompare}
+                  disabled={switching}
+                />
                 {/* Only shown when Kişi is running on the estimate (no real covers entered) */}
                 {coversEst && <CoversMultiplier value={coversMult} onChange={pickCoversMult} />}
-                <AutoRefresh />
+                <BusinessDayPicker value={data.businessDayStart} />
+                <AutoRefresh live={data.live} />
               </div>
             </div>
           </div>
         </div>
+
+        {/* MISSING-DATA BANNER — first thing on the page, because it invalidates
+            everything under it. A range that silently spans days with no POS
+            import under-reports every total and turns each % badge into a
+            comparison between two different numbers of days. */}
+        {data.salesCoverage.missing.length > 0 && (
+          <div className="border-2 border-orange bg-orange/8 px-4 py-3">
+            <p className="text-[12px] font-extrabold text-ink leading-relaxed">
+              Seçili {tl.format(data.salesCoverage.days)} günün{" "}
+              <span className="text-orange">
+                {tl.format(data.salesCoverage.days - data.salesCoverage.daysWithData)} gününde
+              </span>{" "}
+              POS satış verisi yok. Toplamlar eksik, dönem karşılaştırmaları güvenilir değil.
+            </p>
+            <p className="mt-1 text-[11px] font-bold text-green/70 leading-relaxed">
+              Eksik günler:{" "}
+              {data.salesCoverage.missing.slice(0, 12).map((d) => trDate(d)).join(", ")}
+              {data.salesCoverage.missing.length > 12 &&
+                ` … (+${tl.format(data.salesCoverage.missing.length - 12)} gün daha)`}
+              .{" "}
+              <a href="/admin/analytics/sales" className="text-orange underline font-extrabold">
+                Eksik günleri girin →
+              </a>
+            </p>
+          </div>
+        )}
 
         {/* 01 — the pulse: headline metrics for the period */}
         <Zone index="01" title="Nabız" desc="dönem metrikleri">
@@ -1489,12 +2074,35 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               )}
             </div>
           )}
+          {/* One line saying what a "day" is here, because it silently decides
+              which day a 01:30 order belongs to and therefore every weekday and
+              daily figure below. */}
+          <p className="text-[10px] font-bold text-green/50 -mt-2">
+            İş günü {businessDayLabel(data.businessDayStart)}’da başlar
+            {data.businessDayStart > 0
+              ? ` — gece yarısından sonraki siparişler bir önceki güne yazılır.`
+              : ` — takvim günü; gece 00:00’dan sonraki siparişler ertesi güne yazılır.`}{" "}
+            Değişimler {data.compare.label.toLocaleLowerCase("tr")} ({compareNote}) ile karşılaştırılır.
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4">
-            <Kpi label="Gerçek Satış" value={money.format(kpis.totalSales)} unit="₺" delta={data.deltas.totalSales} />
+            {/* Sales-derived deltas are muted when either window is missing days:
+                the number would be a gap in the log, not a change in business. */}
+            <Kpi
+              label="Gerçek Satış"
+              value={money.format(kpis.totalSales)}
+              unit="₺"
+              delta={data.deltas.totalSales}
+              deltaNote={compareNote}
+              muted={!data.salesDeltaReliable}
+              mutedReason={coverageReason}
+            />
             <Kpi
               label="Kişi"
               value={coversReal ? tl.format(kpis.totalCovers) : estimatedCovers != null ? tl.format(estimatedCovers) : "—"}
               delta={coversReal ? data.deltas.totalCovers : undefined}
+              deltaNote={compareNote}
+              muted={!data.salesDeltaReliable}
+              mutedReason={coverageReason}
               estimated={coversEst}
             />
             <Kpi
@@ -1502,13 +2110,16 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               value={spendReal ? money.format(kpis.avgSpendPerCover) : spendEst ? money.format(estimatedSpendPerCover as number) : "—"}
               unit={spendReal || spendEst ? "₺" : undefined}
               delta={spendReal ? data.deltas.avgSpendPerCover : undefined}
+              deltaNote={compareNote}
+              muted={!data.salesDeltaReliable}
+              mutedReason={coverageReason}
               estimated={spendEst}
             />
-            <Kpi label="Tekil Ziyaret" value={kpis.sessions ? tl.format(kpis.sessions) : "—"} delta={data.deltas.sessions} />
-            <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} />
-            <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} />
-            <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} />
-            <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} />
+            <Kpi label="Tekil Ziyaret" value={kpis.sessions ? tl.format(kpis.sessions) : "—"} delta={data.deltas.sessions} deltaNote={compareNote} />
+            <Kpi label="Menü Görüntüleme" value={tl.format(kpis.views)} delta={data.deltas.views} deltaNote={compareNote} />
+            <Kpi label="Medyan Süre" value={duration(kpis.avgSeconds)} delta={data.deltas.avgSeconds} deltaNote={compareNote} />
+            <Kpi label="Garson Çağrısı" value={tl.format(kpis.waiterCalls)} delta={data.deltas.waiterCalls} deltaNote={compareNote} />
+            <Kpi label="Sepet → Çağrı" value={kpis.cartConversion ? tl.format(kpis.cartConversion) : "—"} unit={kpis.cartConversion ? "%" : undefined} delta={data.deltas.cartConversion} deltaNote={compareNote} />
           </div>
         </Zone>
 
@@ -1524,6 +2135,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               configured={data.insightsConfigured}
               initial={data.initialInsights}
               history={data.insightsHistory}
+              basis={data.dataBasis}
             />
             {/* Computed + validated patterns across every numeric signal. Keyed by range
                 AND the ignore list, so excluding an item remounts the card and it
@@ -1534,17 +2146,25 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
         {/* 03 — menu decisions: item-level, the most actionable views */}
         <Zone index="03" title="Menü Kararları" desc="ürün bazında">
-          {/* Item funnel table — the strongest single view for menu decisions */}
-          <ChartCard title="Ürün Dönüşümü (Görüntüleme → Sepet → Satış)">
-            <ConversionTable rows={data.itemConversion} note={engagementNote} />
+          {/* Per-item menu engagement beside real POS sales — the strongest single
+              view for menu decisions. Deliberately NOT titled as a funnel: the two
+              halves come from different populations (see _conversion-table). */}
+          {/* Profit before attention: the matrix leads the zone because "does it
+              make money" outranks every engagement question below it, and because
+              its four quadrants each name the action to take. Full width — it's a
+              2×2 grid that can't survive a half-column. */}
+          <MenuMatrix me={data.menuEngineering} />
+          <ChartCard title="Ürün Performansı — Menü Etkileşimi & Kasa Satışı">
+            <ConversionTable rows={data.itemConversion} note={engagementNote} range={data.range} />
           </ChartCard>
           {/* A card that renders null (no data) simply drops out — the survivors
               re-flow and grow, so there's never an orphaned empty half-row. */}
           <CardGrid>
+            <TopProfit me={data.menuEngineering} />
             <HiddenGems items={data.hiddenGems} />
-            <Momentum rising={data.momentum.rising} fading={data.momentum.fading} />
+            <Momentum momentum={data.momentum} />
             <BoughtTogether pairs={data.basket.pairs} orders={data.basket.orders} />
-            <PromoPerformance promo={data.promo} />
+            <PromoPerformance promo={data.promo} config={data.promoConfig} />
           </CardGrid>
         </Zone>
 
@@ -1578,7 +2198,15 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             </ChartCard>
             <ChartCard title="Fiyat Aralığına Göre Satış Dönüşümü">
               <ConversionBars
-                data={data.priceBands.map((b) => ({ label: b.band, views: b.views, sold: b.sold, revenue: b.revenue }))}
+                data={data.priceBands.map((b) => ({
+                  label: b.band,
+                  views: b.views,
+                  sold: b.sold,
+                  revenue: b.revenue,
+                  // Drill-down: a three-row card said "400₺+ converts badly" and
+                  // left nowhere to go. The items are the decision.
+                  items: b.items,
+                }))}
                 note={engagementNote}
               />
             </ChartCard>

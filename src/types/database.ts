@@ -70,6 +70,9 @@ export type MenuItem = {
   highlight: "green-fill" | "orange-fill" | null;
   image_url: string | null;
   price: number;
+  /** Unit food cost in ₺. null = not entered — never treated as 0 (see the
+   *  20260810000000_menu_item_cost migration and lib/analytics/menu-matrix). */
+  cost: number | null;
   spicy: boolean;
   is_available: boolean;
   sold_out: boolean;
@@ -125,6 +128,8 @@ type MenuItemInsert = {
   highlight?: "green-fill" | "orange-fill" | null;
   image_url?: string | null;
   price: number;
+  /** Unit food cost in ₺; omit or null when unknown — never 0 to mean "unknown". */
+  cost?: number | null;
   spicy?: boolean;
   is_available?: boolean;
   sold_out?: boolean;

@@ -10,6 +10,7 @@ import {
   getTopViewedItems,
   getTopCartedItems,
   getAbandonedViewsByDay,
+  engagementWindow,
   type AbandonedView,
 } from "@/lib/analytics/posthog";
 import { previousRange } from "@/lib/analytics/range";
@@ -156,21 +157,47 @@ export type ItemMomentum = {
   isNew: boolean;
 };
 
+export type MomentumResult = {
+  rising: ItemMomentum[];
+  fading: ItemMomentum[];
+  /**
+   * False when the previous window carries no engagement data at all — every item
+   * then has a baseline of 0, so EVERY product reads as a brand-new rising star
+   * and nothing can possibly fade. The module is meaningless in that state and
+   * says so instead of rendering six fake "0→X YENİ" rows.
+   */
+  comparable: boolean;
+  /** The window the comparison is (or would be) made against — named on screen. */
+  previous: DateRange;
+};
+
 /**
  * Per-item interest momentum: distinct-session views this period vs the previous
  * period of equal length. Surfaces rising stars and quietly fading items early,
  * instead of waiting for end-of-season totals. Based on views (always available);
  * a volume floor keeps a 1→3 blip from being called a trend.
  */
-export async function getItemMomentum(
-  range: DateRange,
-  limit = 6
-): Promise<{ rising: ItemMomentum[]; fading: ItemMomentum[] }> {
+export async function getItemMomentum(range: DateRange, limit = 6): Promise<MomentumResult> {
   const prev = previousRange(range);
+
+  // A previous window entirely before the engagement data floor returns zero rows
+  // for every query, which is indistinguishable from "nothing was viewed" — and
+  // reads on screen as every item being new. Detect it before spending the query.
+  if (engagementWindow(prev).empty) {
+    return { rising: [], fading: [], comparable: false, previous: prev };
+  }
+
   const [cur, old] = await Promise.all([
     getTopViewedItems(range, 60),
     getTopViewedItems(prev, 60),
   ]);
+
+  // Same failure, detected from the data rather than the floor: a previous window
+  // inside the tracked span that still has no views (menu not yet live, tracking
+  // paused) would make every current item look brand new.
+  if (old.length === 0) {
+    return { rising: [], fading: [], comparable: false, previous: prev };
+  }
 
   const oldByKey = new Map(old.map((o) => [nameKey(o.name), o.count]));
   const seen = new Set<string>();
@@ -199,7 +226,7 @@ export async function getItemMomentum(
     .filter((r) => r.previous >= MIN && r.deltaPct != null && r.deltaPct <= -25)
     .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
     .slice(0, limit);
-  return { rising, fading };
+  return { rising, fading, comparable: true, previous: prev };
 }
 
 export async function getSalesVsEngagement(range: DateRange) {

@@ -1,6 +1,15 @@
 import { PageHeader, GhostButton } from "../_components";
 import { requireRole } from "@/lib/auth/require-session";
-import { resolveRange, previousRange } from "@/lib/analytics/range";
+import {
+  resolveRange,
+  resolveCompare,
+  rangeLength,
+  salesCoverage,
+  isLiveRange,
+  RELIABLE_COVERAGE,
+} from "@/lib/analytics/range";
+import { loadBusinessDayStart } from "@/lib/analytics/business-day";
+import { getLocalizedCategoryNames, localizeCategoryCounts } from "@/lib/analytics/categories";
 import { getRealSalesSummary, getRealSalesOverTime, getRealBestSellers } from "@/lib/analytics/sales";
 import {
   getSalesVsEngagement,
@@ -25,6 +34,8 @@ import {
   engagementWindow,
 } from "@/lib/analytics/posthog";
 import { getPriceBandSales } from "@/lib/analytics/price-bands";
+import { getMenuEngineering } from "@/lib/analytics/menu-matrix";
+import { buildDataBasis } from "@/lib/analytics/confidence";
 import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
 import { getRealFoodFilter } from "@/lib/analytics/food";
@@ -51,7 +62,16 @@ export const dynamic = "force-dynamic";
  */
 const ITEM_POOL = 500;
 
-/** Percent change vs previous period; null when there's no baseline. */
+/**
+ * Depth of the per-item funnel pool. The conversion table now offers search and
+ * "show all", so it has to HOLD every product rather than the top 15 — a table
+ * that can't reach item 16 of 89 is the one thing the owner most wants to sort.
+ * Hidden Gems reads the same pool (it needs the low-view tail), so this is still
+ * one aggregation, not two.
+ */
+const CONVERSION_POOL = 500;
+
+/** Percent change vs the comparison period; null when there's no baseline. */
 function pctDelta(cur: number, prev: number): number | null {
   if (!prev) return null;
   return Math.round(((cur - prev) / prev) * 100);
@@ -60,13 +80,17 @@ function pctDelta(cur: number, prev: number): number | null {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; cmp?: string }>;
 }) {
   const { supabase } = await requireRole(["owner", "dev"]);
 
   const sp = await searchParams;
+  // Decides where a day starts, so it has to be in place before the range is
+  // resolved ("Bugün" at 01:30) and before any query buckets a timestamp.
+  const businessDayStartHour = await loadBusinessDayStart(supabase);
   const { preset, range } = resolveRange(sp);
-  const prev = previousRange(range);
+  const compare = resolveCompare(sp, range);
+  const prev = compare.range;
 
   // Engagement (PostHog) has a hard data floor, so the window it can actually
   // answer for is often SHORTER than the one the owner picked, while real sales
@@ -126,6 +150,9 @@ export default async function AnalyticsPage({
     prevFunnel,
     prevSessions,
     prevCartConversion,
+    categoryNames,
+    promoConfigResult,
+    suggestedGroupsResult,
     historyResult,
     currentResult,
   ] = await Promise.all([
@@ -148,9 +175,10 @@ export default async function AnalyticsPage({
     getSessionStats(range),
     getPeakHours(range),
     getAbandonedViewsNet(range),
-    // Deep pool (80): feeds both the conversion table (sliced to its own limit in
-    // the client) AND hidden gems below, so the funnel is aggregated once, not twice.
-    getItemConversion(range, 80),
+    // Deep pool: feeds both the conversion table (which now searches and sorts
+    // over the WHOLE menu) AND hidden gems below, so the funnel is aggregated
+    // once, not twice.
+    getItemConversion(range, CONVERSION_POOL),
     // Views AND real sales per price band — the band chart is a views→SALE rate,
     // never views→cart. Honors the ignore list because it is built from item-level
     // data (an ignored upsell would otherwise carry its whole band).
@@ -169,20 +197,30 @@ export default async function AnalyticsPage({
     engagementComparable ? getEngagementFunnel(prev) : Promise.resolve([]),
     engagementComparable ? getSessionStats(prev) : Promise.resolve({ sessions: 0, avgSeconds: 0 }),
     engagementComparable ? getCartConversion(prev) : Promise.resolve(0),
+    // Slug → localized name for the category chart, which otherwise puts raw
+    // English identifiers ("cold-drinks", "dog-bun") on a Turkish page.
+    getLocalizedCategoryNames(supabase),
+    // Is the promo real estate CONFIGURED? "0 clicks" means two completely
+    // different things depending on the answer, and the card said neither.
+    s.from("settings").select("key, value").in("key", ["hero_mode", "featured_item_id"]),
+    s.from("suggested_groups").select("id").limit(1),
     // Folded in from a former second wave — no dependency on any result above.
     // Recent AI analyses for the history list. Non-fatal if the table is missing.
     s.from("analytics_insights")
       .select("created_at, range_from, range_to, insights")
       .order("created_at", { ascending: false })
       .limit(3),
-    // Latest persisted set for THIS range — shown on load so findings stay stable
-    // (no fresh random generation on every visit). Only reused while within the
-    // 3-day freshness window; older than that it's treated as absent so the client
-    // fully re-generates on load. null when nothing (fresh) is stored.
+    // Latest persisted set for THIS range AND comparison basis — shown on load so
+    // findings stay stable (no fresh random generation on every visit). Keyed on
+    // the basis too because findings name the window they compare against, so a set
+    // written under "geçen yıl" must not surface while the badges read "önceki
+    // dönem". Only reused while within the 3-day freshness window; older than that
+    // it's treated as absent so the client fully re-generates on load.
     s.from("analytics_insights")
       .select("insights, created_at")
       .eq("range_from", range.from)
       .eq("range_to", range.to)
+      .eq("compare_basis", compare.basis)
       .order("created_at", { ascending: false })
       .limit(1),
   ]);
@@ -190,11 +228,38 @@ export default async function AnalyticsPage({
   const { data: currentRows } = currentResult;
 
   // Derive both item-funnel views from the single deep-pool conversion run above,
-  // instead of a second full getItemConversion + getHiddenGems pass. Slicing the
-  // deep pool to 15 yields the same top-15 the shallow call did (sorted by views).
-  const itemConversion = itemConversionDeep.slice(0, 15);
-  const bestSellers = bestSellersDeep.slice(0, 10);
-  const hiddenGems = await getHiddenGems(range, 6, itemConversionDeep);
+  // instead of a second full getItemConversion + getHiddenGems pass.
+  const itemConversion = itemConversionDeep;
+  // FILTER, then take ten. Slicing first meant that when eight of the top ten
+  // sellers were ignored (or auto-hidden as off-menu), the chart rendered two
+  // lonely bars on an axis built for ten and looked broken — while eight
+  // perfectly good sellers sat just below the cut.
+  const bestSellers = bestSellersDeep.filter((x) => keep(x.item_name)).slice(0, 10);
+
+  // Menu engineering: popularity × margin per item, from `menu_items.cost`. Fed the
+  // deep sold list we already have, so the second axis costs one small menu read
+  // rather than another pass over every sale row. `hasData: false` until a cost is
+  // entered anywhere — nothing downstream then mentions margin at all.
+  const [hiddenGems, menuEngineering] = await Promise.all([
+    getHiddenGems(range, 6, itemConversionDeep),
+    getMenuEngineering(range, keep, { sold: bestSellersDeep }),
+  ]);
+
+  // How much of the picked window the POS log actually covers. A range that
+  // silently spans a gap (e.g. an un-imported month) under-reports its total and
+  // turns every comparison into arithmetic across unequal spans, so both the
+  // banner and the muted delta badges are driven from here.
+  const coverage = salesCoverage(range, revenueOverTime.map((d) => d.date));
+  const prevCoverageRatio = prevSummary.daysWithData / Math.max(1, rangeLength(prev));
+  const salesDeltaReliable =
+    coverage.ratio >= RELIABLE_COVERAGE && prevCoverageRatio >= RELIABLE_COVERAGE;
+
+  const promoSettings = (promoConfigResult.data ?? []) as { key: string; value: string }[];
+  const settingOf = (key: string) => promoSettings.find((r) => r.key === key)?.value ?? "";
+  const promoConfig = {
+    featured: settingOf("hero_mode") === "featured" && Boolean(settingOf("featured_item_id")),
+    suggested: (suggestedGroupsResult.data ?? []).length > 0,
+  };
 
   const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
     f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
@@ -271,6 +336,33 @@ export default async function AnalyticsPage({
   const data: AnalyticsData = {
     preset,
     range,
+    // What the % badges are measured against — the single most common unanswered
+    // question about a delta on this page.
+    compare: {
+      basis: compare.basis,
+      label: compare.label,
+      range: compare.range,
+      // No POS entries in the baseline window means every % badge is blank for a
+      // reason the owner can't see otherwise — most often on "geçen yıl" before a
+      // year of history exists.
+      hasData: prevSummary.daysWithData > 0,
+    },
+    salesCoverage: coverage,
+    menuEngineering,
+    // The sample behind every claim on the page — printed on the AI card and used
+    // verbatim by the server-side confidence gate, so the two can't disagree.
+    dataBasis: buildDataBasis({
+      range,
+      salesDates: revenueOverTime.map((d) => d.date),
+      sessions: sessions.sessions,
+      engagementDays: engNow.days,
+      itemsWithSales: bestSellersDeep.filter((b) => keep(b.item_name) && b.qty > 0).length,
+    }),
+    salesDeltaReliable,
+    businessDayStart: businessDayStartHour,
+    // Server-computed so the client never derives "today" itself — that would
+    // risk a hydration mismatch on a page rendered across a date boundary.
+    live: isLiveRange(range),
     posthogConfigured: posthogConfigured(),
     insightsConfigured: insightsConfigured(),
     engagement: engNow,
@@ -304,9 +396,9 @@ export default async function AnalyticsPage({
     tableActivity,
     funnel,
     peakHours,
-    categoryPopularity,
+    categoryPopularity: localizeCategoryCounts(categoryPopularity, categoryNames),
     localeSplit,
-    bestSellers: bestSellers.filter((x) => keep(x.item_name)),
+    bestSellers,
     abandonedViews: abandonedViews.filter((x) => keep(x.name)),
     itemConversion: itemConversion.filter((x) => keep(x.name)),
     priceBands,
@@ -315,10 +407,12 @@ export default async function AnalyticsPage({
     // Hidden Gems additionally keeps only real food (no drinks/extras/sauces/fries).
     hiddenGems: hiddenGems.filter((x) => keep(x.name) && isRealFood(x.name)),
     momentum: {
+      ...momentum,
       rising: momentum.rising.filter((x) => keep(x.name)),
       fading: momentum.fading.filter((x) => keep(x.name)),
     },
     promo: { ...promo, topSuggested: promo.topSuggested.filter((x) => keep(x.name)) },
+    promoConfig,
     // Already filtered at query time via `keep`. `itemNames` is deliberately not
     // forwarded — it feeds `itemOptions` above and would otherwise ship the whole
     // ordered-item universe to the client twice.

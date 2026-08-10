@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -46,6 +46,30 @@ const tl = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
 
 const legendStyle = { fontSize: 11, fontWeight: 700, color: GREEN } as const;
+
+/** Longest category-axis label before it gets an ellipsis. */
+const AXIS_LABEL_MAX = 24;
+
+/**
+ * Category-axis tick that keeps the full name reachable.
+ *
+ * Recharts' `tickFormatter` truncates the string and there is no way back to the
+ * original from the rendered text, so "Berries & Ice Cream Waf…" was a dead end —
+ * the reader could not find out which product it was without leaving the chart.
+ * An SVG `<title>` restores the native tooltip on hover for exactly the ticks that
+ * were cut.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CategoryTick({ x, y, payload }: any) {
+  const full = String(payload?.value ?? "");
+  const cut = full.length > AXIS_LABEL_MAX;
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fill={GREEN} fontSize={10} fontWeight={700}>
+      {cut && <title>{full}</title>}
+      {cut ? `${full.slice(0, AXIS_LABEL_MAX - 1)}…` : full}
+    </text>
+  );
+}
 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -141,13 +165,7 @@ export function HBarChart({
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
         <CartesianGrid stroke={GRID} horizontal={false} />
         <XAxis type="number" {...axisProps} allowDecimals={false} />
-        <YAxis
-          type="category"
-          dataKey="name"
-          width={labelWidth}
-          {...axisProps}
-          tickFormatter={(n) => (String(n).length > 24 ? `${String(n).slice(0, 23)}…` : String(n))}
-        />
+        <YAxis type="category" dataKey="name" width={labelWidth} {...axisProps} tick={<CategoryTick />} />
         <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} />
         <Bar dataKey="count" name="Adet" fill={color} barSize={16} />
       </BarChart>
@@ -176,13 +194,7 @@ export function AbandonedViewsChart({
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
           <CartesianGrid stroke={GRID} horizontal={false} />
           <XAxis type="number" {...axisProps} allowDecimals={false} />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={labelWidth}
-            {...axisProps}
-            tickFormatter={(n) => (String(n).length > 24 ? `${String(n).slice(0, 23)}…` : String(n))}
-          />
+          <YAxis type="category" dataKey="name" width={labelWidth} {...axisProps} tick={<CategoryTick />} />
           <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} />
           <Legend wrapperStyle={legendStyle} />
           <Bar dataKey="b5to10" name="5–10 sn" stackId="d" fill={GREEN} barSize={16} />
@@ -229,44 +241,98 @@ export function FunnelBars({ data, note }: { data: { step: string; count: number
   );
 }
 
+export type ConversionRow = {
+  label: string;
+  views: number;
+  sold: number;
+  revenue?: number;
+  /** Products inside the group — the drill-down behind the summary row. */
+  items?: { name: string; views: number; sold: number; revenue: number }[];
+};
+
 /**
- * Views → REAL SALES per group (price bands). Rows of "label — rate bar — % +
- * sold/views"; a plain HBar would hide the rate, which is the point of the chart.
+ * Views → REAL SALES per group (price bands).
  *
  * Deliberately NOT view→cart: the menu has no checkout, so add-to-cart says which
- * items get tapped, not which get sold. The rate can exceed 100% (an item ordered
- * more often than its detail page is opened), so bars are scaled to the row max.
+ * items get tapped, not which get sold.
+ *
+ * The displayed rate is CAPPED AT 100%. A raw ratio here regularly exceeded it
+ * (465% in one band), and a number above 100 in a box labelled "dönüşüm" reads as
+ * a bug — worse, it reads as spectacular success when it means the opposite: those
+ * units were ordered without the item's menu page ever being opened. That surplus
+ * gets its own honest figure, "menüsüz satış", instead of being folded into a
+ * conversion rate it isn't part of.
  */
-export function ConversionBars({
-  data,
-  note,
-}: {
-  data: { label: string; views: number; sold: number; revenue?: number }[];
-  note?: string;
-}) {
+export function ConversionBars({ data, note }: { data: ConversionRow[]; note?: string }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (!data.some((d) => d.views > 0 || d.sold > 0)) return <Empty note={note ?? "Veri yok."} />;
-  const maxPct = Math.max(...data.map((d) => (d.views > 0 ? d.sold / d.views : 0)), 0.01);
   return (
     <div className="flex flex-col gap-3 py-2">
       {data.map((d) => {
-        const pct = d.views > 0 ? (d.sold / d.views) * 100 : 0;
+        // Units that a viewer could actually account for; the rest were ordered
+        // without the menu page being opened at all.
+        const converted = Math.min(d.sold, d.views);
+        const pct = d.views > 0 ? Math.round((converted / d.views) * 100) : 0;
+        const offMenuPct = d.sold > converted ? Math.round(((d.sold - converted) / d.sold) * 100) : 0;
+        const items = d.items ?? [];
+        const expanded = open === d.label;
         return (
           <div key={d.label}>
-            <div className="flex justify-between text-[11px] font-bold text-green mb-1">
-              <span>{d.label}</span>
-              <span>
-                <span className="text-orange">{Math.round(pct)}%</span>
-                <span className="text-green/50 ml-2">{tl.format(d.sold)}/{tl.format(d.views)}</span>
+            <div className="flex flex-wrap justify-between gap-x-2 text-[11px] font-bold text-green mb-1">
+              <button
+                type="button"
+                disabled={items.length === 0}
+                onClick={() => setOpen(expanded ? null : d.label)}
+                className="flex items-center gap-1.5 text-left enabled:cursor-pointer enabled:hover:text-orange transition-colors"
+                title={items.length ? "Bu aralıktaki ürünleri göster" : undefined}
+              >
+                {items.length > 0 && (
+                  <span aria-hidden className="text-green/40 text-[9px] w-2">{expanded ? "▾" : "▸"}</span>
+                )}
+                <span>{d.label}</span>
+              </button>
+              <span className="tabular-nums">
+                <span className="text-orange">{pct}%</span>
+                <span className="text-green/50 ml-2">
+                  {tl.format(converted)}/{tl.format(d.views)}
+                </span>
+                {offMenuPct > 0 && (
+                  <span
+                    className="ml-2 px-1 py-0.5 bg-ink/10 text-ink font-ui font-extrabold text-[9px] tracking-[0.1em] uppercase"
+                    title={`Satılan ${tl.format(d.sold)} adedin ${tl.format(d.sold - converted)} tanesi, ürün menüde hiç görüntülenmeden sipariş edildi.`}
+                  >
+                    menüsüz %{offMenuPct}
+                  </span>
+                )}
               </span>
             </div>
+            {/* Scaled to a full 100%, not to the row max: the bar is a rate, and a
+                rate deserves an absolute scale the eye can read against. */}
             <div className="h-5 bg-bg-deep">
-              <div className="h-full bg-green" style={{ width: `${(pct / (maxPct * 100)) * 100}%` }} />
+              <div className="h-full bg-green" style={{ width: `${pct}%` }} />
             </div>
+            {expanded && items.length > 0 && (
+              <ul className="mt-2 mb-1 pl-3 border-l-2 border-green/20 flex flex-col divide-y divide-green/10">
+                {items.map((it) => (
+                  <li key={it.name} className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-[12px] text-ink truncate min-w-0" title={it.name}>
+                      {it.name}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-green/60 tabular-nums">
+                      {tl.format(it.views)} görüntüleme · {tl.format(it.sold)} satış
+                      {it.revenue > 0 && <> · {tl.format(Math.round(it.revenue))} ₺</>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         );
       })}
-      <p className="text-[10px] text-green/50 font-bold">
-        Görüntüleme → gerçek satış oranı (satılan adet / görüntüleme)
+      <p className="text-[10px] text-green/50 font-bold leading-relaxed">
+        Görüntüleme → gerçek satış oranı, en fazla %100 gösterilir. “Menüsüz %” = o aralıkta satılan ama menüde
+        hiç açılmadan sipariş edilen adetlerin payı — menünün o ürünlere ulaşmadığı anlamına gelir, başarı değil.
+        {data.some((d) => (d.items?.length ?? 0) > 0) && " Aralığa tıklayarak ürünleri görebilirsiniz."}
       </p>
     </div>
   );

@@ -2,8 +2,15 @@
 
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/require-session";
-import { resolveRange, previousRange } from "@/lib/analytics/range";
-import { getRealSalesSummary, getRealBestSellers, type DateRange } from "@/lib/analytics/sales";
+import { resolveRange, resolveCompare, datesInRange, type CompareBasis } from "@/lib/analytics/range";
+import {
+  getRealSalesSummary,
+  getRealBestSellers,
+  listSalesEntries,
+  type DateRange,
+} from "@/lib/analytics/sales";
+import { getMenuEngineering, menuEngineeringForModel } from "@/lib/analytics/menu-matrix";
+import { buildDataBasis } from "@/lib/analytics/confidence";
 import { getItemConversion, getAbandonedViewsNet } from "@/lib/analytics/compare";
 import {
   getTopViewedItems,
@@ -11,18 +18,33 @@ import {
   getSessionStats,
   getCartConversion,
   getCategoryPopularity,
+  engagementWindow,
 } from "@/lib/analytics/posthog";
 import { getPriceBandSales, getDiscountSalesSplit } from "@/lib/analytics/price-bands";
+import { buildOverview } from "@/lib/analytics/overview";
+import {
+  loadBusinessDayStart,
+  normalizeBusinessDayStart,
+  BUSINESS_DAY_START_KEY,
+} from "@/lib/analytics/business-day";
+import { getLocalizedCategoryNames, localizeCategoryCounts } from "@/lib/analytics/categories";
 import {
   generateFindingsBatch,
   revalidateFindings,
   insightsConfigured,
   isInsightFresh,
   validatePatterns,
+  rankFindings,
+  MAX_FINDINGS,
   type InsightsInput,
   type PatternForJudge,
 } from "@/lib/analytics/insights";
-import { minePatterns, MAX_PATTERN_LEVEL, type PatternKind } from "@/lib/analytics/patterns";
+import {
+  minePatterns,
+  MAX_PATTERN_LEVEL,
+  type PatternKind,
+  type PatternConfidence,
+} from "@/lib/analytics/patterns";
 import {
   getExclusionRules,
   makeKeepFilter,
@@ -41,6 +63,9 @@ const RangeSchema = z.object({
   range: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  // Which window the deltas compare against — the AI has to name the same one the
+  // KPI cards do, or its "…e göre" clause is simply false. See resolveCompare.
+  cmp: z.string().optional(),
   mode: z.enum(["load", "recheck"]).optional(),
 });
 
@@ -104,17 +129,26 @@ function toResult(findings: string[], resolved: string[], newlyAdded: Set<string
   };
 }
 
-/** Latest persisted set for this exact range (with its age), or empty if none. */
+/**
+ * Latest persisted set for this exact range AND comparison basis (with its age),
+ * or empty if none.
+ *
+ * The basis is part of the identity, not a detail: findings name the window they
+ * compare against, so a set generated under "geçen yıl" must never be replayed
+ * while the badges above it read "önceki dönem".
+ */
 async function loadStoredSet(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  range: DateRange
+  range: DateRange,
+  basis: CompareBasis
 ): Promise<{ insights: string[]; createdAt: string | null }> {
   const { data } = await supabase
     .from("analytics_insights")
     .select("insights, created_at")
     .eq("range_from", range.from)
     .eq("range_to", range.to)
+    .eq("compare_basis", basis)
     .order("created_at", { ascending: false })
     .limit(1);
   const row = data?.[0];
@@ -148,16 +182,23 @@ async function ignoredItemNames(rules: ExclusionRules, range: DateRange): Promis
 async function buildInsightsInput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  range: DateRange
+  range: DateRange,
+  preset: string,
+  cmp: string | undefined
 ): Promise<InsightsInput> {
-  const prev = previousRange(range);
+  // The owner's chosen baseline, not an assumed one: "önceki dönem", "4 hafta
+  // önce" or "geçen yıl". Every delta below — and the sentence the model writes
+  // about it — refers to this window.
+  const compare = resolveCompare({ cmp }, range);
+  const prev = compare.range;
 
   // Drop ignored items (manually ticked + off-menu when that rule is on) from the
   // item-level lists the model reasons over, so its findings match the (filtered)
   // charts. Aggregate KPIs/funnel stay whole. Read first: the price-band and
   // discount aggregates are built FROM item-level data, so they need the filter at
   // aggregation time, not after.
-  const keep = makeKeepFilter(await getExclusionRules(supabase));
+  const rules = await getExclusionRules(supabase);
+  const keep = makeKeepFilter(rules);
 
   const [
     summary,
@@ -174,6 +215,10 @@ async function buildInsightsInput(
     prevSummary,
     prevFunnel,
     prevSessions,
+    prevCartConversion,
+    categoryNames,
+    menuEngineering,
+    entries,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealBestSellers(range),
@@ -189,12 +234,58 @@ async function buildInsightsInput(
     getRealSalesSummary(prev),
     getEngagementFunnel(prev),
     getSessionStats(prev),
+    getCartConversion(prev),
+    getLocalizedCategoryNames(supabase),
+    // Profit side. Empty (hasData: false) until a cost is entered, in which case
+    // the model is told there is no margin data rather than shown zeros.
+    getMenuEngineering(range, keep),
+    // Which DAYS actually have POS data — the calendar behind every sample-size
+    // rule in the prompt (a 16-day range holds two Wednesdays).
+    listSalesEntries(range),
   ]);
 
   const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
     f.find((x) => x.step.startsWith(prefix))?.count ?? 0;
   const views = funnelCount(funnel, "Görüntü");
   const waiterCalls = funnelCount(funnel, "Garson");
+
+  // Mirrors page.tsx: the tracking floor can shorten the PREVIOUS window without
+  // shortening the current one, and a delta between windows of different lengths
+  // is a fabricated number. No comparable baseline → no engagement delta.
+  const engagementComparable =
+    !engagementWindow(prev).empty && engagementWindow(prev).days === engagementWindow(range).days;
+  const engDelta = (cur: number, previous: number) => (engagementComparable ? pctDelta(cur, previous) : null);
+
+  // What the deterministic summary card is already saying on the same screen —
+  // handed to the model as things not to repeat. Built from the same numbers the
+  // client builds it from, so the two lists can't drift.
+  const deltasForOverview = {
+    totalSales: pctDelta(summary.totalSales, prevSummary.totalSales),
+    totalCovers: summary.totalCovers > 0 ? pctDelta(summary.totalCovers, prevSummary.totalCovers) : null,
+    avgSpendPerCover:
+      summary.totalCovers > 0 ? pctDelta(summary.avgSpendPerCover, prevSummary.avgSpendPerCover) : null,
+    views: engDelta(views, funnelCount(prevFunnel, "Görüntü")),
+    cartConversion: engDelta(cartConversion, prevCartConversion),
+    sessions: engDelta(sessions.sessions, prevSessions.sessions),
+  };
+  const overview = buildOverview({
+    preset,
+    kpis: {
+      totalSales: summary.totalSales,
+      totalCovers: summary.totalCovers,
+      avgSpendPerCover: summary.avgSpendPerCover,
+      sessions: sessions.sessions,
+      avgSeconds: sessions.avgSeconds,
+      waiterCalls,
+      views,
+      cartConversion,
+    },
+    deltas: deltasForOverview,
+    itemConversion: itemConversion.filter((x) => keep(x.name)),
+    abandonedViews: abandonedViews.filter((x) => keep(x.name)),
+    bestSellers: bestSellers.filter((x) => keep(x.item_name)),
+    menuEngineering,
+  });
 
   // Earlier analyses (may be empty; table might not exist yet — that's fine).
   const { data: historyRows } = await supabase
@@ -226,7 +317,9 @@ async function buildInsightsInput(
     // reading the ratio as demand, which is exactly the wrong verdict here.
     funnel: funnel.filter((f) => !f.step.startsWith("Sepete")),
     abandonedViews: abandonedViews.filter((x) => keep(x.name)),
-    categoryPopularity,
+    // Localized names, matching the chart — the model would otherwise write
+    // findings about "cold-drinks" in an otherwise Turkish sentence.
+    categoryPopularity: localizeCategoryCounts(categoryPopularity, categoryNames),
     // Cart counts are dropped here on purpose: the model kept reading views→carts
     // as demand. It sees views, real sold quantity and the views→sale rate only.
     itemConversion: itemConversion
@@ -243,15 +336,46 @@ async function buildInsightsInput(
     deltas: {
       totalSales: pctDelta(summary.totalSales, prevSummary.totalSales),
       totalCovers: pctDelta(summary.totalCovers, prevSummary.totalCovers),
-      views: pctDelta(views, funnelCount(prevFunnel, "Görüntü")),
-      waiterCalls: pctDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
-      sessions: pctDelta(sessions.sessions, prevSessions.sessions),
+      views: engDelta(views, funnelCount(prevFunnel, "Görüntü")),
+      waiterCalls: engDelta(waiterCalls, funnelCount(prevFunnel, "Garson")),
+      sessions: engDelta(sessions.sessions, prevSessions.sessions),
     },
+    comparison: {
+      basis: compare.basis,
+      label: compare.label,
+      from: prev.from,
+      to: prev.to,
+      // No entries in the baseline window → every delta is null and the model must
+      // not narrate a change. Common on "geçen yıl" before a year of history exists.
+      hasData: prevSummary.daysWithData > 0,
+    },
+    menuEngineering: menuEngineeringForModel(menuEngineering),
+    dataBasis: buildDataBasis({
+      range,
+      salesDates: entries.map((e) => e.entry_date),
+      sessions: sessions.sessions,
+      engagementDays: engagementWindow(range).days,
+      itemsWithSales: bestSellers.filter((b) => keep(b.item_name) && b.qty > 0).length,
+    }),
     previousInsights,
+    alreadyShown: [overview.headline, ...overview.strengths, ...overview.push, ...overview.watch],
+    salesCoverage: {
+      days: datesInRange(range).length,
+      daysWithData: summary.daysWithData,
+      ratio: datesInRange(range).length > 0 ? summary.daysWithData / datesInRange(range).length : 0,
+    },
   };
 }
 
-/** Full build in cycles: keep asking for findings not yet found until a pass adds nothing. */
+/**
+ * Build in cycles, then keep only the five findings with the most money at stake.
+ *
+ * The cycles are a RECALL device, not a length target: each pass asks the model
+ * for findings it hasn't surfaced yet, so the pool is wide before it's cut. What
+ * reaches the card is `MAX_FINDINGS`, ranked by the ₺ figure each one cites —
+ * previously this shipped the entire pool, which is how the card ended up with
+ * nineteen near-identical sentences.
+ */
 async function generateAll(input: InsightsInput): Promise<string[]> {
   let found: string[] = [];
   for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
@@ -259,14 +383,17 @@ async function generateAll(input: InsightsInput): Promise<string[]> {
     const fresh = dedupeNew(batch, found);
     if (fresh.length === 0) break;
     found = [...found, ...fresh];
+    // Enough candidates to rank a good five out of — more passes only add tail.
+    if (found.length >= MAX_FINDINGS * 2) break;
   }
-  return found;
+  return rankFindings(found);
 }
 
 export async function generateInsightsAction(params: {
   range?: string;
   from?: string;
   to?: string;
+  cmp?: CompareBasis | string;
   mode?: "load" | "recheck";
 }): Promise<InsightsResult> {
   const parsed = RangeSchema.safeParse(params);
@@ -276,12 +403,19 @@ export async function generateInsightsAction(params: {
   const { supabase, profile } = await requireRole(["owner", "dev"]);
   if (!insightsConfigured()) return FAIL;
 
-  const { range } = resolveRange(parsed.data);
+  // Must precede resolveRange + every query: it decides where a day starts.
+  await loadBusinessDayStart(supabase);
+  const { preset, range } = resolveRange(parsed.data);
   // Fold the ignore rules into the cache key so changing either one regenerates
   // rather than serving cached findings that still mention an item now ignored.
   // (The range-keyed DB set is filtered at build time on the next recheck.)
   const rules = await getExclusionRules(supabase);
-  const key = `${range.from}_${range.to}${exclusionSignature(rules)}`;
+  // The comparison basis is part of the identity of a finding set: the same range
+  // compared against last month and against last year yields genuinely different
+  // findings, and serving one for the other puts the wrong baseline in the owner's
+  // sentence. It keys the memory cache here and the stored row in the table.
+  const basis = resolveCompare(parsed.data, range).basis;
+  const key = `${range.from}_${range.to}|c:${basis}${exclusionSignature(rules)}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;
 
@@ -296,10 +430,10 @@ export async function generateInsightsAction(params: {
   if (mode === "load") {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return toResult(hit.findings, [], new Set(), true);
-    const stored = await loadStoredSet(s, range);
+    const stored = await loadStoredSet(s, range, basis);
     if (stored.insights.length && isInsightFresh(stored.createdAt)) {
-      // The DB set is keyed by range only, so it can predate the current rules —
-      // strip any finding that names a now-ignored item before reusing it.
+      // The DB set is keyed by range + basis only, so it can predate the current
+      // ignore rules — strip any finding naming a now-ignored item before reuse.
       const storedInsights = dropExcludedMentions(stored.insights, await ignoredNames());
       if (storedInsights.length) {
         cache.set(key, { at: Date.now(), findings: storedInsights });
@@ -308,7 +442,7 @@ export async function generateInsightsAction(params: {
     }
   }
 
-  const input = await buildInsightsInput(s, range);
+  const input = await buildInsightsInput(s, range, preset, parsed.data.cmp);
 
   let current: string[];
   let resolved: string[] = [];
@@ -320,12 +454,16 @@ export async function generateInsightsAction(params: {
     // Filter first so a stored set predating the ignore rules doesn't feed ignored
     // items back into the revalidation prompt.
     const cached = cache.get(key)?.findings;
-    const existing = cached ?? dropExcludedMentions((await loadStoredSet(s, range)).insights, await ignoredNames());
+    const existing =
+      cached ?? dropExcludedMentions((await loadStoredSet(s, range, basis)).insights, await ignoredNames());
     baseline = existing;
     if (existing.length) {
       const r = await revalidateFindings(input, existing);
       const added = dedupeNew(r.added, r.ongoing);
-      current = [...r.ongoing, ...added];
+      // Same cap as generation. Added findings are ranked in alongside ongoing
+      // ones rather than appended past the limit — a new ₺80.000 problem should
+      // displace a surviving ₺5.000 one, not be hidden below it.
+      current = rankFindings([...r.ongoing, ...added]);
       resolved = r.resolved;
       newlyAdded = new Set(added.map(normFinding));
     } else {
@@ -347,6 +485,8 @@ export async function generateInsightsAction(params: {
     const { error: insertError } = await s.from("analytics_insights").insert({
       range_from: range.from,
       range_to: range.to,
+      // Stored WITH its baseline, so a future load only reuses it for the same one.
+      compare_basis: basis,
       insights: current,
       created_by: profile.id,
     });
@@ -374,6 +514,16 @@ export type PatternItem = {
   subjects: string[];
   metrics: Record<string, number | string>;
   strength: number;
+  /**
+   * Sample tier from the miner — "low" never reaches here (patterns.ts drops it).
+   * Rendered as a chip so a medium-sample pattern is never read as settled fact.
+   * Optional because pattern sets persisted before this existed have no value.
+   */
+  confidence?: PatternConfidence;
+  /** How much data it rests on, in plain Turkish ("4 Çarşamba günü"). */
+  sampleLabel?: string;
+  /** The raw sample count behind `sampleLabel`. */
+  sampleSize?: number;
 };
 
 export type PatternsResult = {
@@ -423,6 +573,17 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
     if (candidates.length === 0) continue;
     const pool = candidates.slice(0, CANDIDATES_PER_PASS);
 
+    // Sample data travels with every candidate from here on, so a pattern can
+    // never be shown (or judged) without the size of the thing it rests on.
+    const carry = (c: (typeof pool)[number]) => ({
+      subjects: c.subjects,
+      metrics: c.metrics,
+      strength: c.strength,
+      confidence: c.confidence,
+      sampleLabel: c.sampleLabel,
+      sampleSize: c.sampleSize,
+    });
+
     if (ai) {
       const forJudge: PatternForJudge[] = pool.map((c) => ({
         id: c.id,
@@ -430,6 +591,10 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
         subjects: c.subjects,
         metrics: c.metrics,
         hint: c.desc,
+        // "low" is already impossible here — minePatterns drops those — so the
+        // cast just narrows the type the judge's prompt is written against.
+        confidence: c.confidence as "high" | "medium",
+        sampleLabel: c.sampleLabel,
       }));
       const judged = await validatePatterns(
         forJudge,
@@ -440,17 +605,18 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
         const c = byId.get(j.id);
         if (!c || foundIds.has(c.id)) continue;
         foundIds.add(c.id);
-        found.push({ id: c.id, kind: c.kind, text: j.text, subjects: c.subjects, metrics: c.metrics, strength: c.strength });
+        found.push({ id: c.id, kind: c.kind, text: j.text, ...carry(c) });
         if (found.length >= PATTERN_TARGET) break;
       }
     } else {
       // No judge: the math gate already dropped the obvious ones (lift≈1, weak
-      // correlation). Take the strongest candidates with their templated sentence.
+      // correlation) and every thin-sample one. Take the strongest candidates
+      // with their templated sentence.
       for (const c of pool) {
         if (found.length >= PATTERN_TARGET) break;
         if (foundIds.has(c.id)) continue;
         foundIds.add(c.id);
-        found.push({ id: c.id, kind: c.kind, text: c.fallbackText, subjects: c.subjects, metrics: c.metrics, strength: c.strength });
+        found.push({ id: c.id, kind: c.kind, text: c.fallbackText, ...carry(c) });
       }
       break; // no widening benefit without the judge — one strong pass is enough
     }
@@ -472,6 +638,7 @@ export async function generatePatternsAction(params: {
   const mode = parsed.data.mode ?? "load";
 
   const { supabase, profile } = await requireRole(["owner", "dev"]);
+  await loadBusinessDayStart(supabase);
   const { range } = resolveRange(parsed.data);
   const rules = await getExclusionRules(supabase);
   const keep = makeKeepFilter(rules);
@@ -600,6 +767,36 @@ export async function setOffMenuOverridesAction(names: string[]): Promise<{ ok: 
     .upsert({ key: OFFMENU_OVERRIDES_SETTINGS_KEY, value: JSON.stringify(clean) }, { onConflict: "key" });
   if (error) {
     console.warn("[analytics] setOffMenuOverrides failed", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+/**
+ * Persist when the restaurant's business day starts.
+ *
+ * A kitchen serving past midnight books a 01:30 order on the calendar day the
+ * clock rolled over to, while the shift, the cash-up and the owner all call it
+ * the previous night. Which convention is used silently changes every daily
+ * bucket, weekday pattern and heatmap cell on the tab, so it is a stated,
+ * owner-controlled setting rather than an implicit midnight.
+ *
+ * 0 keeps plain calendar days (the default and the previous behavior).
+ */
+export async function setBusinessDayStartAction(hour: number): Promise<{ ok: boolean }> {
+  const parsed = z.number().safeParse(hour);
+  if (!parsed.success) return { ok: false };
+
+  const { supabase } = await requireRole(["owner", "dev"]);
+  const value = normalizeBusinessDayStart(parsed.data);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+  const { error } = await s
+    .from("settings")
+    .upsert({ key: BUSINESS_DAY_START_KEY, value: String(value) }, { onConflict: "key" });
+  if (error) {
+    console.warn("[analytics] setBusinessDayStart failed", error.message);
     return { ok: false };
   }
   return { ok: true };

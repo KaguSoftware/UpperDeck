@@ -4,12 +4,19 @@
  * Unlike the Groq-backed insights (lib/analytics/insights.ts), this makes NO
  * model call: it reads the numbers already computed for the page and turns them
  * into a plain-language verdict. Because every line is derived directly from a
- * real figure, it can never invent a metric that doesn't exist — notably it
- * never talks about margins/cost, which this system doesn't track.
+ * real figure, it can never invent a metric that doesn't exist.
+ *
+ * It now speaks in PROFIT wherever `menu_items.cost` has been filled in — the
+ * menu-engineering quadrants (see lib/analytics/menu-matrix) are the highest-value
+ * lines this card can carry, so they lead each group and the revenue-only lines
+ * fall in behind them. With no cost entered, margin is simply never mentioned:
+ * an un-costed item is unknown, not free.
  *
  * Pure and side-effect free, so it runs in the client component that already
  * holds the data. Empty sections are simply omitted by the caller.
  */
+
+import type { MenuEngineeringItem, MenuQuadrant } from "@/lib/analytics/menu-matrix";
 
 const tl = new Intl.NumberFormat("tr-TR");
 const money = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
@@ -57,6 +64,19 @@ export type OverviewInput = {
   itemConversion: { name: string; views: number; carts: number; sold: number; convPct: number }[];
   abandonedViews: { name: string; b5to10: number; b10to20: number; b20plus: number; total: number }[];
   bestSellers: { item_name: string; qty: number; revenue: number }[];
+  /**
+   * Cost-derived profit picture. Absent/`hasData: false` whenever no cost has been
+   * entered, and every margin line below is then skipped entirely rather than
+   * computed from a zero cost.
+   */
+  menuEngineering?: {
+    hasData: boolean;
+    items: MenuEngineeringItem[];
+    avgUnitMargin: number;
+    totals: { qty: number; revenue: number; cost: number; profit: number; marginPct: number };
+    counts: Record<MenuQuadrant, number>;
+    coverage: { costedItems: number; soldItems: number; revenueRatio: number; reliable: boolean };
+  } | null;
 };
 
 // Metrics where "up" is unambiguously good — the ones we tally for the verdict.
@@ -98,6 +118,66 @@ export function buildOverview(data: OverviewInput): Overview {
   const metricDeclines: string[] = [];
   // Item names already named in push/watch, so nothing is flagged twice.
   const mentioned = new Set<string>();
+
+  // ---- profit first: the quadrant lines outrank every revenue-only line here ----
+  const me = data.menuEngineering?.hasData ? data.menuEngineering : null;
+  // A matrix covering a sliver of the revenue can't speak for the menu, so its
+  // lines say which items they're about instead of generalizing.
+  const partial = me != null && !me.coverage.reliable;
+  const scope = partial ? " (maliyeti girili ürünler arasında)" : "";
+
+  if (me) {
+    strengths.push(
+      `Kâr marjı %${me.totals.marginPct} — ${money.format(Math.round(me.totals.profit))} ₺ brüt kâr${
+        partial
+          ? `, cironun %${Math.round(me.coverage.revenueRatio * 100)}'ini kapsayan ${me.coverage.costedItems} ürün üzerinden`
+          : ""
+      }.`
+    );
+
+    // Sold below cost — the single most urgent thing this dashboard can say.
+    const below = me.items.filter((i) => i.losingMoney).sort((a, b) => a.profit - b.profit);
+    if (below.length) {
+      for (const i of below.slice(0, 2)) mentioned.add(norm(i.name));
+      const lost = Math.abs(below.reduce((s, i) => s + i.profit, 0));
+      watch.push(
+        below.length === 1
+          ? `${below[0].name} maliyetinin altında satılıyor (birim ${money.format(Math.round(below[0].unitMargin))} ₺) — dönem boyunca ${money.format(Math.round(lost))} ₺ zarar; fiyatı veya porsiyon maliyetini hemen düzelt.`
+          : `${below.length} ürün maliyetinin altında satılıyor (${below.slice(0, 2).map((i) => i.name).join(", ")}…) — dönem boyunca ${money.format(Math.round(lost))} ₺ zarar; fiyat/porsiyon maliyetini hemen düzelt.`
+      );
+    }
+
+    // Plowhorses: carry the traffic, earn little. Usually where the money is.
+    const plowhorse = me.items
+      .filter((i) => i.quadrant === "plowhorse" && !i.losingMoney && !mentioned.has(norm(i.name)))
+      .sort((a, b) => b.qty - a.qty)[0];
+    if (plowhorse) {
+      mentioned.add(norm(plowhorse.name));
+      watch.push(
+        `${plowhorse.name} çok satıyor ama kâr bırakmıyor: birim kâr ${money.format(Math.round(plowhorse.unitMargin))} ₺, menü ortalaması ${money.format(Math.round(me.avgUnitMargin))} ₺${scope} — porsiyon maliyetini düşür ya da fiyatı bir miktar yukarı çek.`
+      );
+    }
+
+    // Puzzles: profitable but nobody finds them — the cheapest lever on the page.
+    const puzzles = me.items
+      .filter((i) => i.quadrant === "puzzle" && !mentioned.has(norm(i.name)))
+      .sort((a, b) => b.unitMargin - a.unitMargin)
+      .slice(0, 2);
+    for (const p of puzzles) {
+      mentioned.add(norm(p.name));
+      push.push(
+        `${p.name} birim ${money.format(Math.round(p.unitMargin))} ₺ kâr bırakıyor ama az satıyor (${tl.format(p.qty)} adet) — menüde üste taşı, personele hatırlat; en ucuz kâr artışı burada.`
+      );
+    }
+
+    // Dogs: only worth a line as a group, and only when there are enough to matter.
+    const dogs = me.items.filter((i) => i.quadrant === "dog" && !i.losingMoney);
+    if (dogs.length >= 3) {
+      watch.push(
+        `${dogs.length} ürün hem az satıyor hem az kâr bırakıyor (toplam ${money.format(Math.round(dogs.reduce((s, d) => s + d.profit, 0)))} ₺) — menüden çıkarmayı değerlendir, mutfak da sadeleşir.`
+      );
+    }
+  }
 
   // 1. Period-over-period movement — the backbone of the verdict.
   let ups = 0;
@@ -181,6 +261,10 @@ export function buildOverview(data: OverviewInput): Overview {
   else if (downs >= 2 && downs - ups >= 2) tone = "weak";
   else if (ups > 0 || downs > 0) tone = "mixed";
   else tone = "neutral";
+
+  // Rising revenue with items sold below cost is not "going well" — the verdict
+  // can't be greener than the profit underneath it.
+  if (tone === "good" && me?.items.some((i) => i.losingMoney)) tone = "mixed";
 
   const period = periodLabel(preset);
   const headline =

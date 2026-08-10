@@ -17,6 +17,12 @@ const ItemSchema = z.object({
   highlight: z.enum(["green-fill", "orange-fill", ""]).transform((v) => v === "" ? null : v).nullable().optional(),
   image_url: z.string().url().nullable().optional(),
   price: z.coerce.number().nonnegative().max(100000),
+  // Blank stays NULL rather than becoming 0 — an un-costed item must read as
+  // "unknown margin", not "pure profit". See lib/analytics/menu-matrix.ts.
+  cost: z.preprocess(
+    (v) => (v === "" || v == null ? null : v),
+    z.coerce.number().nonnegative().max(100000).nullable()
+  ),
   spicy: z.coerce.boolean(),
   is_available: z.coerce.boolean(),
   sold_out: z.coerce.boolean(),
@@ -36,6 +42,7 @@ function parse(formData: FormData) {
     highlight: (formData.get("highlight") as string) || "",
     image_url: rawImageUrl && rawImageUrl !== "" ? rawImageUrl : null,
     price: formData.get("price"),
+    cost: formData.get("cost"),
     spicy: formData.get("spicy") === "on",
     is_available: formData.get("is_available") === "on",
     sold_out: formData.get("sold_out") === "on",

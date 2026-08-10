@@ -110,14 +110,51 @@ const MIN_SHARED_TOKENS = 2;
 /** Below this length a one-edit difference is a different product, not a typo. */
 const MIN_TYPO_LENGTH = 5;
 
+/** A candidate menu name for an unrecognised POS line, with its match score. */
+export type MenuSuggestion = { name: string; score: number };
+
 export type MenuMatcher = {
   /** True when `name` still corresponds to something on the menu. */
   onMenu: (name: string) => boolean;
+  /**
+   * Best menu names for an unmatched POS line, strongest first. Powers the
+   * import mapping step, where the owner needs a shortlist rather than a
+   * yes/no verdict — `onMenu` already said no by the time this is called.
+   */
+  suggest: (name: string, limit?: number) => MenuSuggestion[];
   /** Stable digest of the menu snapshot, for cache keys. */
   digest: string;
   /** How many distinct menu names went in — 0 means "unknown", never "empty menu". */
   size: number;
 };
+
+/**
+ * 0–1 similarity between two names, on the same relaxed key `onMenu` compares on.
+ * Token overlap (Jaccard) carries most of the weight because POS lines drop and
+ * reorder words freely; a character-level ratio breaks ties between names that
+ * share no whole token but are clearly the same word misspelled.
+ */
+function similarity(a: Set<string>, aKey: string, b: Set<string>, bKey: string): number {
+  let shared = 0;
+  for (const t of a) if (b.has(t)) shared++;
+  const union = a.size + b.size - shared;
+  const jaccard = union > 0 ? shared / union : 0;
+
+  // Cheap character-bigram overlap — enough to rank "Cripsy Burger" against
+  // "Crispy Burger" above unrelated names, without a full edit-distance matrix.
+  const grams = (s: string) => {
+    const out = new Set<string>();
+    for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
+    return out;
+  };
+  const ga = grams(aKey);
+  const gb = grams(bKey);
+  let g = 0;
+  for (const x of ga) if (gb.has(x)) g++;
+  const gramScore = ga.size + gb.size > 0 ? (2 * g) / (ga.size + gb.size) : 0;
+
+  return 0.7 * jaccard + 0.3 * gramScore;
+}
 
 /**
  * Build the matcher from every current menu name (items + add-on options, both
@@ -128,6 +165,8 @@ export function buildMenuMatcher(menuNames: string[]): MenuMatcher {
   const exact = new Set<string>();
   const loose = new Set<string>();
   const tokenSets: Set<string>[] = [];
+  // Parallel to `tokenSets`, carrying what `suggest` needs to rank and display.
+  const entries: { display: string; tokens: Set<string>; key: string }[] = [];
 
   for (const name of menuNames) {
     if (!name?.trim()) continue;
@@ -138,6 +177,7 @@ export function buildMenuMatcher(menuNames: string[]): MenuMatcher {
     if (loose.has(key)) continue;
     loose.add(key);
     tokenSets.push(tokens);
+    entries.push({ display: canonicalItemName(name), tokens, key });
   }
 
   const looseKeys = [...loose];
@@ -178,6 +218,18 @@ export function buildMenuMatcher(menuNames: string[]): MenuMatcher {
       const result = test(name);
       memo.set(name, result);
       return result;
+    },
+    suggest: (name: string, limit = 3): MenuSuggestion[] => {
+      const tokens = tokensOf(name);
+      if (tokens.size === 0) return [];
+      const key = looseKey(tokens);
+      return entries
+        .map((e) => ({ name: e.display, score: similarity(tokens, key, e.tokens, e.key) }))
+        // Below this the "suggestion" is noise and offering it invites a bad
+        // mapping — better to leave the line unmatched and let the owner pick.
+        .filter((s) => s.score >= 0.25)
+        .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "tr"))
+        .slice(0, limit);
     },
     digest: [...exact].sort().join(","),
     size: exact.size,

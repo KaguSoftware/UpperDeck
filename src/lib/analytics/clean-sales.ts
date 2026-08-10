@@ -15,6 +15,30 @@ export type CleanStats = {
   duplicatesMerged: number;
 };
 
+/** Why a raw POS line never became a `sales_entry_items` row. */
+export type DropReason = "modifier" | "note" | "zero";
+
+/**
+ * A line the cleaner removed, kept rather than discarded.
+ *
+ * Two reasons it has to survive the import:
+ *  1. the rules are heuristics, so a real product WILL occasionally be dropped —
+ *     without a list of what went, that's an invisible hole in the sales figures
+ *     with no way to notice or debug it;
+ *  2. modifier lines carry real demand ("Mayonezsiz" ×43, "2 Menü" ×61) that is
+ *     worth reading even though it isn't a dish.
+ *
+ * `entry_id` is retained so a line judged a genuine product can be put back
+ * without re-importing the workbook.
+ */
+export type DroppedRow = {
+  entry_id: string;
+  item_name: string;
+  qty: number;
+  revenue: number | null;
+  reason: DropReason;
+};
+
 // POS order-note lines that get exported as if they were menu items
 // ("Mesaj", "Mesaj: az pişmiş", "Müşteri Notu …"). They carry a diner's note,
 // not a sold product, so they should never reach `sales_entry_items`.
@@ -93,38 +117,74 @@ export function isNoteLine(name: string): boolean {
 }
 
 /**
+ * Owner-supplied corrections applied to every import, both directions:
+ *  - `aliases`: raw POS name (normalized, lower-case) → the menu name it means.
+ *    Written by the import review screen when the owner maps an unrecognised
+ *    line, so the next import folds it automatically instead of asking again.
+ *  - `forceKeep`: names the owner declared real products despite matching a
+ *    modifier/note pattern — the escape hatch for a heuristic that got it wrong
+ *    ("Az Pişmiş Burger" is a dish; the `^az ` rule disagrees).
+ */
+export type CleanOverrides = {
+  aliases?: Record<string, string>;
+  forceKeep?: string[];
+};
+
+/** The key both override maps are looked up by. */
+const overrideKey = (name: string) => normalizeItemName(name).toLocaleLowerCase("tr");
+
+/**
  * Drop note lines, modifier lines and zero-qty rows, normalize names, and merge
  * duplicate (entry_id, name) rows by summing qty/revenue.
+ *
+ * Dropped lines are RETURNED, not discarded — see `DroppedRow`. The caller
+ * persists them so the owner can audit what the heuristics removed and put back
+ * anything they got wrong.
  */
-export function cleanItemRows(rows: RawItemRow[]): { rows: RawItemRow[]; stats: CleanStats } {
+export function cleanItemRows(
+  rows: RawItemRow[],
+  overrides: CleanOverrides = {}
+): { rows: RawItemRow[]; stats: CleanStats; dropped: DroppedRow[] } {
   const stats: CleanStats = { modifiersDropped: 0, notesDropped: 0, zeroDropped: 0, duplicatesMerged: 0 };
   const merged = new Map<string, RawItemRow>();
+  const dropped: DroppedRow[] = [];
+
+  const aliases = overrides.aliases ?? {};
+  const forceKeep = new Set((overrides.forceKeep ?? []).map(overrideKey));
 
   for (const row of rows) {
     const name = row.item_name.trim();
-    if (isNoteLine(name)) {
+    const key = overrideKey(name);
+    const kept = forceKeep.has(key);
+
+    if (!kept && isNoteLine(name)) {
       stats.notesDropped++;
+      dropped.push({ ...row, item_name: normalizeItemName(name), reason: "note" });
       continue;
     }
-    if (isModifierLine(name)) {
+    if (!kept && isModifierLine(name)) {
       stats.modifiersDropped++;
+      dropped.push({ ...row, item_name: normalizeItemName(name), reason: "modifier" });
       continue;
     }
     if (row.qty <= 0) {
       stats.zeroDropped++;
+      dropped.push({ ...row, item_name: normalizeItemName(name), reason: "zero" });
       continue;
     }
-    const item_name = normalizeItemName(row.item_name);
-    const key = `${row.entry_id} ${item_name.toLocaleLowerCase("tr")}`;
-    const existing = merged.get(key);
+    // Owner mapping wins over the static alias table, which normalizeItemName
+    // alone wouldn't apply anyway — canonicalItemName does that downstream.
+    const item_name = aliases[key] ? normalizeItemName(aliases[key]) : normalizeItemName(row.item_name);
+    const mergeKey = `${row.entry_id} ${item_name.toLocaleLowerCase("tr")}`;
+    const existing = merged.get(mergeKey);
     if (existing) {
       existing.qty += row.qty;
       if (row.revenue != null) existing.revenue = (existing.revenue ?? 0) + row.revenue;
       stats.duplicatesMerged++;
     } else {
-      merged.set(key, { ...row, item_name });
+      merged.set(mergeKey, { ...row, item_name });
     }
   }
 
-  return { rows: [...merged.values()], stats };
+  return { rows: [...merged.values()], stats, dropped };
 }
