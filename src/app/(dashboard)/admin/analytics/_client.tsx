@@ -171,14 +171,20 @@ function trDate(iso: string, withYear = false): string {
 // Guest-count estimate factor: people per unique visit (menu session). Used only
 // when no real covers were entered for the period. Picker persists in localStorage.
 //
-// Quarter steps between 1 and 2: in practice one phone gets scanned per TABLE, not
-// per guest, so the realistic range is "one diner scanned for a party of two" —
-// the old 2,5 / 3 options were multiplying an already table-level count.
-// A previously saved 2,5 / 3 no longer matches the list and falls back to the
-// default, which is the intended outcome — those values are off the scale now.
-const COVERS_MULT_OPTIONS = [1, 1.25, 1.5, 1.75, 2];
-const COVERS_MULT_DEFAULT = 2;
-const COVERS_MULT_KEY = "analytics-covers-multiplier";
+// Quarter steps between 1 and 2, plus a 1,1 notch: in practice one phone gets
+// scanned per TABLE, not per guest, so the realistic range is "one diner scanned
+// for a party of two" — the old 2,5 / 3 options were multiplying an already
+// table-level count. A previously saved 2,5 / 3 no longer matches the list and
+// falls back to the default, which is the intended outcome — those values are
+// off the scale now.
+//
+// Default is 1,1: a session count already lands close to the guest count, so the
+// estimate only nudges it up ~10% instead of doubling it. The storage key is
+// versioned so browsers holding the old 2 pick the new default up too — a saved
+// 2 is still a valid option, so it would otherwise stick forever.
+const COVERS_MULT_OPTIONS = [1, 1.1, 1.25, 1.5, 1.75, 2];
+const COVERS_MULT_DEFAULT = 1.1;
+const COVERS_MULT_KEY = "analytics-covers-multiplier-v2";
 
 // Auto-refresh intervals. PostHog query results are cached server-side for
 // 30s (posthog.ts), so a 1 min minimum always lands on fresh data.
