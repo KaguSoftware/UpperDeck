@@ -161,14 +161,15 @@ export type MomentumResult = {
   rising: ItemMomentum[];
   fading: ItemMomentum[];
   /**
-   * False when the previous window carries no engagement data at all — every item
-   * then has a baseline of 0, so EVERY product reads as a brand-new rising star
-   * and nothing can possibly fade. The module is meaningless in that state and
-   * says so instead of rendering six fake "0→X YENİ" rows.
+   * False when the baseline can't carry a comparison — see `getItemMomentum`.
+   * The module then says why instead of rendering fabricated momentum.
    */
   comparable: boolean;
   /** The window the comparison is (or would be) made against — named on screen. */
   previous: DateRange;
+  /** Engagement days actually behind each side, for the on-screen explanation. */
+  currentDays: number;
+  previousDays: number;
 };
 
 /**
@@ -179,12 +180,23 @@ export type MomentumResult = {
  */
 export async function getItemMomentum(range: DateRange, limit = 6): Promise<MomentumResult> {
   const prev = previousRange(range);
+  const engNow = engagementWindow(range);
+  const engPrev = engagementWindow(prev);
+  const base = { rising: [], fading: [], previous: prev, currentDays: engNow.days, previousDays: engPrev.days };
 
-  // A previous window entirely before the engagement data floor returns zero rows
-  // for every query, which is indistinguishable from "nothing was viewed" — and
-  // reads on screen as every item being new. Detect it before spending the query.
-  if (engagementWindow(prev).empty) {
-    return { rising: [], fading: [], comparable: false, previous: prev };
+  // The baseline has to span the SAME number of tracked days, not merely exist.
+  //
+  // The tracking floor clips the previous window without touching the current
+  // one, and a partial baseline is worse than none: comparing 30 days of views
+  // against the 7 that clear the floor understates every previous count by ~4x,
+  // so untracked items become "0→15 YENİ" and ordinary ones become "▲ +350%".
+  // Both readings are artifacts of the clip, and both looked like real momentum.
+  //
+  // This is the same equal-length test the KPI deltas already apply (page.tsx
+  // `engagementComparable`); momentum was the one module still comparing across
+  // unequal spans.
+  if (engPrev.empty || engPrev.days !== engNow.days) {
+    return { ...base, comparable: false };
   }
 
   const [cur, old] = await Promise.all([
@@ -196,7 +208,7 @@ export async function getItemMomentum(range: DateRange, limit = 6): Promise<Mome
   // inside the tracked span that still has no views (menu not yet live, tracking
   // paused) would make every current item look brand new.
   if (old.length === 0) {
-    return { rising: [], fading: [], comparable: false, previous: prev };
+    return { ...base, comparable: false };
   }
 
   const oldByKey = new Map(old.map((o) => [nameKey(o.name), o.count]));
@@ -226,7 +238,7 @@ export async function getItemMomentum(range: DateRange, limit = 6): Promise<Mome
     .filter((r) => r.previous >= MIN && r.deltaPct != null && r.deltaPct <= -25)
     .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
     .slice(0, limit);
-  return { rising, fading, comparable: true, previous: prev };
+  return { rising, fading, comparable: true, previous: prev, currentDays: engNow.days, previousDays: engPrev.days };
 }
 
 export async function getSalesVsEngagement(range: DateRange) {

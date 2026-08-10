@@ -163,7 +163,7 @@ function bounds(range: DateRange): Bounds {
   };
 }
 
-/** Range predicate alone. Only `countedSessions` uses this — everything else uses `scope`. */
+/** Range predicate alone — the base both `countedSessions` and `eventScope` build on. */
 function inRange(b: Bounds): string {
   return `${TS()} >= ${b.from} AND ${TS()} <= ${b.to}`;
 }
@@ -189,19 +189,35 @@ function countedSessions(b: Bounds): string {
 }
 
 /**
- * THE population every query in this file runs over — range + counted sessions.
+ * SEATED-DINER population: range + sessions that scanned a table QR.
  *
- * There is deliberately ONE definition of "an event that counts". Each query used
- * to spell out its own range predicate, which is how the headline KPI and the rest
- * of the engagement row came to disagree: filtering one query meant the others
- * silently kept counting off-premise browsers. Add a condition here, not in a
- * query. Membership in a session set implies `$session_id IS NOT NULL`, so no
- * query needs to restate that.
+ * Use for anything measuring HOW MANY DINERS — visit counts, covers, dwell, and
+ * per-locale session totals. Off-premise browsers are real humans but zero
+ * covers, so counting them inflates every figure derived from a session count.
+ *
+ * Do NOT use for raw event volume — see `eventScope` below for why.
  */
 function scope(b: Bounds): string {
   return `${inRange(b)}
       AND $session_id IN (${countedSessions(b)}
       )`;
+}
+
+/**
+ * RAW-EVENT population: range only, no table-QR requirement.
+ *
+ * `waiter_called` fires from the bell sheet, which a seated diner reaches without
+ * ever scanning a `?t=` QR — so those sessions carry no `table_number` and the
+ * seated-diner filter drops them ENTIRELY. That is what silently zeroed the
+ * `GARSON ÇAĞRISI` and `MENÜ GÖRÜNTÜLEME` KPIs while `SEPET → ÇAĞRI` kept
+ * rendering %62: a ratio computed inside the scoped population survives, because
+ * its numerator and denominator shrink together, but a raw count does not.
+ *
+ * The rule: a COUNT OF EVENTS uses this; a COUNT OF DINERS uses `scope`. Ratios
+ * between two event counts may use either, as long as both sides use the same one.
+ */
+function eventScope(b: Bounds): string {
+  return inRange(b);
 }
 
 export type NamedCount = { name: string; count: number };
@@ -225,7 +241,7 @@ export async function getTopViewedItems(range: DateRange, limit = 10): Promise<N
     SELECT properties.item_name AS name, count(DISTINCT $session_id) AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
@@ -243,7 +259,7 @@ export async function getTopCartedItems(range: DateRange, limit = 10): Promise<N
     SELECT properties.item_name AS name, count(DISTINCT $session_id) AS c
     FROM events
     WHERE event = 'item_added_to_cart'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
@@ -276,7 +292,7 @@ export async function getAbandonedViews(range: DateRange, limit = 12): Promise<A
            count() AS total
     FROM events
     WHERE event = 'item_view_abandoned'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY total DESC LIMIT ${limit}
   `);
@@ -312,7 +328,7 @@ export async function getAbandonedViewsByDay(range: DateRange): Promise<Abandone
            countIf(toFloat(properties.dwell_ms) >= 20000) AS b3
     FROM events
     WHERE event = 'item_view_abandoned'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name, d
   `);
@@ -331,11 +347,14 @@ export async function getAbandonedViewsByDay(range: DateRange): Promise<Abandone
  */
 export async function getTableActivity(range: DateRange, limit = 15): Promise<NamedCount[]> {
   const b = bounds(range);
+  // `eventScope` + the explicit `name != ''` below: this query already REQUIRES a
+  // table number on the row itself, so the session-level filter added nothing but
+  // the risk of dropping a call whose session opened without a QR scan.
   const rows = await hogql(`
     SELECT properties.table_number AS name, count() AS c
     FROM events
     WHERE event = 'waiter_called'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != '' AND name IS NOT NULL
     GROUP BY name ORDER BY c DESC LIMIT ${limit}
   `);
@@ -355,7 +374,7 @@ export async function getCartConversion(range: DateRange): Promise<number> {
     FROM (
       SELECT $session_id AS sid, groupArray(event) AS events
       FROM events
-      WHERE ${scope(b)}
+      WHERE ${eventScope(b)}
         AND event IN ('cart_opened','waiter_called')
       GROUP BY sid
     )
@@ -373,7 +392,7 @@ export async function getCategoryPopularity(range: DateRange, limit = 12): Promi
     SELECT properties.category AS name, count() AS c
     FROM events
     WHERE event = 'category_selected'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${limit}
   `);
@@ -386,21 +405,27 @@ export async function getLocaleSplit(range: DateRange): Promise<NamedCount[]> {
   const rows = await hogql(`
     SELECT properties.locale AS name, count() AS c
     FROM events
-    WHERE ${scope(b)}
+    WHERE ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY c DESC
   `);
   return rows.map((r) => ({ name: String(r[0]), count: Number(r[1]) }));
 }
 
-/** Engagement funnel counts: views → add-to-cart → waiter call. */
+/**
+ * Engagement funnel counts: views → add-to-cart → waiter call.
+ *
+ * Raw event volume, so it runs on `eventScope` — the seated-diner filter drops
+ * every bell-sheet `waiter_called` (no table QR was ever scanned) and used to
+ * report this KPI as a flat 0.
+ */
 export async function getEngagementFunnel(range: DateRange) {
   const b = bounds(range);
   const rows = await hogql(`
     SELECT event, count() AS c
     FROM events
     WHERE event IN ('item_viewed','item_added_to_cart','waiter_called')
-      AND ${scope(b)}
+      AND ${eventScope(b)}
     GROUP BY event
   `);
   const m = new Map(rows.map((r) => [String(r[0]), Number(r[1])]));
@@ -479,7 +504,13 @@ export async function getSessionStats(range: DateRange) {
   };
 }
 
-/** Daily counts of menu views + waiter calls (for the comparison chart). */
+/**
+ * Daily counts of menu views + waiter calls (for the comparison chart).
+ *
+ * Raw event volume on `eventScope`, matching `getEngagementFunnel` — the daily
+ * series and the KPI totals must be the same measurement, or the chart and the
+ * card above it disagree.
+ */
 export async function getDailyEngagement(range: DateRange) {
   const b = bounds(range);
   const rows = await hogql(`
@@ -487,7 +518,7 @@ export async function getDailyEngagement(range: DateRange) {
            countIf(event = 'item_viewed') AS views,
            countIf(event = 'waiter_called') AS waiter_calls
     FROM events
-    WHERE ${scope(b)}
+    WHERE ${eventScope(b)}
     GROUP BY d ORDER BY d
   `);
   return rows.map((r) => ({
@@ -518,7 +549,7 @@ export async function getItemViewsWithPrice(range: DateRange): Promise<ItemViewP
            count(DISTINCT $session_id) AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name ORDER BY c DESC LIMIT ${TOP_POOL}
   `);
@@ -544,7 +575,7 @@ export async function getItemViewDiscountDays(range: DateRange): Promise<ItemDis
            max(toFloat(coalesce(properties.discount_pct, '0'))) AS disc
     FROM events
     WHERE event = 'item_viewed'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
       AND name != ''
     GROUP BY name, d
   `);
@@ -565,7 +596,7 @@ export async function getWeekHeatmap(range: DateRange): Promise<{ day: number; h
     SELECT toDayOfWeek(${TS()}) AS d, toHour(${CLOCK_TS}) AS h, count() AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
     GROUP BY d, h
   `);
   return rows.map((r) => ({ day: Number(r[0]), hour: Number(r[1]), count: Number(r[2]) }));
@@ -587,11 +618,14 @@ export type PromoEngagement = {
 export async function getPromoEngagement(range: DateRange): Promise<PromoEngagement> {
   const b = bounds(range);
   const [clickRows, funnelRows, topSuggested] = await Promise.all([
+    // All three run on `eventScope`. The summary total and the breakdown list are
+    // the SAME clicks counted two ways, so they must share a population or the
+    // card contradicts itself ("0 tıklama" above a list of 12 clicks).
     hogql(`
       SELECT event, count() AS clicks
       FROM events
       WHERE event IN ('featured_item_clicked','suggested_item_clicked')
-        AND ${scope(b)}
+        AND ${eventScope(b)}
       GROUP BY event
     `),
     hogql(`
@@ -603,7 +637,7 @@ export async function getPromoEngagement(range: DateRange): Promise<PromoEngagem
       FROM (
         SELECT $session_id AS sid, groupArray(event) AS e
         FROM events
-        WHERE ${scope(b)}
+        WHERE ${eventScope(b)}
           AND event IN ('featured_item_clicked','suggested_item_clicked','item_added_to_cart')
         GROUP BY sid
       )
@@ -612,7 +646,7 @@ export async function getPromoEngagement(range: DateRange): Promise<PromoEngagem
       SELECT properties.item_id AS id, count() AS c
       FROM events
       WHERE event = 'suggested_item_clicked'
-        AND ${scope(b)}
+        AND ${eventScope(b)}
         AND id != ''
       GROUP BY id ORDER BY c DESC LIMIT 8
     `),
@@ -659,6 +693,11 @@ export type LocalePref = {
 export async function getLocalePreferences(range: DateRange, perLocale = 5): Promise<LocalePref[]> {
   const b = bounds(range);
   const [statRows, itemRows] = await Promise.all([
+    // Session totals and the item views below MUST run over the same population,
+    // or the penetration rate divides two different things. Both use `eventScope`:
+    // the seated-diner filter zeroed this denominator while the raw view counts
+    // (which the card shows in parentheses) still populated, so every row rendered
+    // a confident "%0" next to a count of 330.
     hogql(`
       SELECT loc, count() AS sessions, median(duration) AS med
       FROM (
@@ -666,7 +705,7 @@ export async function getLocalePreferences(range: DateRange, perLocale = 5): Pro
                any(properties.locale) AS loc,
                dateDiff('second', min(timestamp), max(timestamp)) AS duration
         FROM events
-        WHERE ${scope(b)}
+        WHERE ${eventScope(b)}
         GROUP BY sid
         HAVING count() >= 2
       )
@@ -677,7 +716,7 @@ export async function getLocalePreferences(range: DateRange, perLocale = 5): Pro
       SELECT properties.locale AS loc, properties.item_name AS name, count(DISTINCT $session_id) AS c
       FROM events
       WHERE event = 'item_viewed'
-        AND ${scope(b)}
+        AND ${eventScope(b)}
         AND name != '' AND loc != ''
       GROUP BY loc, name
     `),
@@ -721,7 +760,7 @@ export async function getPeakHours(range: DateRange) {
     SELECT toHour(${CLOCK_TS}) AS h, count() AS c
     FROM events
     WHERE event = 'item_viewed'
-      AND ${scope(b)}
+      AND ${eventScope(b)}
     GROUP BY h ORDER BY h
   `);
   const byHour = new Map(rows.map((r) => [Number(r[0]), Number(r[1])]));

@@ -29,13 +29,14 @@ import { getMenuCostMap, type ItemCost } from "@/lib/analytics/menu-matrix";
  * general tide. That is what separates "waffles genuinely track burgers" from
  * "both were up because Saturday was packed".
  *
- * The second guard is SAMPLE SIZE, and it is absolute. Every candidate declares
- * how much data it rests on in its own unit and gets a confidence tier from it
- * (see `PatternConfidence` / `SAMPLE_TIERS`); anything tiering "low" is dropped
- * in `minePatterns` before the judge, the card or the owner ever sees it, and
- * every surviving pattern carries its sample in plain Turkish for the UI to print
- * next to the claim. A widening level may loosen how STRONG a signal has to be;
- * it can never loosen how much data stands behind it.
+ * The second guard is SAMPLE SIZE, handled by DISCLOSURE rather than suppression.
+ * Every candidate declares how much data it rests on in its own unit and gets a
+ * confidence tier from it (see `PatternConfidence` / `SAMPLE_TIERS`). Thin ones are
+ * still surfaced — a two-Wednesday skew can be the first sign of something real,
+ * and hiding it means the owner never gets to look — but they travel with their
+ * sample in plain Turkish, sort BELOW better-supported patterns, and are phrased as
+ * hypotheses to watch rather than facts to act on. The sample is never left implicit
+ * anywhere: not in the ranking, not in the sentence, not on the card.
  *
  * Once `menu_items.cost` is filled in, a fifth family opens up: margin patterns
  * (mix drift over the period, weekday margin gaps) — profit questions no
@@ -49,12 +50,15 @@ export type PatternKind = "co-move" | "basket" | "time" | "segment" | "margin";
  * How much sample a pattern rests on, in the unit that actually matters for it.
  *
  * This exists because a strong-looking statistic over a tiny sample is the single
- * most damaging thing this feature can print. "Wednesdays run 5.3×" over a 16-day
- * range is a claim about TWO Wednesdays — an owner who acts on it once and gets
- * burned stops trusting the entire section. So every candidate declares its own
- * sample unit (days, co-orders, weekday occurrences, views), gets a tier from it,
- * and anything landing on "low" is dropped in the miner and never reaches the
- * judge, the card, or the owner.
+ * most damaging thing this feature can print UNLABELLED. "Wednesdays run 5.3×" over
+ * a 16-day range is a claim about TWO Wednesdays — and an owner who acts on that
+ * once and gets burned stops trusting the entire section.
+ *
+ * The fix is the label, not the deletion. Every candidate declares its own sample
+ * unit (days, co-orders, weekday occurrences, views) and gets a tier from it; "low"
+ * is shown, but only ever as "2 Çarşamba günü · düşük güven", ranked beneath the
+ * solid findings, and phrased as something to watch. That way a thin early signal
+ * is still available to the person who wants it, and nobody mistakes it for proof.
  */
 export type PatternConfidence = "high" | "medium" | "low";
 
@@ -70,6 +74,9 @@ function weakest(...tiers: PatternConfidence[]): PatternConfidence {
   if (tiers.includes("low")) return "low";
   return tiers.includes("medium") ? "medium" : "high";
 }
+
+/** Sort weight per tier: better-supported patterns surface above thinner ones. */
+const TIER_RANK: Record<PatternConfidence, number> = { high: 2, medium: 1, low: 0 };
 
 export type PatternCandidate = {
   /** Stable key from kind + subjects — used to dedupe across widening cycles. */
@@ -111,8 +118,11 @@ type Thresholds = {
   minWeekdayQty: number; // qty on a weekday to call it an over-index
   minWeekdayIndex: number; // observed/expected share to flag a weekday skew
   // How many times that weekday must OCCUR in the recorded range. Previously
-  // unchecked, which is how a 16-day range could publish a "Wednesday" pattern
-  // resting on two Wednesdays. Never widens below the confidence floor below.
+  // unchecked entirely, so a 16-day range could publish a confident "Wednesday"
+  // pattern resting on two Wednesdays with nothing on screen saying so. It is now a
+  // real floor that only reaches 2 at the loosest widening level, and anything
+  // under `SAMPLE_TIERS.weekdayOccurrences` arrives labelled "low" rather than
+  // presented as established.
   minWeekdayDays: number;
   // Views floor for the price/discount skews. Counted in DISTINCT-SESSION item
   // views (one per diner per item) since the price/discount families moved to
@@ -122,19 +132,18 @@ type Thresholds = {
 };
 
 const LEVELS: Thresholds[] = [
-  { minDays: 8, minItemDays: 4, minItemQty: 12, minShareCorr: 0.55, minBasketSupport: 5, minLift: 1.6, minWeekdayQty: 8, minWeekdayIndex: 1.7, minWeekdayDays: 6, minSegmentViews: 30 },
-  { minDays: 6, minItemDays: 3, minItemQty: 8, minShareCorr: 0.5, minBasketSupport: 4, minLift: 1.45, minWeekdayQty: 6, minWeekdayIndex: 1.55, minWeekdayDays: 5, minSegmentViews: 20 },
-  { minDays: 5, minItemDays: 3, minItemQty: 6, minShareCorr: 0.45, minBasketSupport: 3, minLift: 1.35, minWeekdayQty: 5, minWeekdayIndex: 1.45, minWeekdayDays: 4, minSegmentViews: 14 },
+  { minDays: 8, minItemDays: 4, minItemQty: 12, minShareCorr: 0.55, minBasketSupport: 5, minLift: 1.6, minWeekdayQty: 8, minWeekdayIndex: 1.7, minWeekdayDays: 5, minSegmentViews: 30 },
+  { minDays: 6, minItemDays: 3, minItemQty: 8, minShareCorr: 0.5, minBasketSupport: 4, minLift: 1.45, minWeekdayQty: 6, minWeekdayIndex: 1.55, minWeekdayDays: 3, minSegmentViews: 20 },
+  { minDays: 5, minItemDays: 3, minItemQty: 6, minShareCorr: 0.45, minBasketSupport: 3, minLift: 1.35, minWeekdayQty: 5, minWeekdayIndex: 1.45, minWeekdayDays: 2, minSegmentViews: 14 },
 ];
 
 export const MAX_PATTERN_LEVEL = LEVELS.length;
 
 /**
- * Sample thresholds per pattern shape: `[medium, high]`. Widening the statistical
- * levels above can loosen how STRONG a signal has to be; it can never loosen how
- * much DATA the claim rests on, because that's the part an owner can't audit and
- * the part that destroys trust when it's thin. Anything below `medium` tiers as
- * "low" and is discarded in `minePatterns`.
+ * Sample thresholds per pattern shape: `[medium, high]`. Anything below `medium`
+ * tiers as "low" — shown, but marked as thin, sorted last, and worded as a
+ * hypothesis. These are display thresholds; the LEVELS above are what decides
+ * whether a candidate is computed at all.
  */
 const SAMPLE_TIERS = {
   /** Recorded days behind a daily correlation. */
@@ -494,13 +503,24 @@ async function mineSegmentSkews(range: DateRange, keep: (n: string) => boolean, 
         id: idKey("segment", subjects),
         kind: "segment",
         subjects: [best.band, worst.band],
+        // Expressed as a per-view RATIO ("5,7×"), never a percentage.
+        //
+        // sold and views count two different populations: views are QR sessions
+        // that opened the item, sold is every POS unit including the guests who
+        // never scanned anything. Their quotient is an index, not a probability,
+        // and it routinely exceeds 1 — cheap staples (tea, cola) are ordered
+        // verbally without anyone opening the page. Printed as "%570" it reads as
+        // a conversion rate and invites exactly the wrong conclusion, which is
+        // what the model kept drawing ("low-priced items convert well").
         metrics: {
           bestBand: best.band,
-          bestSalesPerViewPct: pct(conv(best)),
+          bestSalesPerView: `${round1(conv(best))}×`,
           bestSold: best.sold,
+          bestViews: best.views,
           worstBand: worst.band,
-          worstSalesPerViewPct: pct(conv(worst)),
+          worstSalesPerView: `${round1(conv(worst))}×`,
           worstSold: worst.sold,
+          worstViews: worst.views,
         },
         sampleSize: best.views + worst.views,
         confidence: tier(best.views + worst.views, ...SAMPLE_TIERS.segmentViews),
@@ -508,10 +528,15 @@ async function mineSegmentSkews(range: DateRange, keep: (n: string) => boolean, 
         strength: Math.min(1, (isFinite(ratio) ? ratio : 3) / 4),
         score: Math.min(1, (isFinite(ratio) ? ratio : 3) / 4) * Math.log2(best.views + worst.views + 2),
         desc:
-          `Price-band view→SALE conversion (real POS quantities, not cart adds): "${best.band}" turns ` +
-          `${pct(conv(best))}% of its views into sales (${best.sold} sold on ${best.views} views) vs "${worst.band}" ` +
-          `at ${pct(conv(worst))}% (${worst.sold} sold on ${worst.views} views). Diners act on price band.`,
-        fallbackText: `${best.band} ürünleri her 100 görüntülemede ${pct(conv(best))} satışa dönüşürken ${worst.band} yalnızca ${pct(conv(worst))} — fiyat bandı gerçek satışı değiştiriyor.`,
+          `Units sold per menu view, by price band — an INDEX, not a conversion rate, and NEVER a percentage. ` +
+          `"${best.band}" sells ${round1(conv(best))} units per view (${best.sold} sold, ${best.views} views); ` +
+          `"${worst.band}" sells ${round1(conv(worst))} (${worst.sold} sold, ${worst.views} views). ` +
+          `The two figures count different populations: views are QR sessions that opened the item, sold is every ` +
+          `POS unit including guests who never scanned. A value above 1× therefore means the band is ordered ` +
+          `WITHOUT being browsed (staples asked for verbally) — it is NOT evidence that the band "converts well" ` +
+          `or that its pricing succeeds. Read it as: the cheap band barely needs the menu, the expensive band is ` +
+          `browsed far more than it is bought. Phrase it as "her görüntülemeye N satış" or "N×", never as "%N".`,
+        fallbackText: `${best.band} ürünleri her görüntülemeye ${round1(conv(best))} satış düşerken ${worst.band} ürünlerinde bu ${round1(conv(worst))} — ucuz bandın çoğu menüye bakılmadan sipariş ediliyor, pahalı band ise bakılıp alınmıyor.`,
       });
     }
   }
@@ -690,7 +715,10 @@ function mineMarginPatterns(
   const late = marginPct(days.slice(mid));
   const shift = late.pct - early.pct;
   if (
-    days.length >= SAMPLE_TIERS.marginDays[0] &&
+    // Both halves need enough days to average over at all. The floor is the
+    // widening level's, not the confidence tier's — a shorter window still yields
+    // a real (if thin) drift, and it arrives labelled "low" rather than suppressed.
+    days.length >= Math.max(t.minDays, 4) &&
     early.rev >= MIN_HALF_REVENUE &&
     late.rev >= MIN_HALF_REVENUE &&
     Math.abs(shift) >= MIN_MARGIN_SHIFT_POINTS
@@ -842,13 +870,16 @@ export async function minePatterns(
   // Dedupe by id (a pair can qualify under two levels) and rank.
   const byId = new Map<string, PatternCandidate>();
   for (const c of all) if (!byId.has(c.id)) byId.set(c.id, c);
-  return (
-    [...byId.values()]
-      // The confidence gate, applied before ANYTHING downstream sees a candidate:
-      // the judge can't reject a thin claim it finds persuasive, and the owner
-      // certainly can't audit one. A statistic that rests on too little data is
-      // simply not a pattern here, however strong it looks. See SAMPLE_TIERS.
-      .filter((c) => c.confidence !== "low")
-      .sort((a, b) => b.score - a.score)
+
+  // Rank by TIER first, then by score inside each tier.
+  //
+  // Thin-sample patterns are shown rather than hidden (they're labelled with their
+  // sample everywhere they appear), but they must never outrank a well-supported
+  // one just because a small sample produced a dramatic ratio — which is exactly
+  // what small samples do. So the ordering, not a filter, is what keeps a two-day
+  // curiosity below a three-week finding: the card fills with its strongest
+  // patterns first and the speculative tail lands at the bottom.
+  return [...byId.values()].sort(
+    (a, b) => TIER_RANK[b.confidence] - TIER_RANK[a.confidence] || b.score - a.score
   );
 }

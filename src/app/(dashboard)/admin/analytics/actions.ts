@@ -501,10 +501,15 @@ export async function generateInsightsAction(params: {
 // Separate in-memory cache from the insights one — different shape, same 1h TTL.
 const patternsCache = new Map<string, { at: number; patterns: PatternItem[] }>();
 
-// How many validated patterns we aim for before stopping the widening loop, and
-// how many candidates each pass hands the judge (keeps the prompt bounded).
+// How many WELL-SUPPORTED patterns we aim for before stopping the widening loop,
+// and how many candidates each pass hands the judge (keeps the prompt bounded).
 const PATTERN_TARGET = 6;
 const CANDIDATES_PER_PASS = 24;
+
+// Hard ceiling on the card, thin-sample patterns included. Without it a data-poor
+// range — the one that produces the most low-confidence candidates — would print
+// the longest list, which is exactly backwards.
+const MAX_PATTERNS = 10;
 
 export type PatternItem = {
   id: string;
@@ -562,13 +567,20 @@ async function loadStoredPatterns(
  * fresh candidates to the LLM judge (which rejects the obvious ones and phrases
  * the rest), and stops once we have enough strong patterns or the levels run out.
  * Without an LLM key it degrades to the math gate + templated sentences.
+ *
+ * The target counts WELL-SUPPORTED patterns only. Thin-sample ones are kept and
+ * shown (labelled "düşük güven"), but they must not end the search: a widening pass
+ * can surface a pattern with a large sample and a milder signal — genuinely the
+ * better finding — and counting a handful of two-day curiosities toward the target
+ * would stop the loop before it ever got there.
  */
 async function buildPatterns(range: DateRange, keep: (name: string) => boolean): Promise<PatternItem[]> {
   const ai = insightsConfigured();
   const found: PatternItem[] = [];
   const foundIds = new Set<string>();
+  const solid = () => found.filter((p) => p.confidence !== "low").length;
 
-  for (let level = 0; level < MAX_PATTERN_LEVEL && found.length < PATTERN_TARGET; level++) {
+  for (let level = 0; level < MAX_PATTERN_LEVEL && solid() < PATTERN_TARGET && found.length < MAX_PATTERNS; level++) {
     const candidates = (await minePatterns(range, keep, level)).filter((c) => !foundIds.has(c.id));
     if (candidates.length === 0) continue;
     const pool = candidates.slice(0, CANDIDATES_PER_PASS);
@@ -591,9 +603,10 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
         subjects: c.subjects,
         metrics: c.metrics,
         hint: c.desc,
-        // "low" is already impossible here — minePatterns drops those — so the
-        // cast just narrows the type the judge's prompt is written against.
-        confidence: c.confidence as "high" | "medium",
+        // Every tier reaches the judge, including "low": the prompt's job is to
+        // match the strength of the sentence to the strength of the sample, not to
+        // pretend thin patterns don't exist.
+        confidence: c.confidence,
         sampleLabel: c.sampleLabel,
       }));
       const judged = await validatePatterns(
@@ -606,14 +619,14 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
         if (!c || foundIds.has(c.id)) continue;
         foundIds.add(c.id);
         found.push({ id: c.id, kind: c.kind, text: j.text, ...carry(c) });
-        if (found.length >= PATTERN_TARGET) break;
+        if (solid() >= PATTERN_TARGET || found.length >= MAX_PATTERNS) break;
       }
     } else {
       // No judge: the math gate already dropped the obvious ones (lift≈1, weak
-      // correlation) and every thin-sample one. Take the strongest candidates
-      // with their templated sentence.
+      // correlation). Take the strongest candidates with their templated sentence —
+      // already tier-ordered by the miner, so the solid ones land first.
       for (const c of pool) {
-        if (found.length >= PATTERN_TARGET) break;
+        if (solid() >= PATTERN_TARGET || found.length >= MAX_PATTERNS) break;
         if (foundIds.has(c.id)) continue;
         foundIds.add(c.id);
         found.push({ id: c.id, kind: c.kind, text: c.fallbackText, ...carry(c) });
@@ -622,7 +635,13 @@ async function buildPatterns(range: DateRange, keep: (name: string) => boolean):
     }
   }
 
-  return found.sort((a, b) => b.strength - a.strength);
+  // Tier before strength, matching minePatterns. Sorting on strength alone would
+  // undo the miner's ordering and let a thin-sample pattern with a dramatic ratio
+  // head the card — small samples produce dramatic ratios, which is precisely why
+  // they belong underneath. Absent tier (a set persisted before tiers existed)
+  // sorts as the middle grade rather than to the bottom.
+  const rank = (p: PatternItem) => (p.confidence === "high" ? 2 : p.confidence === "low" ? 0 : 1);
+  return found.sort((a, b) => rank(b) - rank(a) || b.strength - a.strength);
 }
 
 export async function generatePatternsAction(params: {
@@ -660,7 +679,14 @@ export async function generatePatternsAction(params: {
       // band, discount) have non-item subjects that the off-menu rule would
       // otherwise read as delisted products and wipe out the whole family.
       const ignoredKeys = new Set((await ignoredItemNames(rules, range)).map(itemKey));
-      const storedPatterns = stored.patterns.filter((p) => p.subjects.every((sub) => !ignoredKeys.has(itemKey(sub))));
+      const storedPatterns = stored.patterns
+        .filter((p) => p.subjects.every((sub) => !ignoredKeys.has(itemKey(sub))))
+        // Evict patterns generated under the OLD price-band shape, which printed
+        // a per-view index as a percentage ("%570 satışa dönüşüyor"). Those are
+        // wrong, not merely stale, and the 3-day reuse window would keep serving
+        // them — with their wrong sentence already baked in — long after the fix.
+        // Keyed on the retired metric name, so it costs nothing once they age out.
+        .filter((p) => !Object.keys(p.metrics).some((k) => /salesPerViewPct$/i.test(k)));
       if (storedPatterns.length) {
         patternsCache.set(key, { at: Date.now(), patterns: storedPatterns });
         return { ok: true, patterns: storedPatterns, cached: true, usedAI };

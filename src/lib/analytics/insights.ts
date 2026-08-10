@@ -433,11 +433,12 @@ export type PatternForJudge = {
   /** Neutral English description of what was computed. */
   hint: string;
   /**
-   * The sample the claim rests on, already tiered by the miner ("low" never gets
-   * here). Handed over so the judge phrases the sample INTO the sentence rather
-   * than presenting a medium-confidence figure as settled fact.
+   * The sample the claim rests on, already tiered by the miner. Handed over so the
+   * judge phrases the sample INTO the sentence rather than presenting a thin figure
+   * as settled fact — thin candidates are surfaced, not suppressed, so the wording
+   * is what carries the caveat.
    */
-  confidence: "high" | "medium";
+  confidence: "high" | "medium" | "low";
   /** That sample in plain Turkish, e.g. "4 Çarşamba günü" — quote it verbatim. */
   sampleLabel: string;
 };
@@ -451,12 +452,18 @@ You receive an array "candidates": each is a REAL statistical pattern already co
 The numbers are ground truth — NEVER recompute, doubt, or adjust them. Your ONLY job is judgment + phrasing.
 
 Each candidate carries "sampleLabel" (how much data it rests on, in plain Turkish) and "confidence"
-("high" or "medium" — thinner candidates were already discarded before reaching you). You MUST include the
-sampleLabel inside the sentence you write, verbatim, in parentheses or as a clause — e.g.
-"(4 Çarşamba günü üzerinden)". An owner reading a pattern has to be able to see how much it stands on without
-asking. For a "medium" candidate, phrase it as an emerging signal to watch rather than an established fact,
-and REJECT it outright unless the action it implies is cheap and reversible — a medium-sample pattern must
-never recommend cutting an item, changing a price, or anything else expensive to undo.
+("high", "medium" or "low"). You MUST include the sampleLabel inside the sentence you write, verbatim, in
+parentheses or as a clause — e.g. "(4 Çarşamba günü üzerinden)". An owner reading a pattern has to be able to
+see how much it stands on without asking. Then match the STRENGTH OF THE CLAIM to the confidence:
+- "high": state it as an established pattern and recommend the action directly.
+- "medium": state it as an emerging signal ("…gibi görünüyor", "…eğilimi var") and keep the action cheap and
+  reversible — never recommend cutting an item or changing a price on a medium sample.
+- "low": the sample is genuinely thin, so write it as a HYPOTHESIS TO WATCH, not a finding. Say plainly that
+  the data is limited ("henüz az veriyle", "doğrulanması gerek") and let the action be nothing more than
+  "izleyin" / "veri biriktikçe tekrar bakın". Never attach a confident number-driven instruction to a "low"
+  candidate, and never imply it is proven. A low candidate is still worth showing — it is an early hint the
+  owner may recognise from the floor — but it must never read like the high-confidence ones.
+Judge NOVELTY the same way at every tier: a thin sample is not an excuse to keep an obvious pattern.
 
 Every quantity in these candidates comes from REAL sales (owner-entered POS quantities) or from item views.
 This menu has NO checkout and add-to-cart data is deliberately not part of any candidate, so a "conversion"
@@ -468,9 +475,12 @@ REJECT (keep=false) anything that is:
 - obvious / already known — two universally popular items selling together, a staple that of course sells
   on busy days, "people who order food also order a drink", or any pairing whose lift is barely above 1;
 - trivial or circular — restating that a bestseller sells well;
-- an artifact — a correlation with a tiny sample, or a "pattern" that just reflects overall volume;
-- not something the owner could act on;
-- a medium-confidence claim whose implied action is expensive or irreversible.
+- an artifact — a "pattern" that just reflects overall volume rather than a relationship;
+- not something the owner could act on OR watch for;
+- a medium- or low-confidence claim whose implied action is expensive or irreversible (rewrite it as
+  something to watch instead of rejecting it, if the relationship itself is interesting).
+Note that a small sample is NOT by itself a reason to reject: report it as a hypothesis per the tier rules
+above. Reject for being obvious, circular or unusable — not for being early.
 Be strict: it is far better to keep 2 sharp patterns than 8 mild ones. Keeping nothing is a valid answer.
 
 For every KEPT candidate, write ONE natural TURKISH sentence that: states the relationship in plain words,

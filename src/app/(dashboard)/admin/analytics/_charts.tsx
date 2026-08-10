@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -71,11 +71,41 @@ function CategoryTick({ x, y, payload }: any) {
   );
 }
 
+/** Below this the layout is treated as mobile. Matches Tailwind's `sm`. */
+const MOBILE_MAX = 639;
+
+/**
+ * Is the viewport phone-sized right now?
+ *
+ * Recharts' `ResponsiveContainer` adapts its WIDTH but takes `height` as a fixed
+ * number, so a chart sized for desktop keeps that exact height at 390px — which is
+ * where the page's screens-tall blank gaps came from. Charts read this to pick a
+ * proportionate height instead.
+ *
+ * Starts `false` and corrects in an effect so server and first client render agree
+ * (a `window` read during render would hydration-mismatch); the swap is a height
+ * change on an already-responsive element, so nothing reflows visibly.
+ */
+export function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_MAX}px)`);
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return isMobile;
+}
+
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-2 border-green bg-white p-5 shadow-hard">
-      <h3 className="flex items-center gap-2 text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase mb-4">
-        <span aria-hidden className="size-1.5 bg-orange shrink-0" />
+    <section className="border-2 border-green bg-white p-4 sm:p-5 shadow-hard">
+      {/* items-start + the marker's nudge: on a heading that wraps to two lines
+          (common at 390px) `items-center` floated the square against the middle of
+          the block instead of aligning it to the first line. */}
+      <h3 className="flex items-start gap-2 text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase mb-4">
+        <span aria-hidden className="size-1.5 bg-orange shrink-0 mt-[0.35em]" />
         {title}
       </h3>
       {children}
@@ -83,42 +113,162 @@ export function ChartCard({ title, children }: { title: string; children: React.
   );
 }
 
+/**
+ * Empty-state note. Sized to its text on mobile rather than reserving a chart's
+ * worth of height — an empty card that occupies 220px of a 844px screen is most of
+ * a scroll for one sentence.
+ */
 function Empty({ note }: { note: string }) {
   return (
-    <div className="h-[220px] grid place-items-center text-[12px] text-green/50 text-center px-4">{note}</div>
+    <div className="py-8 sm:h-[220px] grid place-items-center text-[12px] text-green/50 text-center px-4">
+      {note}
+    </div>
   );
 }
 
-/** Headline: real revenue (bars) vs menu engagement (line). */
+/** The three series of the headline chart, in render order. */
+const SVE_SERIES = [
+  { key: "revenue", label: "Gerçek Satış (₺)", color: GREEN },
+  { key: "views", label: "Görüntüleme", color: ORANGE },
+  { key: "waiterCalls", label: "Garson Çağrısı", color: GREEN_DEEP },
+] as const;
+
+type SveKey = (typeof SVE_SERIES)[number]["key"];
+
+/**
+ * Headline: real revenue (bars) vs menu engagement (lines).
+ *
+ * Desktop keeps all three series on a dual axis. Mobile cannot: 16 days, two axes
+ * and three series inside ~340px produced 12px-wide bars, a legend wrapping to two
+ * centred lines, and a dotted waiter-call series indistinguishable from the
+ * baseline. So at phone width the chart shows ONE series at a time on a SINGLE
+ * axis, picked from chips above it and defaulting to revenue.
+ *
+ * One axis is the point, not a side effect: two differently-scaled axes on a
+ * 390px screen invite reading a crossing of the two as meaningful when it is an
+ * artifact of independent scaling.
+ */
 export function SalesVsEngagementChart({
   data,
 }: {
   data: { date: string; revenue: number | null; views: number; waiterCalls: number }[];
 }) {
+  const isMobile = useIsMobile();
+  const [active, setActive] = useState<SveKey>("revenue");
+
   if (!data.length) return <Empty note="Menü etkileşimi biriktikçe ve gerçek satış girdikçe burada karşılaştırılır." />;
+
+  const current = SVE_SERIES.find((s) => s.key === active)!;
+
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <ComposedChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="date" {...axisProps} tickFormatter={(d) => String(d).slice(5)} minTickGap={16} />
-        <YAxis yAxisId="left" {...axisProps} width={44} tickFormatter={(v) => compact.format(v)} />
-        <YAxis yAxisId="right" orientation="right" {...axisProps} width={32} allowDecimals={false} />
-        <Tooltip {...tooltipStyle} />
-        <Legend wrapperStyle={legendStyle} iconType="plainline" />
-        {/* connectNulls + visible dots so sparse days (a single sales entry or a
-            lone active day) still render instead of showing an empty plot. */}
-        <Bar yAxisId="left" dataKey="revenue" name="Gerçek Satış (₺)" fill={GREEN} barSize={18} />
-        <Line yAxisId="right" type="monotone" dataKey="views" name="Görüntüleme" stroke={ORANGE} strokeWidth={2} dot={{ r: 2 }} connectNulls />
-        <Line yAxisId="right" type="monotone" dataKey="waiterCalls" name="Garson Çağrısı" stroke={GREEN_DEEP} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} connectNulls />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <>
+      {/* Chips double as the legend on mobile (P1.1: legend above, left-aligned,
+          wrapping — never a two-line centred block below the plot). */}
+      {isMobile && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {SVE_SERIES.map((s) => {
+            const on = s.key === active;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setActive(s.key)}
+                aria-pressed={on}
+                className={[
+                  "inline-flex items-center gap-1.5 px-2.5 min-h-11 border-2 font-ui font-extrabold",
+                  "text-[10px] tracking-[0.12em] uppercase cursor-pointer transition-colors",
+                  on ? "border-green bg-green text-white" : "border-green/30 bg-white text-green/60",
+                ].join(" ")}
+              >
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0"
+                  style={{ background: on ? "#fff" : s.color }}
+                />
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <ResponsiveContainer width="100%" height={isMobile ? 210 : 320}>
+        <ComposedChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
+          <CartesianGrid stroke={GRID} vertical={false} />
+          <XAxis
+            dataKey="date"
+            {...axisProps}
+            tickFormatter={(d) => String(d).slice(5)}
+            minTickGap={isMobile ? 24 : 16}
+            angle={isMobile ? -45 : 0}
+            textAnchor={isMobile ? "end" : "middle"}
+            height={isMobile ? 46 : 30}
+          />
+          {/* Mobile: one axis, sized for the active series. Desktop: unchanged. */}
+          {isMobile ? (
+            <YAxis
+              yAxisId="left"
+              {...axisProps}
+              width={44}
+              tickFormatter={(v) => compact.format(v)}
+              allowDecimals={false}
+            />
+          ) : (
+            <>
+              <YAxis yAxisId="left" {...axisProps} width={44} tickFormatter={(v) => compact.format(v)} />
+              <YAxis yAxisId="right" orientation="right" {...axisProps} width={32} allowDecimals={false} />
+            </>
+          )}
+          <Tooltip {...tooltipStyle} />
+          {!isMobile && <Legend wrapperStyle={legendStyle} iconType="plainline" />}
+          {/* connectNulls + visible dots so sparse days (a single sales entry or a
+              lone active day) still render instead of showing an empty plot. */}
+          {(!isMobile || active === "revenue") && (
+            <Bar yAxisId="left" dataKey="revenue" name="Gerçek Satış (₺)" fill={GREEN} barSize={isMobile ? 10 : 18} />
+          )}
+          {(!isMobile || active === "views") && (
+            <Line
+              yAxisId={isMobile ? "left" : "right"}
+              type="monotone"
+              dataKey="views"
+              name="Görüntüleme"
+              stroke={ORANGE}
+              strokeWidth={2}
+              dot={{ r: 2 }}
+              connectNulls
+            />
+          )}
+          {(!isMobile || active === "waiterCalls") && (
+            <Line
+              yAxisId={isMobile ? "left" : "right"}
+              type="monotone"
+              dataKey="waiterCalls"
+              name="Garson Çağrısı"
+              stroke={GREEN_DEEP}
+              strokeWidth={2}
+              // The dashed style is what made this series vanish against the
+              // baseline at phone width; on its own single axis it can be solid.
+              strokeDasharray={isMobile ? undefined : "4 3"}
+              dot={{ r: 2 }}
+              connectNulls
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+      {isMobile && (
+        <p className="mt-2 text-[10px] text-green/90 font-bold">
+          Tek eksende okunabilirlik için seriler ayrı gösterilir — üstteki etiketlerden seçin.
+          <span className="text-green/70"> Şu an: {current.label}.</span>
+        </p>
+      )}
+    </>
   );
 }
 
 export function RevenueAreaChart({ data }: { data: { date: string; revenue: number }[] }) {
+  const isMobile = useIsMobile();
   if (!data.length) return <Empty note="Bu dönem için satış girilmedi. Sağ üstten “Gerçek Satış Gir”." />;
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={isMobile ? 200 : 300}>
       <AreaChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
@@ -329,7 +479,7 @@ export function ConversionBars({ data, note }: { data: ConversionRow[]; note?: s
           </div>
         );
       })}
-      <p className="text-[10px] text-green/50 font-bold leading-relaxed">
+      <p className="text-[10px] text-green/90 font-bold leading-relaxed">
         Görüntüleme → gerçek satış oranı, en fazla %100 gösterilir. “Menüsüz %” = o aralıkta satılan ama menüde
         hiç açılmadan sipariş edilen adetlerin payı — menünün o ürünlere ulaşmadığı anlamına gelir, başarı değil.
         {data.some((d) => (d.items?.length ?? 0) > 0) && " Aralığa tıklayarak ürünleri görebilirsiniz."}
@@ -351,33 +501,58 @@ export function WeekHeatmapChart({
   data: { day: number; hour: number; count: number }[];
   note?: string;
 }) {
+  const isMobile = useIsMobile();
   if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
   const byCell = new Map(data.map((d) => [`${d.day}-${d.hour}`, d.count]));
   const peak = Math.max(...data.map((d) => d.count));
+
+  // TRADING HOURS ONLY on mobile. A fixed 00–23 axis opens on twelve hours of
+  // empty pre-service cells and pushes the actual peak off-screen — the card hid
+  // its own headline finding. Narrowing to the hours that contain data (padded by
+  // one for context) fits the whole week in 390px with no horizontal scroll at
+  // all, so there is nothing left to scroll away from.
+  const active = data.filter((d) => d.count > 0).map((d) => d.hour);
+  const from = isMobile ? Math.max(0, Math.min(...active) - 1) : 0;
+  const to = isMobile ? Math.min(23, Math.max(...active) + 1) : 23;
+  const hours = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  // Label every 3rd hour on desktop; mobile's window is short enough for every 2nd.
+  const labelEvery = isMobile ? 2 : 3;
+  const clipped = isMobile && (from > 0 || to < 23);
+
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[560px]">
-        <div className="grid gap-[3px]" style={{ gridTemplateColumns: "36px repeat(24, 1fr)" }}>
-          {/* hour header */}
-          <div />
-          {Array.from({ length: 24 }, (_, h) => (
+      {/* No min-width on mobile: the collapsed hour window is designed to fit. */}
+      <div className="sm:min-w-[560px]">
+        <div
+          className="grid gap-[2px] sm:gap-[3px]"
+          style={{ gridTemplateColumns: `28px repeat(${hours.length}, minmax(0, 1fr))` }}
+        >
+          {/* hour header — sticky alongside the day column so the corner cell
+              doesn't let the grid slide under the labels while scrolling. */}
+          <div className="sticky left-0 z-[3] bg-white" />
+          {hours.map((h) => (
             <div key={h} className="text-center text-[9px] font-bold text-green/50">
-              {h % 3 === 0 ? String(h).padStart(2, "0") : ""}
+              {h % labelEvery === 0 ? String(h).padStart(2, "0") : ""}
             </div>
           ))}
           {DAY_LABELS.map((label, i) => {
             const day = i + 1;
             return (
               <Fragment key={day}>
-                <div className="text-[10px] font-extrabold text-green/70 leading-4">{label}</div>
-                {Array.from({ length: 24 }, (_, h) => {
+                {/* Sticky day label: once the grid scrolls right, an unlabelled row
+                    of cells says nothing about which day it belongs to. Opaque
+                    background is required or cells show through underneath. */}
+                <div className="sticky left-0 z-[2] bg-white pr-1 text-[10px] font-extrabold text-green/70 leading-4">
+                  {label}
+                </div>
+                {hours.map((h) => {
                   const count = byCell.get(`${day}-${h}`) ?? 0;
                   const isPeak = count === peak && count > 0;
                   return (
                     <div
                       key={`${day}-${h}`}
                       title={`${label} ${String(h).padStart(2, "0")}:00 — ${tl.format(count)}`}
-                      className="h-4"
+                      className="h-5 sm:h-4"
                       style={{
                         background: isPeak
                           ? ORANGE
@@ -392,8 +567,15 @@ export function WeekHeatmapChart({
             );
           })}
         </div>
-        <p className="mt-3 text-[10px] text-green/50 font-bold">
+        <p className="mt-3 text-[10px] text-green/90 font-bold">
           Koyu = daha çok görüntüleme · turuncu = en yoğun saat
+          {clipped && (
+            <>
+              {" "}
+              · Yalnızca hareket olan saatler ({String(from).padStart(2, "0")}:00–
+              {String(to).padStart(2, "0")}:00) gösteriliyor
+            </>
+          )}
         </p>
       </div>
     </div>
@@ -401,14 +583,21 @@ export function WeekHeatmapChart({
 }
 
 export function PeakHoursChart({ data, note }: { data: { hour: number; count: number }[]; note?: string }) {
+  const isMobile = useIsMobile();
   if (!data.some((d) => d.count > 0)) return <Empty note={note ?? "Veri yok."} />;
   // Compute the peak once (not per-cell) so only the busiest hour is highlighted.
   const peak = Math.max(...data.map((d) => d.count));
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={isMobile ? 170 : 220}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="hour" {...axisProps} tickFormatter={(h) => `${String(h).padStart(2, "0")}`} interval={2} />
+        {/* Wider tick spacing on mobile — at 390px every-3rd-hour labels collide. */}
+        <XAxis
+          dataKey="hour"
+          {...axisProps}
+          tickFormatter={(h) => `${String(h).padStart(2, "0")}`}
+          interval={isMobile ? 3 : 2}
+        />
         <YAxis {...axisProps} width={28} allowDecimals={false} />
         <Tooltip {...tooltipStyle} cursor={{ fill: GRID }} labelFormatter={(h) => `${String(h).padStart(2, "0")}:00`} />
         <Bar dataKey="count" name="Görüntüleme" barSize={10}>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ItemConversion } from "@/lib/analytics/compare";
+import { useIsMobile } from "./_charts";
 
 /**
  * Per-item menu engagement beside real POS sales.
@@ -83,6 +84,7 @@ export function ConversionTable({
   const [sort, setSort] = useState<{ key: SortKey; dir: Dir }>({ key: "views", dir: "desc" });
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const isMobile = useIsMobile();
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("tr");
@@ -120,13 +122,23 @@ export function ConversionTable({
   const visible = showAll ? filtered : filtered.slice(0, COLLAPSED);
 
   if (!rows.length) {
-    return <div className="h-30 grid place-items-center text-[12px] text-green/50 text-center px-4">{note}</div>;
+    return <div className="py-8 sm:h-30 grid place-items-center text-[12px] text-green/50 text-center px-4">{note}</div>;
   }
 
   const th = "text-[10px] tracking-[0.14em] font-extrabold text-green/60 uppercase text-right py-2 px-3";
   const td = "text-[13px] font-bold text-ink text-right py-2 px-3 tabular-nums";
   const ctrl =
-    "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.14em] uppercase border-2 cursor-pointer transition-colors bg-white text-green border-green/40 hover:bg-bg-deep";
+    "px-2.5 min-h-11 font-ui font-extrabold text-[10px] tracking-[0.14em] uppercase border-2 cursor-pointer transition-colors bg-white text-green border-green/40 hover:bg-bg-deep";
+
+  // STICKY PRODUCT NAME (P0.1). `Satılan` and `Satış/Görünt.` — the two columns
+  // this table exists for — sit at the right edge, so reading them on a phone
+  // means scrolling the name column out of view and staring at a column of bare
+  // "0,5× 0,7× 1,0×" with no idea which product is which. Pinning the first column
+  // keeps the row identifiable at every scroll position. The background must be
+  // opaque (cells would otherwise show through) and the header's z-index must beat
+  // the body's, or a scrolled cell rides over the header.
+  const stickyCell = "sticky left-0 z-[2] bg-white";
+  const stickyHead = "sticky left-0 z-[3] bg-white";
 
   const toggle = (key: SortKey) =>
     setSort((s) =>
@@ -136,12 +148,18 @@ export function ConversionTable({
           { key, dir: key === "name" ? "asc" : "desc" }
     );
 
+  // The button fills the header cell rather than hugging the text: the sort arrows
+  // alone are a ~10px target, well under the 44px minimum (P2.2).
   const Th = ({ k, children, className = "" }: { k: SortKey; children: React.ReactNode; className?: string }) => (
     <th className={`${th} ${className}`}>
       <button
         type="button"
         onClick={() => toggle(k)}
-        className="inline-flex items-center gap-1 uppercase cursor-pointer hover:text-orange transition-colors"
+        className={[
+          "w-full min-h-11 inline-flex items-center gap-1 uppercase cursor-pointer",
+          "hover:text-orange transition-colors",
+          className.includes("text-left") ? "justify-start" : "justify-end",
+        ].join(" ")}
         title="Bu sütuna göre sırala"
       >
         {children}
@@ -154,21 +172,35 @@ export function ConversionTable({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      {/* Toolbar stacks on mobile (P1.2). On one row the search box collapsed to
+          ~90px and showed its placeholder as "Ür" — an unusable control on the
+          table that most needs searching. Full width first, buttons 50/50 below. */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 mb-3">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Ürün ara…"
-          className="min-w-0 flex-1 sm:flex-none sm:w-56 px-2.5 py-1.5 border-2 border-green/30 bg-white text-[12px] text-ink placeholder:text-green/40 focus:outline-none focus:border-green"
+          className="w-full min-w-0 sm:flex-none sm:w-56 px-2.5 min-h-11 sm:min-h-0 sm:py-1.5 border-2 border-green/30 bg-white text-[12px] text-ink placeholder:text-green/40 focus:outline-none focus:border-green"
         />
-        <button type="button" onClick={() => toggle("ratio")} className={ctrl} title="En çok bakılıp en az satılanlar üste">
-          Az Satan Üste
-        </button>
-        <button type="button" onClick={() => download(filtered, range)} className={ctrl}>
-          Excel’e Aktar
-        </button>
-        <span className="text-[10px] font-extrabold text-green/50 tabular-nums ml-auto">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => toggle("ratio")}
+            className={`${ctrl} flex-1 sm:flex-none`}
+            title="En çok bakılıp en az satılanlar üste"
+          >
+            Az Satan Üste
+          </button>
+          <button
+            type="button"
+            onClick={() => download(filtered, range)}
+            className={`${ctrl} flex-1 sm:flex-none`}
+          >
+            Excel’e Aktar
+          </button>
+        </div>
+        <span className="text-[10px] font-extrabold text-green/50 tabular-nums sm:ml-auto text-right">
           {tl.format(visible.length)} / {tl.format(filtered.length)} ürün
         </span>
       </div>
@@ -179,22 +211,25 @@ export function ConversionTable({
             {/* Source banner: the two halves of this table do not come from the
                 same place and must never be read as consecutive funnel steps. */}
             <tr>
-              <th />
+              <th className={stickyHead} />
+              {/* `normal-case`+wrap rather than a truncating single line: the header
+                  used to cut to "MENÜ (QR) · BAKA…", and a source label that can't
+                  name its source is the one thing this row exists to do (P1.3). */}
               <th
                 colSpan={2}
-                className="text-[9px] tracking-[0.16em] font-extrabold text-green/50 uppercase text-right pb-1 px-3"
+                className="text-[9px] tracking-[0.16em] font-extrabold text-green/50 uppercase text-right pb-1 px-3 whitespace-normal"
               >
                 Menü (QR) · bakan kişiler
               </th>
               <th
                 colSpan={2}
-                className="text-[9px] tracking-[0.16em] font-extrabold text-green/50 uppercase text-right pb-1 px-3"
+                className="text-[9px] tracking-[0.16em] font-extrabold text-green/50 uppercase text-right pb-1 px-3 whitespace-normal"
               >
                 POS (kasa) · tüm müşteriler
               </th>
             </tr>
             <tr className="border-b-2 border-green">
-              <Th k="name" className="text-left">
+              <Th k="name" className={`text-left ${stickyHead}`}>
                 Ürün
               </Th>
               <Th k="views">Görüntüleme</Th>
@@ -206,7 +241,13 @@ export function ConversionTable({
           <tbody>
             {visible.map((r) => (
               <tr key={r.name} className="border-b border-green/15">
-                <td className={`${td} text-left whitespace-nowrap max-w-45 truncate`} title={r.name}>
+                {/* max-w tighter on mobile so the pinned column leaves room for the
+                    figures; `title` carries the full name for the truncated ones —
+                    the only place on the page where an ellipsis is acceptable. */}
+                <td
+                  className={`${td} ${stickyCell} text-left whitespace-nowrap max-w-32 sm:max-w-45 truncate shadow-[2px_0_4px_rgba(0,0,0,0.06)] sm:shadow-none`}
+                  title={r.name}
+                >
                   {r.name}
                 </td>
                 <td className={td}>{tl.format(r.views)}</td>
@@ -246,13 +287,23 @@ export function ConversionTable({
         </button>
       )}
 
-      <p className="mt-2 text-[10px] text-green/50 font-bold leading-relaxed">
-        İki ayrı kaynak: <b>Görüntüleme/Sepet</b> QR menüyü açan müşterilerden, <b>Satılan</b> kasadan gelir —
-        menüyü hiç açmayan müşteriler de satışa dahil olduğu için satılan adet sepetten çok daha yüksek
-        olabilir; bu bir huni değildir. <b>Satış/Görünt.</b> = her görüntülemeye düşen satış (1× = görüntülendiği
-        kadar satılıyor, 1×+ = menüye bakılmadan da sipariş ediliyor) · turuncu = çok görüntülenip hiç
-        satılmayan.
-      </p>
+      {/* Collapsed by default on mobile (P1.7): the explanation is genuinely good,
+          but 6 lines of it before the reader has seen a single number costs a whole
+          screen. Open on desktop, where it costs nothing. Contrast raised from
+          green/50 to green/80 to clear WCAG AA at this size. */}
+      <details className="mt-2" open={!isMobile}>
+        <summary className="inline-flex items-center gap-1.5 min-h-11 sm:min-h-0 text-[10px] font-extrabold text-green/90 uppercase tracking-[0.14em] cursor-pointer list-none marker:content-none hover:text-orange transition-colors">
+          <span aria-hidden className="text-orange">ⓘ</span>
+          Nasıl okunur?
+        </summary>
+        <p className="mt-1.5 text-[10px] text-green/90 font-bold leading-relaxed">
+          İki ayrı kaynak: <b>Görüntüleme/Sepet</b> QR menüyü açan müşterilerden, <b>Satılan</b> kasadan gelir —
+          menüyü hiç açmayan müşteriler de satışa dahil olduğu için satılan adet sepetten çok daha yüksek
+          olabilir; bu bir huni değildir. <b>Satış/Görünt.</b> = her görüntülemeye düşen satış (1× = görüntülendiği
+          kadar satılıyor, 1×+ = menüye bakılmadan da sipariş ediliyor) · turuncu = çok görüntülenip hiç
+          satılmayan.
+        </p>
+      </details>
     </div>
   );
 }

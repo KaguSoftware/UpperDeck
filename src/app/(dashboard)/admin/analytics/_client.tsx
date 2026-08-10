@@ -328,7 +328,9 @@ function ComparePicker({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    // Label ABOVE the segments on mobile (P1.4): beside them it ate ~40% of the
+    // row and squeezed three options into what was left.
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
       <span
         className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
         title="Yüzde değişimlerin karşılaştırıldığı dönem"
@@ -346,7 +348,7 @@ function ComparePicker({
               disabled={disabled}
               title={b.hint}
               className={[
-                "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
+                "px-2.5 min-h-11 sm:min-h-0 sm:py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait",
                 active ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
               ].join(" ")}
             >
@@ -388,7 +390,7 @@ function BusinessDayPicker({ value }: { value: number }) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
       <span
         className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
         title="Gün hangi saatte başlasın — gece yarısını geçen siparişler bir önceki güne yazılır. Günlük, haftalık ve saat bazlı tüm dağılımları etkiler."
@@ -399,7 +401,7 @@ function BusinessDayPicker({ value }: { value: number }) {
         value={hour}
         disabled={saving}
         onChange={(e) => pick(Number(e.target.value))}
-        className="border-2 border-green/40 bg-white px-2 py-1.5 text-[11px] font-extrabold text-green tabular-nums cursor-pointer disabled:opacity-50"
+        className="border-2 border-green/40 bg-white px-2 min-h-11 sm:min-h-0 sm:py-1.5 text-[11px] font-extrabold text-green tabular-nums cursor-pointer disabled:opacity-50"
       >
         {BUSINESS_DAY_START_OPTIONS.map((h) => (
           <option key={h} value={h}>
@@ -419,14 +421,16 @@ function BusinessDayPicker({ value }: { value: number }) {
  */
 function CoversMultiplier({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
       <span
         className="text-[10px] tracking-[0.18em] font-extrabold text-green/60 uppercase"
         title="Menüyü açan her tekil ziyaret için varsayılan kişi sayısı — tahmini Kişi hesabında kullanılır"
       >
         Kişi Tahmini ×
       </span>
-      <div className="flex items-center">
+      {/* Six options never fit one phone row at a 44px tap size, so they scroll
+          horizontally as a chip row rather than shrinking below the tap minimum. */}
+      <div className="flex items-center overflow-x-auto max-w-full">
         {COVERS_MULT_OPTIONS.map((o) => {
           const active = value === o;
           return (
@@ -435,7 +439,7 @@ function CoversMultiplier({ value, onChange }: { value: number; onChange: (v: nu
               type="button"
               onClick={() => onChange(o)}
               className={[
-                "px-2.5 py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors tabular-nums",
+                "shrink-0 px-2.5 min-h-11 sm:min-h-0 sm:py-1.5 font-ui font-extrabold text-[10px] tracking-[0.12em] uppercase border-2 -ml-0.5 first:ml-0 cursor-pointer transition-colors tabular-nums",
                 active ? "bg-green text-white border-green" : "bg-white text-green border-green/40 hover:bg-bg-deep",
               ].join(" ")}
             >
@@ -489,9 +493,14 @@ function Kpi({
     eff > 11 ? "text-[18px]" : eff > 9 ? "text-[22px]" : eff > 6 ? "text-[28px]" : "text-[40px]";
   return (
     <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center">
-      {/* title so a label the card is too narrow to show ("Menü Görüntüleme")
-          is still readable instead of ending in a dead ellipsis. */}
-      <div className="text-[10px] tracking-[0.22em] font-bold text-green/70 uppercase truncate" title={label}>
+      {/* NEVER truncated: the label is what makes the number mean anything, and
+          "MENÜ GÖRÜNTÜLE…" beside a figure is a number without a metric. It wraps
+          to two lines on mobile at a slightly tighter size/tracking instead; the
+          `title` stays for the hover affordance. */}
+      <div
+        className="text-[9px] sm:text-[10px] tracking-[0.16em] sm:tracking-[0.22em] font-bold text-green/70 uppercase whitespace-normal leading-tight"
+        title={label}
+      >
         {label}
       </div>
       <div className="flex items-baseline justify-center gap-1 mt-1.5 whitespace-nowrap">
@@ -678,7 +687,15 @@ function AiInsights({
   }, [configured, findings, run]);
 
   const hasFindings = findings !== null && findings.length > 0;
-  const buttonLabel = pending ? "Kontrol ediliyor…" : hasFindings ? "Tekrar Kontrol Et" : "Yorum Oluştur";
+  // On error the button is the retry affordance, so it has to SAY so — labelling it
+  // "Yorum Oluştur" next to a failure message reads as an unrelated control.
+  const buttonLabel = pending
+    ? "Kontrol ediliyor…"
+    : error
+      ? "Tekrar Dene"
+      : hasFindings
+        ? "Tekrar Kontrol Et"
+        : "Yorum Oluştur";
 
   // The server already caps and ranks the set by money at stake (see
   // rankFindings), so everything it returns is shown — no "show more" toggle,
@@ -708,8 +725,12 @@ function AiInsights({
       </div>
       {/* Height floor for the state that swaps in place (placeholder → "üretiliyor"
           → findings). Without it the card grew by ~200px the moment generation
-          finished and shoved everything below it down mid-read. */}
-      <div className="min-h-40">
+          finished and shoved everything below it down mid-read.
+          It is deliberately NOT applied to the terminal states (error, or the
+          not-configured notice): nothing is going to swap in after them, so the
+          floor would just reserve empty space under a one-line message — on mobile
+          that read as a ~1200px white box under "Yorum oluşturulamadı". */}
+      <div className={error || !configured ? undefined : "md:min-h-40"}>
       {!configured ? (
         <p className="text-[12px] text-green/50 py-3">
           Yapay zekâ yorumu için GROQ_API_KEY ortam değişkeni gerekli.
@@ -824,6 +845,36 @@ const PATTERN_KIND: Record<PatternItem["kind"], { label: string; chip: string }>
   margin: { label: "Kâr Marjı", chip: "bg-orange/80 text-white" },
 };
 
+/**
+ * Sample-tier chip styling. Three visibly different grades, because all three tiers
+ * are shown: without a grade on the chip a two-day curiosity and a three-week
+ * finding look identical on the card, which is the exact confusion the sample label
+ * exists to prevent. "low" is deliberately the quietest of the three — visible to
+ * anyone reading the row, never competing for attention with a solid pattern.
+ */
+const CONFIDENCE_CHIP: Record<
+  NonNullable<PatternItem["confidence"]>,
+  { className: string; suffix: string; title: (sample: string) => string }
+> = {
+  high: {
+    className: "border-green/40 bg-green/10 text-green",
+    suffix: "",
+    title: (s) => `Sağlam örneklem: ${s}`,
+  },
+  medium: {
+    className: "border-orange/40 bg-orange/8 text-orange",
+    suffix: " · erken",
+    title: (s) =>
+      `Sınırlı örneklem (${s}) — erken sinyal olarak okuyun; geri dönüşü zor kararlar için veri birikmesini bekleyin`,
+  },
+  low: {
+    className: "border-ink/25 bg-ink/5 text-ink/50",
+    suffix: " · düşük güven",
+    title: (s) =>
+      `Çok az veri (${s}) — bu bir bulgu değil, izlenmesi gereken bir ihtimal. Doğrulanmadan karar vermeyin`,
+  },
+};
+
 /** Compact "the numbers behind it" line, phrased per pattern kind. */
 function patternEvidence(p: PatternItem): string {
   const m = p.metrics;
@@ -841,8 +892,13 @@ function patternEvidence(p: PatternItem): string {
         ? `%${m.earlyMarginPct} → %${m.lateMarginPct} · ${m.days} gün`
         : Object.values(m).slice(0, 2).join(" · ");
     case "segment": {
-      // Prefer the rate/percentage metrics (keys ending in "Pct") so locale/price/
-      // discount patterns read as comparable rates, not raw counts.
+      // Per-view ratios first. These are an index (sold ÷ views over two DIFFERENT
+      // populations), so they carry their own "×" and must never get a % sign —
+      // rendering 5.7 as "%570" is what made this card read as a broken
+      // conversion rate. Locale/discount segments keep the Pct branch below,
+      // where the figures really are rates bounded by 100.
+      const ratios = Object.entries(m).filter(([k]) => /perview$/i.test(k));
+      if (ratios.length) return ratios.map(([, v]) => String(v)).join(" · ");
       const rates = Object.entries(m).filter(([k]) => /pct$/i.test(k));
       if (rates.length) return rates.map(([, v]) => `%${v}`).join(" · ");
       return Object.values(m).slice(0, 2).join(" · ");
@@ -925,25 +981,20 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
                       {PATTERN_KIND[p.kind].label}
                     </span>
                     {/* SAMPLE, next to the claim. "Çarşamba 5,3×" means nothing
-                        until you know whether it's four Wednesdays or two — and the
-                        thin ones never get here at all (patterns.ts drops them),
-                        so this chip separates "solid" from "early signal". */}
+                        until you know whether it stands on four Wednesdays or two.
+                        Thin patterns ARE shown — an early hint is worth seeing — so
+                        this chip is what keeps them from being mistaken for proven
+                        ones: it names the sample and grades it in the same breath. */}
                     {p.confidence && p.sampleLabel && (
                       <span
                         className={[
                           "px-1.5 py-0.5 font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase border",
-                          p.confidence === "high"
-                            ? "border-green/40 bg-green/10 text-green"
-                            : "border-orange/40 bg-orange/8 text-orange",
+                          CONFIDENCE_CHIP[p.confidence].className,
                         ].join(" ")}
-                        title={
-                          p.confidence === "high"
-                            ? `Sağlam örneklem: ${p.sampleLabel}`
-                            : `Sınırlı örneklem (${p.sampleLabel}) — erken sinyal olarak okuyun, geri dönüşü zor kararlar için bekleyin`
-                        }
+                        title={CONFIDENCE_CHIP[p.confidence].title(p.sampleLabel)}
                       >
                         {p.sampleLabel}
-                        {p.confidence === "medium" && " · erken"}
+                        {CONFIDENCE_CHIP[p.confidence].suffix}
                       </span>
                     )}
                     <span className="text-[11px] text-ink/45 font-mono">{patternEvidence(p)}</span>
@@ -952,8 +1003,17 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
               </li>
             ))}
           </ul>
+          {/* Legend for the sample chips. Three grades are on screen at once, so
+              what each one means has to be stated once rather than left to the
+              tooltips — a chip nobody hovers is a chip nobody understands. */}
+          <p className="mt-3 text-[10px] text-ink/45 font-bold leading-relaxed">
+            Her kalıbın yanındaki etiket, dayandığı veri miktarıdır. Etiketsiz = sağlam örneklem ·{" "}
+            <span className="text-orange">erken</span> = sınırlı veri, geri dönüşü kolay adımlar için ·{" "}
+            <span className="text-ink/60">düşük güven</span> = çok az veri; bulgu değil, izlenecek ihtimal.
+            Sıralama en sağlam kalıptan başlar.
+          </p>
           {!aiConfigured && (
-            <p className="mt-3 text-[11px] text-ink/40 leading-relaxed">
+            <p className="mt-2 text-[11px] text-ink/40 leading-relaxed">
               Yapay zekâ eleyicisi kapalı (GROQ_API_KEY yok) — kalıplar yalnızca istatistiksel eşiklerle
               süzülüyor. Açıldığında bariz olanlar da elenir.
             </p>
@@ -966,7 +1026,8 @@ function PatternsCard({ aiConfigured }: { aiConfigured: boolean }) {
           Tüm satış/etkileşim verisini tarayıp sayılarla görünen gerçek kalıpları bulur: birlikte hareket eden
           ürünler (yoğun gün etkisi arındırılmış), beklentinin üstünde birlikte alınan çiftler, güne özel satışlar
           ve segment farkları. Bariz olanlar ({aiConfigured ? "yapay zekâ + " : ""}istatistik eşikleriyle) elenir.
-          Her kalıp, dayandığı veri miktarıyla birlikte gösterilir; örneklemi yetersiz olanlar hiç gösterilmez.
+          Her kalıp, dayandığı veri miktarıyla birlikte gösterilir — az veriye dayananlar da listelenir ama
+          “düşük güven” etiketiyle ve en altta.
         </p>
       )}
     </section>
@@ -1319,7 +1380,10 @@ function MenuMatrix({ me }: { me: MenuEngineering }) {
             {me.coverage.soldItems > 0
               ? `Bu dönemde ${tl.format(me.coverage.soldItems)} ürün satıldı, hiçbirinin maliyeti girilmemiş.`
               : "Bu dönem için ürün bazında gerçek satış verisi yok."}{" "}
-            <a href="/admin/menu" className="text-orange underline font-extrabold">
+            <a
+              href="/admin/menu"
+              className="inline-flex items-center min-h-11 sm:min-h-0 text-orange underline font-extrabold"
+            >
               Menüden maliyet gir →
             </a>
           </p>
@@ -1442,7 +1506,7 @@ function MenuMatrix({ me }: { me: MenuEngineering }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{QUADRANTS_ORDER.map(cell)}</div>
 
-      <p className="mt-3 text-[10px] text-green/50 font-bold leading-relaxed">
+      <p className="mt-3 text-[10px] text-green/90 font-bold leading-relaxed">
         “Popüler” = satış adedinin menü ortalamasının %70’i ve üzeri · “Yüksek marj” = birim kârı menü
         ortalamasının üzerinde · birim kâr, ürünün gerçek satış tutarından (indirimler dâhil) maliyeti
         çıkarılarak bulunur · ⚠ = maliyetinin altında satılıyor.
@@ -1470,7 +1534,7 @@ function TopProfit({ me }: { me: MenuEngineering }) {
           </StatRow>
         ))}
       </StatList>
-      <p className="mt-2 text-[10px] text-green/50 font-bold">
+      <p className="mt-2 text-[10px] text-green/90 font-bold">
         Ciro sıralaması değil <b>kâr</b> sıralaması — en çok satan ürün genellikle en çok kazandıran ürün
         değildir.
       </p>
@@ -1494,7 +1558,7 @@ function HiddenGems({ items }: { items: HiddenGem[] }) {
           </StatRow>
         ))}
       </StatList>
-      <p className="mt-2 text-[10px] text-green/50 font-bold">
+      <p className="mt-2 text-[10px] text-green/90 font-bold">
         Görüntüleyenlerin büyük kısmı satın alıyor ama az kişi görüyor — menüde üst sıraya taşı / öne çıkar.
       </p>
     </ChartCard>
@@ -1504,23 +1568,39 @@ function HiddenGems({ items }: { items: HiddenGem[] }) {
 /**
  * Rising and fading items by view momentum vs the comparison period.
  *
- * Refuses to render a comparison it can't make. When the baseline window has no
- * engagement data (a custom range whose predecessor predates tracking, most
- * often), every item's "previous" is 0 — so every single product came out as
- * "0→X YENİ" and nothing could ever fade. Six fake rising stars is worse than an
- * empty module, so the module says why instead.
+ * Refuses to render a comparison it can't make. The baseline has to span the same
+ * number of TRACKED days, not merely exist: the tracking floor clips the previous
+ * window while leaving the current one whole, and comparing 30 days of views
+ * against the 7 that clear the floor understated every baseline ~4x — which
+ * surfaced as "0→15 YENİ" and "▲ +350%" for ordinary items. Fabricated momentum
+ * is worse than an empty module, so the module says why instead.
  */
 function Momentum({ momentum }: { momentum: MomentumResult }) {
-  const { rising, fading, comparable, previous } = momentum;
+  const { rising, fading, comparable, previous, currentDays, previousDays } = momentum;
 
   if (!comparable) {
+    // Two different failures, two different sentences: nothing to compare against
+    // vs. a baseline too short to compare fairly. They need different fixes.
+    const partial = previousDays > 0 && previousDays !== currentDays;
     return (
       <ChartCard title="Yükselenler / Düşenler (görüntülenme ivmesi)">
         <div className="min-h-24 grid place-items-center px-4 text-center">
           <p className="text-[12px] text-green/60 leading-relaxed">
-            Karşılaştırma dönemi ({trDate(previous.from)} – {trDate(previous.to)}) için etkileşim verisi yok,
-            bu yüzden ivme hesaplanamıyor — her ürün “yeni” görünürdü. Etkileşim takibinin başladığı tarihten
-            sonrasını kapsayan bir dönem seçin.
+            {partial ? (
+              <>
+                Karşılaştırma dönemi ({trDate(previous.from)} – {trDate(previous.to)}) yalnızca{" "}
+                <b>{tl.format(previousDays)} gün</b> etkileşim verisi içeriyor, bu dönem ise{" "}
+                <b>{tl.format(currentDays)} gün</b> — eşit olmayan iki aralığı karşılaştırmak her ürünü
+                yapay olarak “yükseliyor” gösterir. Tamamı etkileşim takibi başladıktan sonrasına düşen
+                daha kısa bir dönem seçin.
+              </>
+            ) : (
+              <>
+                Karşılaştırma dönemi ({trDate(previous.from)} – {trDate(previous.to)}) için etkileşim
+                verisi yok, bu yüzden ivme hesaplanamıyor — her ürün “yeni” görünürdü. Etkileşim
+                takibinin başladığı tarihten sonrasını kapsayan bir dönem seçin.
+              </>
+            )}
           </p>
         </div>
       </ChartCard>
@@ -1558,7 +1638,7 @@ function Momentum({ momentum }: { momentum: MomentumResult }) {
           )}
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-green/50 font-bold">
+      <p className="mt-2 text-[10px] text-green/90 font-bold">
         {trDate(previous.from)} – {trDate(previous.to)} dönemine göre görüntülenme değişimi. “Yeni” = geçen
         dönem yokken bu dönem öne çıkan.
       </p>
@@ -1572,7 +1652,7 @@ function BoughtTogether({ pairs, orders }: { pairs: ItemPair[]; orders: number }
   return (
     <ChartCard title="Birlikte Alınanlar">
       {pairs.length === 0 ? (
-        <div className="h-24 grid place-items-center text-[12px] text-green/50 text-center px-4">
+        <div className="py-6 sm:h-24 grid place-items-center text-[12px] text-green/50 text-center px-4">
           {tl.format(orders)} siparişte belirgin bir ikili örüntü yok.
         </div>
       ) : (
@@ -1592,7 +1672,7 @@ function BoughtTogether({ pairs, orders }: { pairs: ItemPair[]; orders: number }
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[10px] text-green/50 font-bold">
+          <p className="mt-3 text-[10px] text-green/90 font-bold">
             “%” = ilk ürünü sipariş edenlerin ikinciyi de alma oranı · {tl.format(orders)} sipariş üzerinden · kombin/öneri fırsatı.
           </p>
         </>
@@ -1696,7 +1776,7 @@ function PromoPerformance({
           </StatList>
         </div>
       )}
-      <p className="mt-2 text-[10px] text-green/50 font-bold">
+      <p className="mt-2 text-[10px] text-green/90 font-bold">
         “%” = o alana tıklayan oturumların sepete ekleme oranı — alanın işe yarayıp yaramadığını gösterir.
       </p>
     </ChartCard>
@@ -1722,7 +1802,7 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
             <div className="flex items-center justify-between gap-2 mb-1.5 pb-1.5 border-b-2 border-green/15">
               <span className="text-[12px] font-extrabold text-green">{label(l.locale)}</span>
               <span className="text-[11px] font-bold text-green/50 tabular-nums">
-                {tl.format(l.sessions)} oturum · {duration(l.medianSeconds)}
+                {l.sessions > 0 ? `${tl.format(l.sessions)} oturum · ${duration(l.medianSeconds)}` : "—"}
               </span>
             </div>
             {l.topItems.length ? (
@@ -1733,8 +1813,17 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
                       <span className="text-green/40 font-bold mr-1.5">{i + 1}</span>
                       {it.name}
                     </span>
+                    {/* No session denominator → no percentage. A confident "%0"
+                        beside a raw count of 330 is worse than showing nothing,
+                        so the rate drops out and the honest raw count remains. */}
                     <span className="shrink-0 tabular-nums">
-                      <span className="font-extrabold text-green">%{Math.round(it.rate * 100)}</span>
+                      {l.sessions > 0 ? (
+                        <span className="font-extrabold text-green">%{Math.round(it.rate * 100)}</span>
+                      ) : (
+                        <span className="font-extrabold text-green/40" title="Oturum sayısı yok — oran hesaplanamıyor">
+                          —
+                        </span>
+                      )}
                       <span className="text-green/40 ml-1.5">({tl.format(it.count)})</span>
                     </span>
                   </li>
@@ -1746,11 +1835,88 @@ function LocalePrefs({ locales }: { locales: LocalePref[] }) {
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[10px] text-green/50 font-bold">
+      <p className="mt-3 text-[10px] text-green/90 font-bold">
         Her dil için en çok görüntülenen ürünler (kendi oturum oranına göre) ve oturum/süre — dile göre öne
         çıkarmayı şekillendirir.
       </p>
     </ChartCard>
+  );
+}
+
+/** Stable anchor id for a zone, shared by the section and the jump-nav. */
+function zoneId(index: string): string {
+  return `bolum-${index}`;
+}
+
+/** The five zones, in page order — drives the jump-nav (P2.1). */
+const ZONE_NAV = [
+  { index: "01", short: "Nabız" },
+  { index: "02", short: "Yapay Zekâ" },
+  { index: "03", short: "Menü" },
+  { index: "04", short: "Satış" },
+  { index: "05", short: "Zaman" },
+] as const;
+
+/**
+ * Compact section jump-nav for mobile.
+ *
+ * Five zones over a very long scroll with no way back: the page's own structure
+ * was invisible from inside it. Chips scroll the matching zone into view and
+ * scroll-spy marks the one being read.
+ *
+ * IntersectionObserver rather than a scroll handler: it reports visibility
+ * directly, costs nothing per frame, and needs no manual offset math against the
+ * sticky deck (`rootMargin` expresses that once).
+ */
+function ZoneNav() {
+  const [active, setActive] = useState<string>(ZONE_NAV[0].index);
+
+  useEffect(() => {
+    const sections = ZONE_NAV.map((z) => document.getElementById(zoneId(z.index))).filter(
+      (el): el is HTMLElement => el !== null
+    );
+    if (!sections.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        // Topmost intersecting section wins, so passing a boundary doesn't flicker
+        // between the outgoing and incoming zone.
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible?.target.id) setActive(visible.target.id.replace("bolum-", ""));
+      },
+      // Top inset clears the sticky deck; the large bottom inset keeps only the
+      // upper band of the viewport eligible, which is where reading happens.
+      { rootMargin: "-140px 0px -55% 0px", threshold: 0 }
+    );
+    sections.forEach((s) => io.observe(s));
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <nav aria-label="Bölümler" className="sm:hidden -mx-1 px-1 overflow-x-auto">
+      <ul className="flex items-center gap-1.5 w-max">
+        {ZONE_NAV.map((z) => {
+          const on = active === z.index;
+          return (
+            <li key={z.index}>
+              <a
+                href={`#${zoneId(z.index)}`}
+                aria-current={on ? "true" : undefined}
+                className={[
+                  "inline-flex items-center gap-1 px-2 min-h-11 border-2 font-ui font-extrabold",
+                  "text-[10px] tracking-[0.12em] uppercase transition-colors",
+                  on ? "border-green bg-green text-white" : "border-green/30 bg-white text-green/70",
+                ].join(" ")}
+              >
+                <span className="tabular-nums">{z.index}</span>
+                <span>{z.short}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
 
@@ -1771,20 +1937,26 @@ function Zone({
   children: React.ReactNode;
 }) {
   return (
-    <section>
-      <div className="flex items-center gap-3 mb-5">
+    // `scroll-mt` clears the sticky control deck: without it a jump-nav tap (or any
+    // anchor link) lands with the heading hidden underneath the pinned panel (P1.5).
+    <section id={zoneId(index)} className="scroll-mt-32 sm:scroll-mt-28">
+      {/* items-start so the index chip aligns to the FIRST line of a heading that
+          wraps to two at 390px, rather than floating against the block's middle. */}
+      <div className="flex items-start sm:items-center gap-3 mb-5">
         <span className="font-bowlby text-[13px] leading-none text-white bg-green px-2 py-1.5 tabular-nums shrink-0">
           {index}
         </span>
-        <h2 className="font-bowlby text-[17px] leading-none text-green uppercase tracking-[-0.3px] shrink-0">{title}</h2>
+        <h2 className="font-bowlby text-[15px] sm:text-[17px] leading-tight sm:leading-none text-green uppercase tracking-[-0.3px] min-w-0 sm:shrink-0">
+          {title}
+        </h2>
         {desc && (
           <span className="hidden sm:block text-[10px] tracking-[0.18em] font-bold text-green/45 uppercase truncate">
             {desc}
           </span>
         )}
-        <span aria-hidden className="h-0.5 flex-1 min-w-4 bg-green/15" />
+        <span aria-hidden className="hidden sm:block h-0.5 flex-1 min-w-4 bg-green/15" />
       </div>
-      <div className="flex flex-col gap-6">{children}</div>
+      <div className="flex flex-col gap-4 sm:gap-6">{children}</div>
     </section>
   );
 }
@@ -1809,7 +1981,9 @@ function Zone({
  */
 function CardGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap gap-6 items-start *:grow *:basis-[calc(50%-0.75rem)] *:min-w-[min(20rem,100%)]">
+    // Tighter gutter on mobile: at 390px every card is full-width anyway, so a
+    // 24px gap between each of ~24 stacked cards is ~250px of pure scroll.
+    <div className="flex flex-wrap gap-4 sm:gap-6 items-start *:grow *:basis-[calc(50%-0.75rem)] *:min-w-[min(20rem,100%)]">
       {children}
     </div>
   );
@@ -1940,7 +2114,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
         </div>
       )}
 
-      <div className="flex flex-col gap-12">
+      <div className="flex flex-col gap-7 sm:gap-12">
         {/* CONTROL DECK — one pinned panel: date range (primary scope control) over
             a hairline, then the utilities. Keeps every control reachable however
             far you scroll, instead of two loose bars. */}
@@ -1967,20 +2141,29 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                   );
                 })}
               </div>
-              <div className="flex items-center gap-1.5 sm:ml-auto min-w-0">
-                <input
-                  type="date"
-                  defaultValue={data.range.from}
-                  id="range-from"
-                  className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
-                />
-                <span className="text-green/60 text-[12px] shrink-0">→</span>
-                <input
-                  type="date"
-                  defaultValue={data.range.to}
-                  id="range-to"
-                  className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 py-1.5 text-[12px] text-ink"
-                />
+              {/* Dates stack on mobile (P1.3). A native date input needs ~150px to
+                  render "dd.mm.yyyy" plus its calendar icon; sharing one row with a
+                  sibling and the Apply button squeezed both to ~90px, which is why
+                  they displayed as a clipped "05.07.20". Full width and a "–"
+                  separator instead of the horizontal "→". */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto sm:ml-auto min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <input
+                    type="date"
+                    defaultValue={data.range.from}
+                    id="range-from"
+                    aria-label="Başlangıç tarihi"
+                    className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 min-h-11 sm:min-h-0 sm:py-1.5 text-[12px] text-ink"
+                  />
+                  <span className="text-green/60 text-[12px] shrink-0">–</span>
+                  <input
+                    type="date"
+                    defaultValue={data.range.to}
+                    id="range-to"
+                    aria-label="Bitiş tarihi"
+                    className="min-w-0 flex-1 sm:flex-none border-2 border-green bg-white px-2 min-h-11 sm:min-h-0 sm:py-1.5 text-[12px] text-ink"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -1990,7 +2173,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                   }}
                   disabled={switching}
                   className={[
-                    "shrink-0 px-3 py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait",
+                    "shrink-0 px-3 min-h-11 sm:min-h-0 sm:py-2 font-ui font-extrabold text-[10px] tracking-[0.18em] uppercase border-2 cursor-pointer disabled:opacity-50 disabled:cursor-wait",
                     activePreset === "custom" ? "bg-orange text-white border-orange" : "bg-white text-green border-green hover:bg-bg-deep",
                   ].join(" ")}
                 >
@@ -2022,6 +2205,12 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 <BusinessDayPicker value={data.businessDayStart} />
                 <AutoRefresh live={data.live} />
               </div>
+            </div>
+
+            {/* Jump-nav, inside the pinned deck so it travels with the scroll.
+                Mobile only — on desktop the whole page is a short scroll. */}
+            <div className="sm:hidden border-t-2 border-green/12 p-2">
+              <ZoneNav />
             </div>
           </div>
         </div>
