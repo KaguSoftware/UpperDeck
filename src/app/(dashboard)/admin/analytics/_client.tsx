@@ -502,60 +502,67 @@ function Kpi({
           "MENÜ GÖRÜNTÜLE…" beside a figure is a number without a metric. It wraps
           to two lines on mobile at a slightly tighter size/tracking instead; the
           `title` stays for the hover affordance. */}
-      {/* Two lines' worth of height is reserved whether or not the label wraps,
-          so a wrapping label ("Menü Görüntüleme") doesn't shove its number down
-          a line relative to a one-word neighbour ("Kişi"). */}
+      {/* FIXED height (not min-h): two lines' worth, reserved whether or not the
+          label wraps. A min-height lets a wrapping label ("Menü Görüntüleme")
+          grow past its floor and steal height from the number band below, which
+          is what knocks the figures off a shared centre line. */}
       <div
-        className="flex items-center justify-center min-h-[2.4em] text-[9px] sm:text-[10px] tracking-[0.16em] sm:tracking-[0.22em] font-bold text-green/70 uppercase whitespace-normal leading-tight"
+        className="flex items-center justify-center h-[30px] shrink-0 text-[9px] sm:text-[10px] tracking-[0.16em] sm:tracking-[0.22em] font-bold text-green/70 uppercase whitespace-normal leading-tight"
         title={label}
       >
         {label}
       </div>
-      {/* The number band takes the leftover height and centres within it, so
-          every figure in the row sits on the same optical line regardless of
-          what the bands above and below it contain. */}
+      {/* The number band takes the leftover height and centres within it. With
+          the label and footnote bands both fixed above, the leftover is
+          identical on every card, so the figures share one centre line.
+          `leading-none` on the inner row matters: a default line-height makes
+          the 30px and 38px values build different-height line boxes, which
+          shifts their centres apart even inside identical bands. */}
       <div className="flex-1 flex items-center justify-center min-h-[44px]">
-        <div className="flex items-baseline justify-center gap-1 whitespace-nowrap">
+        <div className="flex items-baseline justify-center gap-1 whitespace-nowrap leading-none">
           {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
           {estimated && <span className="font-ui font-extrabold text-[18px] text-green/50">~</span>}
           {unit && <span className="font-ui font-extrabold text-[18px] text-green/70">{unit}</span>}
           <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
         </div>
       </div>
-      {/* Reserved regardless of content: cards with no delta and no estimate
-          would otherwise end short and float their number upward. */}
-      {estimated ? (
-        <div
-          className="min-h-[2.4em] text-[11px] font-extrabold text-green/40"
-          title="Gerçek kişi sayısı girilmedi — menüyü açan tekil ziyaretlerden tahmin edildi"
-        >
-          tahmini
-        </div>
-      ) : delta != null ? (
-        <div
-          className={`min-h-[2.4em] text-[11px] font-extrabold ${
-            muted
-              ? "text-green/30"
-              : delta > 0
-                ? "text-green"
-                : delta < 0
-                  ? "text-orange"
-                  : "text-green/50"
-          }`}
-          title={muted ? mutedReason : deltaNote ? `${deltaNote} dönemine göre` : "Önceki döneme göre"}
-        >
-          {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
-          {delta}%
-          {/* Never leave a percentage without saying what it is a percentage OF. */}
-          {deltaNote && (
-            <span className="block mt-0.5 text-[9px] font-bold text-green/40 leading-tight normal-case">
-              {muted ? "eksik veri" : `vs ${deltaNote}`}
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="min-h-[2.4em]" aria-hidden />
-      )}
+      {/* FIXED height, declared once for all three branches: a two-line delta
+          ("▲ +12%" over "vs 13 Haz – 12 Tem"), a one-line "tahmini", and the
+          empty case must occupy identical space, or the number band above them
+          gets different leftovers and the figures stop sharing a centre line.
+          Top-aligned inside, so the one-line variants hang from the same edge. */}
+      <div className="h-[34px] shrink-0 flex items-start justify-center">
+        {estimated ? (
+          <div
+            className="text-[11px] font-extrabold text-green/40"
+            title="Gerçek kişi sayısı girilmedi — menüyü açan tekil ziyaretlerden tahmin edildi"
+          >
+            tahmini
+          </div>
+        ) : delta != null ? (
+          <div
+            className={`text-[11px] font-extrabold ${
+              muted
+                ? "text-green/30"
+                : delta > 0
+                  ? "text-green"
+                  : delta < 0
+                    ? "text-orange"
+                    : "text-green/50"
+            }`}
+            title={muted ? mutedReason : deltaNote ? `${deltaNote} dönemine göre` : "Önceki döneme göre"}
+          >
+            {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
+            {delta}%
+            {/* Never leave a percentage without saying what it is a percentage OF. */}
+            {deltaNote && (
+              <span className="block mt-0.5 text-[9px] font-bold text-green/40 leading-tight normal-case">
+                {muted ? "eksik veri" : `vs ${deltaNote}`}
+              </span>
+            )}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
