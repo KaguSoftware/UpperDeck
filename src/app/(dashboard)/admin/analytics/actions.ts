@@ -70,8 +70,12 @@ const RangeSchema = z.object({
   mode: z.enum(["load", "recheck"]).optional(),
 });
 
-// In-memory cache per date range, 1h TTL. Fine for this single-instance
-// dashboard; resets on redeploy, which just means one extra generation.
+// In-memory cache per date range, 1h TTL — a read shortcut in FRONT of the
+// persisted set, never the thing that decides whether findings survive. Expiring
+// here (or losing it to a redeploy) only costs a DB round-trip: the stored row is
+// reused regardless of age, so the owner still sees the same findings. That is
+// why this TTL stays short — it's what lets a rescan from another session, or a
+// changed ignore rule, be picked up instead of shadowed indefinitely.
 const cache = new Map<string, { at: number; findings: string[] }>();
 const TTL_MS = 60 * 60 * 1000;
 
@@ -540,7 +544,9 @@ export async function generateInsightsAction(params: {
 
 // ---------- Patterns ("Kalıplar") ----------
 
-// Separate in-memory cache from the insights one — different shape, same 1h TTL.
+// Separate in-memory cache from the insights one — different shape, same 1h TTL,
+// and the same role: a read shortcut in front of the persisted set, not the thing
+// that decides whether a pattern set survives. See the insights `cache` above.
 const patternsCache = new Map<string, { at: number; patterns: PatternItem[] }>();
 
 // How many WELL-SUPPORTED patterns we aim for before stopping the widening loop,

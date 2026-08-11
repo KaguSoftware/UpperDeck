@@ -64,16 +64,19 @@ export function insightsConfigured(): boolean {
 }
 
 /**
- * Persisted findings are reused as-is for this long. Past it they're stale and a
- * page load fully re-generates them; within it, only an explicit recheck updates.
+ * A stored set is reused as-is for as long as it exists — AGE IS NOT A REASON TO
+ * REGENERATE. The two things that invalidate it are the two the owner can see:
+ * the timeline changing (a different range/basis is a different stored row) and
+ * an explicit "Tekrar Kontrol Et" / "Yeniden Tara".
+ *
+ * This used to expire after three days, which meant a card the owner had read,
+ * acted on, and expected to still be there quietly re-rolled itself on an
+ * ordinary page visit — new sentences, no click, no way to tell what changed or
+ * why. Findings that move only when asked are worth more than fresh ones that
+ * move on their own.
  */
-export const INSIGHTS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-
-/** True while a stored set (by its created_at) is still within the reuse window. */
 export function isInsightFresh(createdAt: string | null | undefined): boolean {
-  if (!createdAt) return false;
-  const t = Date.parse(createdAt);
-  return Number.isFinite(t) && Date.now() - t < INSIGHTS_TTL_MS;
+  return Boolean(createdAt) && Number.isFinite(Date.parse(createdAt!));
 }
 
 /** Trimmed serialization of the analytics page data — only what the model needs. */
