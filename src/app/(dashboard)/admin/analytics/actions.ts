@@ -36,7 +36,10 @@ import {
   validatePatterns,
   rankFindings,
   lastInsightsError,
+  dropRejectedFindings,
+  normalizeFinding,
   MAX_FINDINGS,
+  SCAN_PASSES,
   type InsightsInput,
   type PatternForJudge,
 } from "@/lib/analytics/insights";
@@ -79,17 +82,34 @@ const RangeSchema = z.object({
 const cache = new Map<string, { at: number; findings: string[] }>();
 const TTL_MS = 60 * 60 * 1000;
 
-// Cap the generation loop. Each cycle asks the model for findings it hasn't
-// surfaced yet; it stops early once a cycle returns nothing new.
-const MAX_CYCLES = 3;
-
-/** Pause between generation cycles so the free tier's per-minute token bucket
- *  refills before the next full-payload request. See generateAll. */
+/**
+ * Pause between generation passes so the free tier's per-minute token bucket
+ * refills before the next request. See generateAll.
+ *
+ * The pass count went 3 → 5, so the gap has to come DOWN to keep the scan inside
+ * roughly the wall clock it already had: 5 × 8s of waiting is about what 3 × 8s
+ * plus two extra requests used to cost, and the page is unusable long before a
+ * minute of spinner.
+ *
+ * Holding it at 8s is safe precisely because the requests shrank. A directed pass
+ * carries only its own angle's tables (see ANGLE_TABLES) — roughly a third of the
+ * old full payload — so five of them spend fewer tokens per minute than three
+ * undirected ones did. The ceiling did not move; the thing being measured against
+ * it got smaller. chat() still waits out a 429 if a burst does clip the limit.
+ */
 const CYCLE_GAP_MS = 8_000;
 
-/** Non-zero temperature for recall-only cycles — see generateAll. Small on
- *  purpose: enough to explore a different angle, not enough to invent numbers. */
-const RECALL_TEMPERATURE = 0.4;
+/**
+ * Temperature for the angle passes.
+ *
+ * The old loop needed a non-zero value as its ONLY source of variety — identical
+ * prompt, identical payload, so without a temperature nudge pass two just retraced
+ * pass one. The angles supply that separation structurally now, which means this
+ * can go back to being about phrasing rather than exploration: low enough that two
+ * runs over unchanged data still agree, since the findings are meant to be stable
+ * between page loads.
+ */
+const SCAN_TEMPERATURE = 0.2;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -187,6 +207,43 @@ async function loadStoredSet(
 }
 
 /**
+ * How many rejections are loaded per request.
+ *
+ * The list only grows and never expires, but only the newest reach the model (see
+ * MAX_REJECTED_EXAMPLES). A few more than that are read so the hard filter in
+ * `gate()` still catches an older rejected sentence being regenerated verbatim —
+ * that check costs nothing per row, unlike prompt tokens.
+ */
+const MAX_REJECTIONS_LOADED = 60;
+
+/**
+ * The owner's "don't write findings like this" list, newest first.
+ *
+ * Range-independent by design: a rejection judges the SHAPE of a sentence, which
+ * doesn't stop being true when the period changes. Returns [] if the table isn't
+ * there yet, so the feature degrades to the previous behaviour rather than taking
+ * the whole card down with it.
+ */
+async function loadRejections(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+): Promise<{ text: string; reason: string | null }[]> {
+  const { data, error } = await supabase
+    .from("analytics_insight_rejections")
+    .select("text, reason")
+    .order("created_at", { ascending: false })
+    .limit(MAX_REJECTIONS_LOADED);
+  if (error) {
+    console.warn("[insights] rejection list unavailable", error.message);
+    return [];
+  }
+  return ((data ?? []) as { text: string; reason: string | null }[]).map((r) => ({
+    text: String(r.text ?? ""),
+    reason: r.reason ?? null,
+  }));
+}
+
+/**
  * The ignored items of a range as actual NAMES, for the two places that reuse a
  * stored set and so need names rather than the `keep` predicate: stripping AI
  * findings that quote an ignored item, and dropping patterns about one.
@@ -247,6 +304,7 @@ async function buildInsightsInput(
     categoryNames,
     menuEngineering,
     entries,
+    rejectedExamples,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealBestSellers(range),
@@ -270,6 +328,9 @@ async function buildInsightsInput(
     // Which DAYS actually have POS data — the calendar behind every sample-size
     // rule in the prompt (a 16-day range holds two Wednesdays).
     listSalesEntries(range),
+    // The owner's rejected findings — negative examples for the prompt and the
+    // ban list for the gate. Not range-scoped: see loadRejections.
+    loadRejections(supabase),
   ]);
 
   const funnelCount = (f: { step: string; count: number }[], prefix: string) =>
@@ -392,38 +453,54 @@ async function buildInsightsInput(
       daysWithData: summary.daysWithData,
       ratio: datesInRange(range).length > 0 ? summary.daysWithData / datesInRange(range).length : 0,
     },
+    rejectedExamples,
   };
 }
 
 /**
- * Build in cycles, then keep only the five findings with the most money at stake.
+ * Walk every scan angle, then keep the findings with the most money at stake.
  *
- * The cycles are a RECALL device, not a length target: each pass asks the model
- * for findings it hasn't surfaced yet, so the pool is wide before it's cut. What
- * reaches the card is `MAX_FINDINGS`, ranked by the ₺ figure each one cites —
- * previously this shipped the entire pool, which is how the card ended up with
- * nineteen near-identical sentences.
+ * This used to run the SAME prompt over the SAME payload twice and rely on
+ * temperature for variety. It did not work: pass two reasoned its way to pass
+ * one's conclusions, `dedupeNew` threw nearly all of them away, and the card
+ * settled around three findings regardless of how much the data actually held.
+ * The early break at `MAX_FINDINGS * 2` then usually fired after cycle one, so
+ * the second pass frequently never ran at all.
+ *
+ * Now each pass is DIRECTED at one angle (profit, conversion, pricing, movement,
+ * structure) with only that angle's tables in its payload. A model told to look
+ * exclusively at margin cannot return the view-count finding it already gave —
+ * the angle, not the sampling temperature, is what forces new ground. Five narrow
+ * passes also cost less in tokens than the two wide ones did.
+ *
+ * No early break on pool size. Every angle is worth its request: the structural
+ * pass runs last and is often where the single most valuable finding lives, and
+ * the old cap would have stopped before reaching it. `rankFindings` still cuts to
+ * `MAX_FINDINGS` at the end, so a wide pool costs the reader nothing.
  */
 async function generateAll(input: InsightsInput): Promise<string[]> {
   let found: string[] = [];
-  for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
-    // Each pass re-sends the full payload, so back-to-back cycles spend several
-    // thousand tokens inside one minute and trip the free tier's TPM ceiling
-    // mid-run. chat() will wait out a 429, but arriving under the limit is much
-    // cheaper than being bounced off it — the pause between cycles lets the token
-    // bucket refill instead of paying for a rejected request first.
-    if (cycle > 0) await sleep(CYCLE_GAP_MS);
-    // Later cycles exist purely for RECALL — they ask for what the earlier passes
-    // missed. At temperature 0 over an unchanged payload the model retraces the
-    // same ground and dedupeNew discards the result, spending a full request for
-    // nothing; a little spread is what makes the extra pass worth its tokens.
-    const batch = await generateFindingsBatch(input, found, cycle === 0 ? 0 : RECALL_TEMPERATURE);
+  let consecutiveEmpty = 0;
+
+  for (let angle = 0; angle < SCAN_PASSES; angle++) {
+    // Let the per-minute token bucket refill between passes. chat() will wait out
+    // a 429, but arriving under the limit is cheaper than being bounced off it.
+    if (angle > 0) await sleep(CYCLE_GAP_MS);
+
+    const batch = await generateFindingsBatch(input, found, SCAN_TEMPERATURE, angle);
     const fresh = dedupeNew(batch, found);
-    if (fresh.length === 0) break;
     found = [...found, ...fresh];
-    // Enough candidates to rank a good five out of — more passes only add tail.
-    if (found.length >= MAX_FINDINGS * 2) break;
+
+    // An angle returning nothing is normal and expected — it means this period
+    // holds no profit story, or no pricing story. But two silent angles in a row
+    // on top of an empty pool means the upstream is failing or the dataset is
+    // genuinely bare, and the remaining passes would only burn the daily cap to
+    // confirm it. A pool with findings in it keeps going regardless: a quiet
+    // middle angle says nothing about the ones after it.
+    consecutiveEmpty = fresh.length === 0 ? consecutiveEmpty + 1 : 0;
+    if (consecutiveEmpty >= 2 && found.length === 0) break;
   }
+
   return rankFindings(found);
 }
 
@@ -540,6 +617,134 @@ export async function generateInsightsAction(params: {
   }
 
   return toResult(current, resolved, newlyAdded, false);
+}
+
+// ---------- Rejecting a finding ("Böyle bulgu isteme") ----------
+
+export type RejectInsightResult = {
+  ok: boolean;
+  /** The set after the rejection, with the replacement (if one was found) marked `isNew`. */
+  findings: InsightFinding[];
+  /** True when the model produced a replacement for the rejected finding. */
+  replaced: boolean;
+  /** Why no replacement arrived, when that's known. */
+  reason?: string;
+};
+
+/**
+ * Mark a finding as a bad example and put a different one in its place.
+ *
+ * Two halves, and the first must not depend on the second: the rejection is
+ * PERSISTED before any model call, so a Groq failure (or the free tier's rate
+ * ceiling, which is routine here) still leaves the finding struck from the card
+ * and the lesson recorded for later generations. The replacement is the nice-to-
+ * have; the rejection is the thing the owner actually clicked for.
+ *
+ * The replacement runs ONE generation cycle rather than generateAll's two, because
+ * this sits behind a single button press: the second cycle costs a 45s wall-clock
+ * pause (CYCLE_GAP_MS) to widen a pool that is then cut back to one sentence. It
+ * asks for findings not already on the card, so what comes back is genuinely new.
+ */
+export async function rejectInsightAction(params: {
+  text: string;
+  reason?: string;
+  range?: string;
+  from?: string;
+  to?: string;
+  cmp?: CompareBasis | string;
+}): Promise<RejectInsightResult> {
+  const parsed = z
+    .object({
+      text: z.string().min(1).max(2000),
+      reason: z.string().max(500).optional(),
+      range: z.string().optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      cmp: z.string().optional(),
+    })
+    .safeParse(params);
+  if (!parsed.success) return { ok: false, findings: [], replaced: false };
+
+  const { supabase, profile } = await requireRole(["owner", "dev"]);
+  await loadBusinessDayStart(supabase);
+  const { preset, range } = resolveRange(parsed.data);
+  const rules = await getExclusionRules(supabase);
+  const basis = resolveCompare(parsed.data, range).basis;
+  const key = `${range.from}_${range.to}|c:${basis}${exclusionSignature(rules)}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const s = supabase as any;
+
+  const rejectedText = parsed.data.text.trim();
+  const note = parsed.data.reason?.trim();
+
+  // Persist first — see the doc comment. The unique index on md5(text) makes a
+  // re-rejection of the same sentence a no-op rather than an error, so the button
+  // stays safe to click twice.
+  const { error: rejectError } = await s.from("analytics_insight_rejections").upsert(
+    {
+      text: rejectedText,
+      // Same normalization the gate compares with, so "already rejected" means the
+      // same thing in the table as it does in lib/analytics/insights.ts.
+      text_key: normalizeFinding(rejectedText),
+      reason: note || null,
+      created_by: profile.id,
+    },
+    { onConflict: "text_key", ignoreDuplicates: true }
+  );
+  if (rejectError) {
+    console.warn("[insights] rejection insert failed", rejectError.message);
+    return { ok: false, findings: [], replaced: false, reason: "Kaydedilemedi" };
+  }
+
+  // The set as the owner currently sees it, minus the rejected finding. The cache
+  // is the authority when warm: it holds exactly what the card rendered.
+  const cached = cache.get(key)?.findings;
+  const existing =
+    cached ?? dropExcludedMentions((await loadStoredSet(s, range, basis)).insights, await ignoredItemNames(rules, range));
+  const remaining = dropRejectedFindings(existing, [rejectedText]).kept;
+
+  // Write the reduced set through immediately, so the rejection survives even if
+  // everything below fails or the owner navigates away mid-generation.
+  const persist = async (findings: string[]) => {
+    cache.set(key, { at: Date.now(), findings });
+    const { error } = await s.from("analytics_insights").insert({
+      range_from: range.from,
+      range_to: range.to,
+      compare_basis: basis,
+      insights: findings,
+      created_by: profile.id,
+    });
+    if (error) console.warn("[insights] history insert failed", error.message);
+  };
+
+  if (!insightsConfigured()) {
+    await persist(remaining);
+    return {
+      ok: true,
+      findings: remaining.map((t) => ({ text: t, isNew: false })),
+      replaced: false,
+      reason: "GROQ_API_KEY tanımlı değil",
+    };
+  }
+
+  // buildInsightsInput re-reads the rejection list, so the row just written is
+  // already in the prompt AND in the gate for this very call.
+  const input = await buildInsightsInput(s, range, preset, parsed.data.cmp);
+  const batch = await generateFindingsBatch(input, remaining);
+  const fresh = dedupeNew(batch, remaining);
+
+  // Rank the survivor set together with whatever came back, capped as usual — a
+  // replacement worth more than a finding already on the card should sort above it.
+  const next = rankFindings([...remaining, ...fresh]);
+  const added = new Set(fresh.filter((f) => next.includes(f)).map(normFinding));
+  await persist(next);
+
+  return {
+    ok: true,
+    findings: next.map((t) => ({ text: t, isNew: added.has(normFinding(t)) })),
+    replaced: added.size > 0,
+    reason: added.size > 0 ? undefined : (lastInsightsError() ?? "Yerine koyacak yeni bir bulgu çıkmadı"),
+  };
 }
 
 // ---------- Patterns ("Kalıplar") ----------

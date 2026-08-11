@@ -142,10 +142,26 @@ export type InsightsInput = {
    * to know before it calls a gap a decline.
    */
   salesCoverage: { days: number; daysWithData: number; ratio: number };
+  /**
+   * Findings the owner explicitly rejected, with their reason when they gave one.
+   * Negative examples — see REJECTIONS_HEADER. Range-independent, so the same list
+   * travels with every period.
+   */
+  rejectedExamples: { text: string; reason: string | null }[];
 };
 
-/** Findings shown at once. Five with money attached beat nineteen without. */
-export const MAX_FINDINGS = 5;
+/**
+ * Findings shown at once.
+ *
+ * Was 5. The cap is a guard against padding, not a target, and at 5 it was doing
+ * the opposite job: the deep scan below routinely surfaces ten-plus genuinely
+ * distinct findings across the angles, and cutting to five threw away real money
+ * — a ₺20.000 dwell-time finding lost its slot to the fifth-largest revenue one
+ * every single run. Eight is the point where the marginal finding starts being
+ * one the owner already half-knew; the strength bar, not this number, is still
+ * what stops filler from reaching the card.
+ */
+export const MAX_FINDINGS = 8;
 
 /**
  * Largest ₺ amount a finding cites, used to rank by money at stake.
@@ -299,7 +315,7 @@ avoid: if many items share a problem, that is ONE finding about the group, with 
 const GENERATE_SYSTEM = `${DATA_CONTEXT}
 
 Return AT MOST ${MAX_FINDINGS} findings, ordered by how much money is at stake — biggest first. Fewer is
-fine; returning two sharp findings is a better answer than five padded ones. Never pad:
+fine; returning two sharp findings is a better answer than eight padded ones. Never pad:
 skip anything you can't tie to a real number, and skip anything the owner already sees in the dashboard's
 own rankings. Do NOT simply announce who the best or worst sellers are — that is already on screen. Instead
 look for the non-obvious tension, where supported: a shared trait uniting the winners or losers (ingredient,
@@ -312,7 +328,99 @@ an item selling below cost; and follow-ups on previousInsights.
 The user message includes "alreadyFound": findings already produced in earlier passes. Do NOT repeat or
 rephrase any of them — return ONLY genuinely new, distinct findings. If nothing new remains, return [].
 
+DIG. A finding that took one glance at a ranking to produce is the kind the owner does not need you for.
+Before you emit anything, cross two different tables against each other — views against real sales, margin
+against popularity, dwell-time buckets against price, a delta against the coverage behind it. The findings
+worth the owner's attention live in the CONTRADICTIONS between tables, never inside a single column. Do not
+stop at the first defensible finding: work the data until you have exhausted what it can support, then cut
+back to the strongest.
+
 Respond with ONLY a JSON array of strings, e.g. ["bulgu 1","bulgu 2"].`;
+
+/**
+ * The angles a deep scan walks, one per generation pass.
+ *
+ * This is the insights analogue of `LEVELS` in patterns.ts, and it exists for the
+ * same reason: repeating an identical request never digs deeper, it only re-treads.
+ * The old loop sent the SAME prompt with the same payload twice and leaned on
+ * temperature for variety — so pass two retraced pass one's reasoning, `dedupeNew`
+ * discarded nearly all of it, and the card settled at ~3 findings no matter how
+ * much was actually in the data.
+ *
+ * A directed pass cannot do that. Told to look only at profit, the model cannot
+ * hand back the view-count finding it already gave; the angle itself is what forces
+ * new ground. Order is deliberate — the earliest angles are where the money usually
+ * is, so a run cut short by rate limits still returns the findings that matter most.
+ *
+ * Each entry is appended to GENERATE_SYSTEM for that pass only. They deliberately
+ * OVERLAP slightly in the data they touch: the same number read as a margin problem
+ * and as a pricing problem yields two genuinely different actions, and that is the
+ * point of walking them separately.
+ */
+const SCAN_ANGLES: { id: string; focus: string }[] = [
+  {
+    id: "profit",
+    focus: `THIS PASS: PROFIT AND COST ONLY (menuEngineering). Ignore everything else.
+Find: items selling below cost or at a near-zero margin; a popular low-margin item ("çok satıyor ama kâr
+bırakmıyor") whose price or portion cost is where the real money is; a high-margin item that almost nobody
+sees ("kârlı ama az satıyor") and what specifically would expose it; a top-REVENUE item beaten on actual
+PROFIT by a quieter one. If menuEngineering is null, return [] — never estimate a margin.`,
+  },
+  {
+    id: "conversion",
+    focus: `THIS PASS: THE GAP BETWEEN LOOKING AND BUYING ONLY. Ignore profit and time-of-period entirely.
+Find: items with heavy views and a poor views→sale rate, and WHY the data says so (read their abandonedViews
+buckets — 5-10s is a photo/appeal problem, 10-20s a description problem, 20s+ a content-or-price problem, and
+each implies a different fix); items whose convPct exceeds 100, which means diners buy WITHOUT ever opening
+the page — an exposure problem, never a success. Group items that share the same failure into ONE finding
+with the combined money.`,
+  },
+  {
+    id: "pricing",
+    focus: `THIS PASS: PRICE AND DISCOUNT STRUCTURE ONLY (priceBands, discountSplit). Ignore single items
+except as evidence about the band they sit in.
+Find: a price band that draws views but converts far worse than the others, and what that costs per month;
+a band that quietly outperforms and deserves more menu real estate; whether discounting actually moves REAL
+sales at all — a discount that does not beat the full-price conversion rate is margin given away for nothing,
+and that is worth stating plainly with the ₺ figure.`,
+  },
+  {
+    id: "movement",
+    focus: `THIS PASS: CHANGE OVER TIME ONLY (deltas, comparison, previousInsights). Ignore static rankings.
+Name the comparison window exactly as comparison.label states it. Find: a KPI that moved materially and what
+it is worth per month; a REVERSAL, where two figures moved in opposite directions (views up but sales down,
+covers up but average spend down) — that tension is the finding, not either number alone; and follow-ups on
+previousInsights, saying whether earlier advice actually landed. Respect salesCoverage: if ratio is below
+0.9 the totals are incomplete and a gap is missing data, NOT a decline. Respect the trend gate in dataBasis.`,
+  },
+  {
+    id: "structural",
+    focus: `THIS PASS: THE MENU AS A WHOLE. Ignore anything already framed as one item's problem.
+Find the shared trait the owner cannot see item-by-item: a category, ingredient, or price tier where MANY
+items underperform together (one finding, combined money — never one sentence per item); a category with
+heavy engagement and thin sales, or the reverse; a structural gap the menu has (a price point or category
+that draws attention but is barely stocked). This pass is for findings that only exist at the level of the
+whole menu, so a single-item observation does not belong here.`,
+  },
+];
+
+/** How many angle passes a full deep scan walks. */
+export const SCAN_PASSES = SCAN_ANGLES.length;
+
+/** The system prompt for one angle pass, or the undirected prompt when out of range. */
+function generateSystemFor(angle: number): string {
+  const a = SCAN_ANGLES[angle];
+  if (!a) return GENERATE_SYSTEM;
+  return `${GENERATE_SYSTEM}
+
+=== FOCUS OF THIS PASS: ${a.id.toUpperCase()} ===
+${a.focus}
+
+Stay inside this pass's focus even if you can see a good finding elsewhere — another pass covers that ground,
+and a duplicate costs more than the finding is worth. Every rule above still applies in full: the sample
+gate, the ₺ figure, the non-obviousness bar, and "alreadyFound". Returning [] is correct and expected when
+this particular angle holds nothing.`;
+}
 
 const REVALIDATE_SYSTEM = `${DATA_CONTEXT}
 
@@ -328,6 +436,50 @@ them. "ongoing" plus "added" must not exceed ${MAX_FINDINGS} sentences in total;
 ones with the most money at stake and drop the rest.
 
 Respond with ONLY a JSON object: {"ongoing":[...],"resolved":[...],"added":[...]}.`;
+
+/**
+ * Cap on rejected examples sent to the model.
+ *
+ * The list only grows, and a prompt that ends in eighty banned sentences buys
+ * nothing: past ~15 the model stops generalising the lesson and starts pattern-
+ * matching the wording, while the block crowds out the data the findings are
+ * actually built from (and 413 is a real ceiling here — see MAX_ITEM_ROWS). The
+ * newest are kept, so the owner's most recent judgement is the one that lands.
+ */
+const MAX_REJECTED_EXAMPLES = 15;
+
+/**
+ * The negative-example block, appended to whichever system prompt is running.
+ *
+ * Rules stated in the abstract ("be non-obvious", "attach the money") are the ones
+ * a model reasons its way around; a concrete sentence the owner rejected is not
+ * arguable. Each example carries the owner's reason when they gave one, because
+ * the goal is for the model to avoid the SHAPE of the mistake, not to memorise one
+ * string — "Köfte en çok satan ürün" and "Ayran en çok satan içecek" are the same
+ * error twice, and only the reason says so.
+ *
+ * Returns "" when nothing has been rejected, so the default prompt is untouched.
+ */
+function rejectionsBlock(rejected: InsightsInput["rejectedExamples"]): string {
+  if (!rejected.length) return "";
+  const lines = rejected
+    .slice(0, MAX_REJECTED_EXAMPLES)
+    .map((r, i) => `${i + 1}. "${r.text}"${r.reason ? ` — REDDEDİLME NEDENİ: ${r.reason}` : ""}`)
+    .join("\n");
+  return `
+
+REJECTED BY THE OWNER — DO NOT WRITE FINDINGS LIKE THESE. The restaurant owner read the findings below
+and marked each one as bad. They are the highest-authority quality signal you have: they OVERRIDE your own
+judgement about what is worth showing, and they outrank every general rule above when the two disagree.
+
+${lines}
+
+Treat each one as a CLASS of finding, not a banned string. Before you emit a finding, check it against this
+list: if it makes the same kind of mistake as any of them — same shape, same reasoning, same sort of claim
+about a different item, category, price band or period — drop it and find something else. Rewording a
+rejected finding, or applying its template to another product, counts as repeating it. If avoiding these
+leaves you with fewer findings, return fewer; returning nothing is better than returning one of these again.`;
+}
 
 /**
  * Why the last upstream call failed, if it did.
@@ -429,12 +581,18 @@ async function chat(
         // 429 that outlived its retries is a real ceiling (daily cap, or a limit
         // too low for this payload) — say so, because "try again" is the wrong
         // advice for it in a way a plain server error is not.
+        // 413 is neither transient nor a key/model fault: the request itself is
+        // too big. Retrying sends the identical body, so it needs its own message
+        // — the generic 4xx text pointed at the API key, which is the wrong place
+        // to look when the real cause is menu size.
         lastUpstreamError =
           res.status === 429
             ? `Groq kota sınırı — birazdan tekrar deneyin`
-            : res.status >= 400 && res.status < 500
-              ? `Groq ${res.status} — model/anahtar ayarı (yeniden denemek çözmez)`
-              : `Groq ${res.status} — geçici sunucu hatası`;
+            : res.status === 413
+              ? `Groq 413 — veri paketi çok büyük (menü çok kalabalık)`
+              : res.status >= 400 && res.status < 500
+                ? `Groq ${res.status} — model/anahtar ayarı (yeniden denemek çözmez)`
+                : `Groq ${res.status} — geçici sunucu hatası`;
         return "";
       }
       lastUpstreamError = null;
@@ -513,33 +671,200 @@ export function dropLowConfidenceClaims(
   return { kept, dropped };
 }
 
-/** Everything the confidence gate rejects, logged once so thin output is debuggable. */
+/**
+ * Normalized form for comparing two findings — Turkish-aware, punctuation-
+ * insensitive. Also the dedupe key persisted as `analytics_insight_rejections
+ * .text_key`, so the stored uniqueness matches what the gate considers identical.
+ */
+export const normalizeFinding = (s: string) =>
+  s
+    .toLocaleLowerCase("tr")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Drop findings the owner has already rejected.
+ *
+ * The prompt asks the model not to repeat them; this makes sure it cannot. A
+ * rejected sentence reappearing is the one failure this feature cannot afford —
+ * the owner clicked the button precisely to say "not this", and seeing it again
+ * next load means the button did nothing.
+ *
+ * Matched on an exact normalized string, NOT on similarity. A fuzzy match here
+ * would silently eat legitimate new findings about the same item, which is far
+ * worse than letting one reworded near-duplicate through: the owner can reject
+ * that one too, and the prompt block is what generalises the lesson. Punctuation
+ * and casing are normalized away because a regenerated finding is frequently the
+ * same sentence with a different final period or an updated ₺ figure — but a
+ * changed figure is a genuinely different claim, so it survives on purpose.
+ */
+export function dropRejectedFindings(
+  texts: string[],
+  rejected: string[]
+): { kept: string[]; dropped: string[] } {
+  if (!rejected.length) return { kept: texts, dropped: [] };
+  const banned = new Set(rejected.map(normalizeFinding).filter(Boolean));
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const text of texts) {
+    if (banned.has(normalizeFinding(text))) dropped.push(text);
+    else kept.push(text);
+  }
+  return { kept, dropped };
+}
+
+/** Everything the confidence + rejection gates reject, logged once so thin output is debuggable. */
 function gate(texts: string[], data: InsightsInput): string[] {
   const { kept, dropped } = dropLowConfidenceClaims(texts.filter(isStrong), data.dataBasis);
   if (dropped.length) {
     console.warn(`[insights] dropped ${dropped.length} low-confidence finding(s)`, dropped);
   }
-  return kept;
+  const rejected = dropRejectedFindings(
+    kept,
+    data.rejectedExamples.map((r) => r.text)
+  );
+  if (rejected.dropped.length) {
+    console.warn(`[insights] dropped ${rejected.dropped.length} owner-rejected finding(s)`, rejected.dropped);
+  }
+  return rejected.kept;
+}
+
+/**
+ * How many rows of each per-item array reach the model.
+ *
+ * A 102-item menu serializes into a request Groq rejects outright with 413, and
+ * long before that it costs more per call than the free tier's whole per-minute
+ * budget. The tail is what gets cut: these arrive already ranked, and an item at
+ * position 40 by views or sales is not where a finding worth showing comes from.
+ * Cutting it costs no insight and is what makes the request fit at all.
+ */
+const MAX_ITEM_ROWS = 40;
+/** Long-tail arrays that only ever support a finding, never carry one. */
+const MAX_SECONDARY_ROWS = 25;
+/** Prior sets are for follow-up, not re-reading — the newest carry that alone. */
+const MAX_PREVIOUS_SETS = 3;
+
+/**
+ * Which payload tables each angle actually reads.
+ *
+ * An angle pass that is told to ignore profit does not need the menu-engineering
+ * table in its request, and sending it anyway costs tokens the free tier's TPM
+ * ceiling genuinely does not have. Dropping the unread tables is what pays for the
+ * wider MAX_ITEM_ROWS above: each directed pass ends up SMALLER than the old
+ * undirected one while showing more rows of the tables it does read — so a deeper
+ * scan does not mean a bigger request, and 413 stays as far away as before.
+ *
+ * Only the large per-item arrays are listed. The small shared context — kpis,
+ * range, comparison, dataBasis, salesCoverage, alreadyShown — travels with every
+ * pass, because a finding from any angle still has to respect the calendar, the
+ * coverage and the things already on screen.
+ */
+const ANGLE_TABLES: Record<string, (keyof InsightsInput)[]> = {
+  profit: ["menuEngineering", "bestSellers", "itemConversion"],
+  conversion: ["itemConversion", "abandonedViews", "topViewed", "bestSellers"],
+  pricing: ["priceBands", "discountSplit", "itemConversion"],
+  movement: ["deltas", "bestSellers", "previousInsights", "funnel"],
+  structural: ["categoryPopularity", "itemConversion", "bestSellers", "topViewed", "priceBands"],
+};
+
+/** Big per-item arrays — emptied, not deleted, when an angle does not read them. */
+const OPTIONAL_TABLES = [
+  "topViewed",
+  "bestSellers",
+  "itemConversion",
+  "abandonedViews",
+  "categoryPopularity",
+  "priceBands",
+  "discountSplit",
+  "previousInsights",
+] as const;
+
+/**
+ * Trim the payload to what a finding can actually be built from.
+ *
+ * Applied at the boundary rather than at each call site so every pass — generate
+ * and revalidate alike — sends the same shape, and so the caps live next to the
+ * transport whose limits they exist to respect.
+ *
+ * `angle` narrows it further to that pass's tables (see ANGLE_TABLES). Undirected
+ * callers (revalidate, and the fallback pass) pass nothing and get the full shape.
+ */
+function trimInput(data: InsightsInput, angle?: string): Omit<InsightsInput, "rejectedExamples"> {
+  // rejectedExamples is dropped here on purpose: it goes into the SYSTEM prompt via
+  // rejectionsBlock, where a rule belongs. Sending it in the data payload too would
+  // pay for the tokens twice and invite the model to read the rejected sentences as
+  // findings it may reuse.
+  const { rejectedExamples: _rejected, ...rest } = data;
+  const trimmed = {
+    ...rest,
+    topViewed: data.topViewed.slice(0, MAX_ITEM_ROWS),
+    bestSellers: data.bestSellers.slice(0, MAX_ITEM_ROWS),
+    itemConversion: data.itemConversion.slice(0, MAX_ITEM_ROWS),
+    abandonedViews: data.abandonedViews.slice(0, MAX_SECONDARY_ROWS),
+    categoryPopularity: data.categoryPopularity.slice(0, MAX_SECONDARY_ROWS),
+    previousInsights: data.previousInsights.slice(0, MAX_PREVIOUS_SETS),
+    // menuEngineering is deliberately untouched: menuEngineeringForModel already
+    // caps it at 24 and does so intelligently, keeping the profit-ranked head PLUS
+    // every loss-maker, dog and plowhorse. A blind slice here would drop exactly
+    // the problem items that function went out of its way to preserve.
+  };
+
+  const wanted = angle ? ANGLE_TABLES[angle] : undefined;
+  if (!wanted) return trimmed;
+
+  // Emptied rather than deleted: the key staying present is what tells the model
+  // the table exists and is simply not this pass's subject. A missing key reads as
+  // "no such data", which is the one thing that would make it invent a number.
+  const narrowed = { ...trimmed } as Record<string, unknown>;
+  for (const table of OPTIONAL_TABLES) {
+    if (!wanted.includes(table)) narrowed[table] = [];
+  }
+  if (!wanted.includes("menuEngineering")) narrowed.menuEngineering = null;
+  return narrowed as Omit<InsightsInput, "rejectedExamples">;
 }
 
 /**
  * One generation pass. `alreadyFound` is echoed to the model so it returns only
  * findings not already surfaced — call this in a loop to collect the full set.
+ *
+ * `angle` selects one of SCAN_ANGLES: it swaps in that angle's system prompt and
+ * narrows the payload to the tables that angle reads. Omit it for an undirected
+ * pass over everything.
  */
 export async function generateFindingsBatch(
   data: InsightsInput,
   alreadyFound: string[],
-  temperature = 0
+  temperature = 0,
+  angle?: number
 ): Promise<string[]> {
   if (!insightsConfigured()) return [];
-  const content = await chat(GENERATE_SYSTEM, JSON.stringify({ ...data, alreadyFound }), MODEL, temperature);
+  const angleId = angle === undefined ? undefined : SCAN_ANGLES[angle]?.id;
+  const content = await chat(
+    generateSystemFor(angle ?? -1) + rejectionsBlock(data.rejectedExamples),
+    JSON.stringify({ ...trimInput(data, angleId), alreadyFound }),
+    MODEL,
+    temperature
+  );
+  // Gate against the FULL data, not the trimmed copy: dropLowConfidenceClaims
+  // reads dataBasis (weekday counts, sales days), which trimming never touches,
+  // and the confidence bar must reflect the real calendar either way.
   return gate(parseStringArray(content), data);
 }
 
 /** Re-check an existing set against the latest data. Keeps the set on any failure. */
 export async function revalidateFindings(data: InsightsInput, existing: string[]): Promise<RevalidateResult> {
-  if (!insightsConfigured()) return { ongoing: existing, resolved: [], added: [] };
-  const content = await chat(REVALIDATE_SYSTEM, JSON.stringify({ ...data, existingFindings: existing }));
+  // Even the no-AI passthrough honors the rejection list: `existing` is a stored
+  // set that may predate a rejection, and handing it back intact would put a
+  // sentence the owner struck out right back on the card.
+  const banned = data.rejectedExamples.map((r) => r.text);
+  if (!insightsConfigured()) {
+    return { ongoing: dropRejectedFindings(existing, banned).kept, resolved: [], added: [] };
+  }
+  const content = await chat(
+    REVALIDATE_SYSTEM + rejectionsBlock(data.rejectedExamples),
+    JSON.stringify({ ...trimInput(data), existingFindings: existing })
+  );
   const r = parseRevalidate(content, existing);
   // Apply the same strength + confidence bar to what we keep/add. `resolved` is
   // informational ("this no longer holds"), so it passes through untouched.

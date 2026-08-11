@@ -13,6 +13,7 @@ import {
 } from "./_charts";
 import {
   generateInsightsAction,
+  rejectInsightAction,
   generatePatternsAction,
   setExcludedItemsAction,
   setAutoExcludeOffMenuAction,
@@ -707,6 +708,55 @@ function AiInsights({
     [params, router]
   );
 
+  // Which finding is mid-rejection, so only its own row shows the busy state and
+  // the rest of the card stays readable. Kept as the text (not the index) because
+  // the list is re-sorted the moment the replacement lands.
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  // Set when a rejection saved but the model had nothing to put in its place —
+  // worth saying, since the row simply vanishing looks like a lost click.
+  const [rejectNote, setRejectNote] = useState<string | null>(null);
+
+  /**
+   * "Böyle bulgu isteme": record the finding as a bad example and pull a
+   * replacement in its place.
+   *
+   * The reason prompt is optional on purpose — an owner who just wants the finding
+   * gone can dismiss it, and a rejection with no reason still teaches the model
+   * plenty. When they do type one, it travels to the prompt with the sentence,
+   * which is what generalises the lesson past this one wording.
+   */
+  const reject = useCallback(
+    (text: string) => {
+      const why = window.prompt(
+        "Bu bulgu neden kötü? (isteğe bağlı — yapay zekâ bir daha bu tarz bulgu üretmesin diye kullanılır)",
+        ""
+      );
+      // prompt() returns null for Cancel and "" for OK-with-empty-box. Only Cancel
+      // aborts; an empty box is a deliberate "no reason, just remove it".
+      if (why === null) return;
+      setRejectNote(null);
+      setRejecting(text);
+      startTransition(async () => {
+        const res = await rejectInsightAction({
+          text,
+          reason: why.trim() || undefined,
+          range: params.get("range") ?? undefined,
+          from: params.get("from") ?? undefined,
+          to: params.get("to") ?? undefined,
+          cmp: params.get("cmp") ?? undefined,
+        });
+        setRejecting(null);
+        if (res.ok) {
+          setFindings(res.findings);
+          if (!res.replaced) setRejectNote(res.reason ?? "Yerine koyacak yeni bir bulgu çıkmadı");
+        } else {
+          setRejectNote(res.reason ?? "Kaydedilemedi — tekrar deneyin");
+        }
+      });
+    },
+    [params]
+  );
+
   // Auto-generate on first mount when nothing is stored for this range yet.
   const didAuto = useRef(false);
   useEffect(() => {
@@ -781,10 +831,13 @@ function AiInsights({
       ) : hasFindings ? (
         <>
           <ul className="flex flex-col gap-2 pt-2">
-            {visible.map((f, i) => (
-              <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-ink">
+            {/* Keyed by text, not index: rejecting a finding re-sorts the list (the
+                replacement lands at the top as `isNew`), and an index key would let
+                React keep the busy row's state on whatever slid into that slot. */}
+            {visible.map((f) => (
+              <li key={f.text} className="group flex gap-2 text-[13px] leading-relaxed text-ink">
                 <span className="text-orange font-extrabold shrink-0">→</span>
-                <span>
+                <span className="flex-1">
                   {f.text}
                   {f.isNew && (
                     <span className="ml-2 px-1.5 py-0.5 align-middle bg-green text-white font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase">
@@ -792,9 +845,39 @@ function AiInsights({
                     </span>
                   )}
                 </span>
+                {/* Reject + replace. Always in the DOM (never hidden behind hover
+                    alone) so it stays reachable on touch and by keyboard; it only
+                    fades UP on hover/focus rather than appearing, so the row's
+                    layout can't shift under the pointer mid-read. */}
+                <button
+                  type="button"
+                  onClick={() => reject(f.text)}
+                  disabled={pending}
+                  title="Böyle bulgu isteme — bunu kötü örnek olarak kaydet ve yerine yenisini üret"
+                  aria-label="Bu bulguyu kötü örnek olarak işaretle ve yerine yenisini üret"
+                  className={[
+                    "shrink-0 self-start px-1.5 py-0.5 font-ui font-extrabold text-[9px] tracking-[0.14em] uppercase",
+                    "border-2 transition-opacity cursor-pointer",
+                    rejecting === f.text
+                      ? "opacity-100 border-orange/40 text-orange/60 cursor-wait"
+                      : pending
+                        ? "opacity-30 border-green/20 text-green/40 cursor-not-allowed"
+                        : "opacity-40 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-70 border-green/25 text-green/60 hover:border-orange hover:text-orange",
+                  ].join(" ")}
+                >
+                  {rejecting === f.text ? "…" : "✕"}
+                </button>
               </li>
             ))}
           </ul>
+          {/* A rejection that saved but produced no replacement — without this the
+              row just disappears and the click reads as having done nothing. */}
+          {rejectNote && (
+            <p className="mt-2 text-[11px] font-bold text-green/60 leading-relaxed">
+              Bulgu kötü örnek olarak kaydedildi — {rejectNote}. Sonraki üretimlerde bu tarz bulgular
+              çıkarılmayacak.
+            </p>
+          )}
           {resolved.length > 0 && (
             <div className="mt-4 border-t-2 border-green/15 pt-3">
               <div className="text-[10px] tracking-[0.18em] font-extrabold text-green/50 uppercase mb-2">
@@ -815,9 +898,11 @@ function AiInsights({
         <p className="text-[12px] text-green/50 py-3">Veriler yoruma çevriliyor…</p>
       ) : (
         <p className="text-[12px] text-green/50 py-3">
-          Seçili dönemin verilerinden en fazla <b>5 bulgu</b> çıkarır — para etkisi en büyük olandan başlayarak,
-          her biri tahmini aylık ₺ karşılığıyla. Yukarıdaki Genel Bakış’ta yazan şeyleri tekrar etmez. Bulgular
-          kalıcıdır; “Tekrar Kontrol Et” mevcut bulguları doğrular ve yenilerini ekler.
+          Seçili dönemi <b>beş ayrı açıdan</b> tarar — kârlılık, görüntülenme/satış farkı, fiyat ve indirim
+          yapısı, döneme göre değişim ve menünün geneli — ve en fazla <b>8 bulgu</b> çıkarır: para etkisi en
+          büyük olandan başlayarak, her biri tahmini aylık ₺ karşılığıyla. Derin tarama olduğu için ilk
+          oluşturma <b>yarım dakikadan uzun sürebilir</b>. Yukarıdaki Genel Bakış’ta yazan şeyleri tekrar etmez.
+          Bulgular kalıcıdır; “Tekrar Kontrol Et” mevcut bulguları doğrular ve yenilerini ekler.
         </p>
       )}
       </div>

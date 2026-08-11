@@ -40,7 +40,7 @@ import { buildDataBasis } from "@/lib/analytics/confidence";
 import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
 import { getRealFoodFilter } from "@/lib/analytics/food";
-import { insightsConfigured, isInsightFresh } from "@/lib/analytics/insights";
+import { insightsConfigured, isInsightFresh, dropRejectedFindings } from "@/lib/analytics/insights";
 import {
   getExclusionRules,
   makeKeepFilter,
@@ -156,6 +156,7 @@ export default async function AnalyticsPage({
     suggestedGroupsResult,
     historyResult,
     currentResult,
+    rejectionsResult,
   ] = await Promise.all([
     getRealSalesSummary(range),
     getRealSalesOverTime(range),
@@ -224,9 +225,18 @@ export default async function AnalyticsPage({
       .eq("compare_basis", compare.basis)
       .order("created_at", { ascending: false })
       .limit(1),
+    // Findings the owner rejected ("böyle bulgu isteme"). The stored set above is
+    // written per range and never rewritten in place, so without this a rejected
+    // finding sitting in an older row comes straight back on the next page load —
+    // the exact thing the reject button exists to prevent. Not range-scoped: a
+    // rejection judges the shape of a sentence, not the period. Non-fatal if the
+    // table is missing (pre-migration deploys just see no rejections).
+    s.from("analytics_insight_rejections").select("text").limit(200),
   ]);
   const { data: historyRows } = historyResult;
   const { data: currentRows } = currentResult;
+  const { data: rejectionRows } = rejectionsResult;
+  const rejectedTexts = ((rejectionRows ?? []) as { text: string }[]).map((r) => String(r.text ?? ""));
 
   // Derive both item-funnel views from the single deep-pool conversion run above,
   // instead of a second full getItemConversion + getHiddenGems pass.
@@ -331,11 +341,15 @@ export default async function AnalyticsPage({
   const initialInsights: string[] | null =
     isInsightFresh(storedRow?.created_at) && Array.isArray(storedRow?.insights)
       ? // The stored set is range-keyed, so it can predate the current rules — strip
-        // any finding naming a now-ignored item so the AI card never shows one.
-        dropExcludedMentions(storedRow.insights.map(String).filter(Boolean), [
-          ...excludedItems,
-          ...autoExcludedItems,
-        ])
+        // any finding naming a now-ignored item so the AI card never shows one, and
+        // any the owner has since rejected, so a refresh can't undo the ✕ click.
+        dropRejectedFindings(
+          dropExcludedMentions(storedRow.insights.map(String).filter(Boolean), [
+            ...excludedItems,
+            ...autoExcludedItems,
+          ]),
+          rejectedTexts
+        ).kept
       : null;
 
   const data: AnalyticsData = {
