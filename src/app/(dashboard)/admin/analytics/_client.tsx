@@ -649,6 +649,11 @@ function AiInsights({
   );
   const [resolved, setResolved] = useState<string[]>([]);
   const [error, setError] = useState(false);
+  // What actually went wrong, and whether clicking again could ever help. A retry
+  // button offered against a retired model or a missing key is worse than no
+  // button: it implies the fault is transient when it is a config change.
+  const [errorReason, setErrorReason] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(true);
   const [pending, startTransition] = useTransition();
 
   const run = useCallback(
@@ -672,6 +677,8 @@ function AiInsights({
           if (mode === "recheck") router.refresh();
         } else {
           setError(true);
+          setErrorReason(res.reason ?? null);
+          setCanRetry(res.retryable !== false);
         }
       });
     },
@@ -707,7 +714,7 @@ function AiInsights({
     <section className="border-2 border-green bg-white p-5 shadow-hard">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
         <h3 className="text-[11px] tracking-[0.2em] font-extrabold text-green/70 uppercase">Yapay Zekâ Yorumu</h3>
-        {configured && (
+        {configured && !(error && !canRetry) && (
           <button
             type="button"
             onClick={() => run(hasFindings ? "recheck" : "load")}
@@ -736,7 +743,19 @@ function AiInsights({
           Yapay zekâ yorumu için GROQ_API_KEY ortam değişkeni gerekli.
         </p>
       ) : error ? (
-        <p className="text-[12px] text-orange font-bold py-3">Yorum oluşturulamadı — tekrar deneyin.</p>
+        <div className="py-3">
+          <p className="text-[12px] text-orange font-bold">
+            {canRetry ? "Yorum oluşturulamadı — tekrar deneyin." : "Yorum oluşturulamadı."}
+          </p>
+          {/* The actual cause. Without it the card asks the owner to retry something
+              that cannot succeed, and gives them nothing to act on or report. */}
+          {errorReason && (
+            <p className="mt-1 text-[11px] text-green/90 font-bold leading-relaxed">
+              {errorReason}
+              {!canRetry && " — ayar düzeltilene kadar bu kart çalışmaz."}
+            </p>
+          )}
+        </div>
       ) : hasFindings ? (
         <>
           <ul className="flex flex-col gap-2 pt-2">

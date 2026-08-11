@@ -35,6 +35,7 @@ import {
   isInsightFresh,
   validatePatterns,
   rankFindings,
+  lastInsightsError,
   MAX_FINDINGS,
   type InsightsInput,
   type PatternForJudge,
@@ -87,9 +88,22 @@ export type InsightsResult = {
   resolved: string[];
   /** True when served from cache/stored set without hitting the model. */
   cached: boolean;
+  /**
+   * Why it failed, when the cause is known and RETRYING WON'T FIX IT (bad key,
+   * retired model, no AI configured). Absent when the model was reached and simply
+   * had nothing to say — the one case where the retry button is the right advice.
+   */
+  reason?: string;
+  /** False when the failure is permanent — the UI hides the retry button. */
+  retryable?: boolean;
 };
 
 const FAIL: InsightsResult = { ok: false, findings: [], resolved: [], cached: false };
+
+/** FAIL carrying a diagnosis, so the card can explain itself instead of guessing. */
+function failWith(reason: string, retryable: boolean): InsightsResult {
+  return { ...FAIL, reason, retryable };
+}
 
 function pctDelta(cur: number, prev: number): number | null {
   if (!prev) return null;
@@ -401,7 +415,7 @@ export async function generateInsightsAction(params: {
   const mode = parsed.data.mode ?? "load";
 
   const { supabase, profile } = await requireRole(["owner", "dev"]);
-  if (!insightsConfigured()) return FAIL;
+  if (!insightsConfigured()) return failWith("GROQ_API_KEY tanımlı değil", false);
 
   // Must precede resolveRange + every query: it decides where a day starts.
   await loadBusinessDayStart(supabase);
@@ -473,7 +487,15 @@ export async function generateInsightsAction(params: {
     current = await generateAll(input);
   }
 
-  if (current.length === 0 && resolved.length === 0) return FAIL;
+  if (current.length === 0 && resolved.length === 0) {
+    // Distinguish "the model was unreachable" from "the model found nothing".
+    // Both used to render the same retry prompt, which is useless advice for the
+    // first case — a 4xx answers identically however many times it's clicked.
+    const upstream = lastInsightsError();
+    return upstream
+      ? failWith(upstream, !upstream.includes("yeniden denemek çözmez"))
+      : failWith("Bu dönem için öne çıkan bir bulgu çıkmadı", true);
+  }
 
   cache.set(key, { at: Date.now(), findings: current });
 

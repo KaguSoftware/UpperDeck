@@ -27,7 +27,15 @@ import {
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Swap for any current Groq-hosted model — see https://console.groq.com/docs/models
-const MODEL = "llama-3.3-70b-versatile";
+//
+// Was `llama-3.3-70b-versatile`, which Groq scheduled for decommission on
+// 2026-08-16 (its listed replacement is this model). A retired model answers every
+// request with a 4xx, and `chat()` turns any non-OK response into "" — which the
+// caller reads as "no findings" and renders as "Yorum oluşturulamadı", identically
+// on every retry. Nothing about that surface says "wrong model", so it is worth
+// stating here: if this card fails permanently while the rest of the tab is fine,
+// check this constant against the models list before anything else.
+const MODEL = "openai/gpt-oss-120b";
 
 export function insightsConfigured(): boolean {
   return Boolean(env.GROQ_API_KEY);
@@ -296,6 +304,27 @@ ones with the most money at stake and drop the rest.
 
 Respond with ONLY a JSON object: {"ongoing":[...],"resolved":[...],"added":[...]}.`;
 
+/**
+ * Why the last upstream call failed, if it did.
+ *
+ * `chat()` collapses every failure into "" and the caller reads "" as "the model
+ * found nothing" — so a dead API key, a decommissioned model and a genuinely
+ * quiet dataset all render as the same "Yorum oluşturulamadı". That message sends
+ * the owner to a retry button which cannot possibly help, because a 4xx is
+ * identical on every attempt. Recording the reason lets the UI say which of the
+ * two it is, and the owner stop retrying something that will never succeed.
+ *
+ * Module-scoped rather than threaded through every return type: the failure is
+ * about the transport, not about any one caller's data, and every entry point
+ * runs inside one request.
+ */
+let lastUpstreamError: string | null = null;
+
+/** The last Groq transport/API failure, or null if the last call reached the model. */
+export function lastInsightsError(): string | null {
+  return lastUpstreamError;
+}
+
 /** One chat completion; returns the raw content string ("" on any failure). */
 async function chat(system: string, user: string): Promise<string> {
   try {
@@ -315,13 +344,22 @@ async function chat(system: string, user: string): Promise<string> {
       }),
     });
     if (!res.ok) {
-      console.error("[insights] Groq request failed", res.status, await res.text());
+      const body = (await res.text()).slice(0, 300);
+      console.error("[insights] Groq request failed", res.status, body);
+      // 4xx is a configuration fault (key, model, quota) — it will fail the same
+      // way forever. 5xx really is worth another attempt.
+      lastUpstreamError =
+        res.status >= 400 && res.status < 500
+          ? `Groq ${res.status} — model/anahtar ayarı (yeniden denemek çözmez)`
+          : `Groq ${res.status} — geçici sunucu hatası`;
       return "";
     }
+    lastUpstreamError = null;
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     return json.choices?.[0]?.message?.content ?? "";
   } catch (err) {
     console.error("[insights] request error", err);
+    lastUpstreamError = "Groq'a ulaşılamadı — ağ hatası";
     return "";
   }
 }
