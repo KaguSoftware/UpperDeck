@@ -4,7 +4,7 @@ import { updateTag } from "next/cache";
 import { requireRole } from "@/lib/auth/require-session";
 
 export async function setTableWaiterDisabled(tableNumber: string, disabled: boolean) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = supabase as any;

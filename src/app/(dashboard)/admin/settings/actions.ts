@@ -18,7 +18,7 @@ const HeroSchema = z.object({
 });
 
 export async function saveHeroSettings(formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
 
   const raw = (k: string) => { const v = formData.get(k); return v && v !== "" ? v : null; };
 

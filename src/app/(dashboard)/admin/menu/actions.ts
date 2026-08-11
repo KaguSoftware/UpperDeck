@@ -51,7 +51,7 @@ function parse(formData: FormData) {
 }
 
 export async function createItem(formData: FormData) {
-  const { user, supabase } = await requireRole(["admin", "owner"]);
+  const { user, supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parse(formData);
   const { error } = await supabase
     .from("menu_items")
@@ -63,7 +63,7 @@ export async function createItem(formData: FormData) {
 }
 
 export async function updateItem(id: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parse(formData);
   const { error } = await supabase.from("menu_items").update(data).eq("id", id);
   if (error) throw new Error(error.message);
@@ -73,7 +73,7 @@ export async function updateItem(id: string, formData: FormData) {
 }
 
 export async function toggleSoldOut(id: string, sold_out: boolean) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await supabase.from("menu_items").update({ sold_out }).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -81,7 +81,7 @@ export async function toggleSoldOut(id: string, sold_out: boolean) {
 }
 
 export async function toggleAvailability(id: string, is_available: boolean) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await supabase.from("menu_items").update({ is_available }).eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -90,7 +90,7 @@ export async function toggleAvailability(id: string, is_available: boolean) {
 
 export async function deleteItem(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await supabase.from("menu_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");

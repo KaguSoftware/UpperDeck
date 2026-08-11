@@ -35,7 +35,7 @@ function parse(formData: FormData) {
 }
 
 export async function createCategory(formData: FormData) {
-  const { user, supabase } = await requireRole(["admin", "owner"]);
+  const { user, supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parse(formData);
 
   const { data: maxRow } = await supabase
@@ -59,7 +59,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function updateCategory(id: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parse(formData);
   const { error } = await supabase.from("categories").update(data).eq("id", id);
   if (error) throw new Error(error.message);
@@ -70,7 +70,7 @@ export async function updateCategory(id: string, formData: FormData) {
 
 export async function deleteCategory(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -79,7 +79,7 @@ export async function deleteCategory(formData: FormData) {
 }
 
 async function reorderCategory(id: string, direction: "up" | "down") {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
 
   // Fetch the current row including its parent_id so we scope neighbours correctly
   const { data: curr, error: e1 } = await supabase
