@@ -93,7 +93,40 @@ const NAME_ALIASES: Record<string, string> = {
   "wild eggy smash": "Wild Eggy",
   "biroche ekmeği": "Brioche Ekmeği",
   "peanut pancake": "Pancake",
-  "truf gravyer patates": "Truffle Parmesan Fries",
+
+  // Waffles. NOTE the dotless "ı" in "berries & ıce cream": normalizeItemName
+  // title-cases under Turkish rules ("ice" → "İce"), and the lookup then lowers
+  // "İ" → "ı". Every key holding an English "i" that starts a word must be
+  // written with "ı" here or it can never match. Same for "ıce cream" below.
+  "berries & ıce cream waffle": "Berries Ice Cream Waffle",
+  "apple & cinnamon & caramel waffle": "Apple & Cinnamon Waffle",
+
+  // Buns
+  "veggy bun": "Vegy Bun",
+
+  // Fries — the en/tr split plus the "Patates Kızartması" long-form variants
+  "truf gravyer patates": "Truf & Parmesan",
+  "trüf parmesanlı patates kızartması": "Truf & Parmesan",
+  "patates kızartması truf & parmesanlı": "Truf & Parmesan",
+  "truffle parmesan fries": "Truf & Parmesan",
+  "cheddarlı patates kızartması": "Cheddar",
+  "cheddar patates kızartması": "Cheddar",
+  "tuzlu sirkeli patates kızartması": "Tuzlu Sirkeli Patates",
+  "baharatlı patates kızartması": "Baharatlı Patates",
+  "spicy fries": "Baharatlı Patates",
+
+  // Milkshakes
+  "çilekli milkshake": "Çilek Milkshake",
+  "pink milkshake": "Çilek Milkshake",
+  "strawberry milkshake": "Çilek Milkshake",
+  "banana milkshake": "Muzlu Milkshake",
+
+  // Coffee — note "İce" (dotted capital İ) is the POS spelling, "Ice" the menu's.
+  // İce Caramel Latte is deliberately NOT folded into İce Latte: caramel is a
+  // separate product, not a spelling of the plain one.
+  "filtre kahve": "Filtre Kahvesi",
+  "filter coffee": "Filtre Kahvesi",
+  "ice filtre kahve": "Ice Filtre Kahve",
 };
 
 /**

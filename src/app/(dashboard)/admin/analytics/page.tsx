@@ -35,6 +35,7 @@ import {
 } from "@/lib/analytics/posthog";
 import { getPriceBandSales } from "@/lib/analytics/price-bands";
 import { getMenuEngineering } from "@/lib/analytics/menu-matrix";
+import { getMenuPositionAnalysis } from "@/lib/analytics/menu-position";
 import { buildDataBasis } from "@/lib/analytics/confidence";
 import { getPromoPerformance } from "@/lib/analytics/promo";
 import { getBoughtTogether } from "@/lib/analytics/basket";
@@ -240,9 +241,13 @@ export default async function AnalyticsPage({
   // deep sold list we already have, so the second axis costs one small menu read
   // rather than another pass over every sale row. `hasData: false` until a cost is
   // entered anywhere — nothing downstream then mentions margin at all.
-  const [hiddenGems, menuEngineering] = await Promise.all([
+  // Menu position: current slot order vs. real units sold. Reuses the same deep
+  // sold list as the matrix, so it costs one small `categories` + `menu_items`
+  // read rather than another pass over every sale row of the range.
+  const [hiddenGems, menuEngineering, menuPosition] = await Promise.all([
     getHiddenGems(range, 6, itemConversionDeep),
     getMenuEngineering(range, keep, { sold: bestSellersDeep }),
+    getMenuPositionAnalysis(range, keep, { sold: bestSellersDeep }),
   ]);
 
   // How much of the picked window the POS log actually covers. A range that
@@ -349,6 +354,7 @@ export default async function AnalyticsPage({
     },
     salesCoverage: coverage,
     menuEngineering,
+    menuPosition,
     // The sample behind every claim on the page — printed on the AI card and used
     // verbatim by the server-side confidence gate, so the two can't disagree.
     dataBasis: buildDataBasis({

@@ -23,6 +23,12 @@ import {
  *
  * temperature is 0 so repeated runs over the same data stay consistent rather
  * than surfacing different "random" findings each time.
+ *
+ * Two models, not one: MODEL does the reasoning-heavy generation, JUDGE_MODEL the
+ * pre-computed keep/reject pass. Groq meters its rate limits per model, so the
+ * split also buys the generation cycles the full token budget of the big model.
+ * chat() waits out a 429 rather than treating it as fatal — on the free tier the
+ * per-minute ceiling is low enough that one full load will normally touch it.
  */
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -36,6 +42,22 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // stating here: if this card fails permanently while the rest of the tab is fine,
 // check this constant against the models list before anything else.
 const MODEL = "openai/gpt-oss-120b";
+
+/**
+ * The judge model for validatePatterns.
+ *
+ * Deliberately smaller than MODEL, for two reasons. Rate limits on Groq are
+ * per-model, so routing the validate pass here takes its tokens out of the 120b
+ * bucket entirely — the generation cycles, which are the calls that actually need
+ * the big model's reasoning, get the whole TPM budget to themselves. And the work
+ * is a genuinely easier shape: the numbers arrive pre-computed as ground truth and
+ * the model only judges keep/reject and phrases one sentence, rather than reasoning
+ * over the whole dataset.
+ *
+ * If pattern phrasing quality ever regresses noticeably, this constant — not the
+ * prompt — is the first thing to put back to MODEL.
+ */
+const JUDGE_MODEL = "llama-3.1-8b-instant";
 
 export function insightsConfigured(): boolean {
   return Boolean(env.GROQ_API_KEY);
@@ -325,42 +347,105 @@ export function lastInsightsError(): string | null {
   return lastUpstreamError;
 }
 
-/** One chat completion; returns the raw content string ("" on any failure). */
-async function chat(system: string, user: string): Promise<string> {
-  try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0, // consistent findings across runs, not fresh random ones
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const body = (await res.text()).slice(0, 300);
-      console.error("[insights] Groq request failed", res.status, body);
-      // 4xx is a configuration fault (key, model, quota) — it will fail the same
-      // way forever. 5xx really is worth another attempt.
-      lastUpstreamError =
-        res.status >= 400 && res.status < 500
-          ? `Groq ${res.status} — model/anahtar ayarı (yeniden denemek çözmez)`
-          : `Groq ${res.status} — geçici sunucu hatası`;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * How long to wait after a 429, in ms.
+ *
+ * Groq states the exact wait in the error body ("Please try again in 12.795s")
+ * and, usually, in a `retry-after` header. Both are preferred over any backoff we
+ * could invent, because the limit is a token bucket refilling on a known schedule
+ * — guessing short burns another request off the daily cap for nothing, guessing
+ * long stalls the page. The padding covers clock skew and the refill boundary.
+ * The fallback only applies when neither source parses.
+ */
+function retryDelayMs(body: string, headers: Headers): number {
+  const header = Number(headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1000 + RETRY_PAD_MS;
+  const m = body.match(/try again in ([\d.]+)s/i);
+  if (m) {
+    const secs = Number(m[1]);
+    if (Number.isFinite(secs) && secs > 0) return secs * 1000 + RETRY_PAD_MS;
+  }
+  return DEFAULT_RETRY_MS;
+}
+
+const RETRY_PAD_MS = 500;
+const DEFAULT_RETRY_MS = 20_000;
+/** 429s are expected on the free tier's TPM ceiling, so allow a couple of waits. */
+const MAX_RETRIES = 3;
+
+/**
+ * One chat completion; returns the raw content string ("" on any failure).
+ *
+ * Retries on 429 (and 5xx), waiting the interval the server asks for. On the free
+ * tier the TPM ceiling is low enough that a single analytics load will routinely
+ * trip it mid-run — that is a transient bucket-refill condition, NOT the permanent
+ * configuration fault the other 4xx codes represent, and treating it as permanent
+ * is what made a full load impossible to complete.
+ */
+async function chat(
+  system: string,
+  user: string,
+  model: string = MODEL,
+  temperature = 0
+): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(GROQ_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          // Defaults to 0 so repeated runs over the same data stay consistent
+          // rather than surfacing different "random" findings each time. Raised
+          // only for recall-only retry cycles — see generateAll.
+          temperature,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.text()).slice(0, 300);
+        console.error("[insights] Groq request failed", res.status, body);
+        const transient = res.status === 429 || res.status >= 500;
+        if (transient && attempt < MAX_RETRIES) {
+          const wait = res.status === 429 ? retryDelayMs(body, res.headers) : DEFAULT_RETRY_MS;
+          console.warn(
+            `[insights] ${res.status} on ${model} — retrying in ${Math.round(wait / 1000)}s ` +
+              `(attempt ${attempt + 1}/${MAX_RETRIES})`
+          );
+          await sleep(wait);
+          continue;
+        }
+        // 429 that outlived its retries is a real ceiling (daily cap, or a limit
+        // too low for this payload) — say so, because "try again" is the wrong
+        // advice for it in a way a plain server error is not.
+        lastUpstreamError =
+          res.status === 429
+            ? `Groq kota sınırı — birazdan tekrar deneyin`
+            : res.status >= 400 && res.status < 500
+              ? `Groq ${res.status} — model/anahtar ayarı (yeniden denemek çözmez)`
+              : `Groq ${res.status} — geçici sunucu hatası`;
+        return "";
+      }
+      lastUpstreamError = null;
+      const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      return json.choices?.[0]?.message?.content ?? "";
+    } catch (err) {
+      console.error("[insights] request error", err);
+      if (attempt < MAX_RETRIES) {
+        await sleep(DEFAULT_RETRY_MS);
+        continue;
+      }
+      lastUpstreamError = "Groq'a ulaşılamadı — ağ hatası";
       return "";
     }
-    lastUpstreamError = null;
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return json.choices?.[0]?.message?.content ?? "";
-  } catch (err) {
-    console.error("[insights] request error", err);
-    lastUpstreamError = "Groq'a ulaşılamadı — ağ hatası";
-    return "";
   }
 }
 
@@ -438,9 +523,13 @@ function gate(texts: string[], data: InsightsInput): string[] {
  * One generation pass. `alreadyFound` is echoed to the model so it returns only
  * findings not already surfaced — call this in a loop to collect the full set.
  */
-export async function generateFindingsBatch(data: InsightsInput, alreadyFound: string[]): Promise<string[]> {
+export async function generateFindingsBatch(
+  data: InsightsInput,
+  alreadyFound: string[],
+  temperature = 0
+): Promise<string[]> {
   if (!insightsConfigured()) return [];
-  const content = await chat(GENERATE_SYSTEM, JSON.stringify({ ...data, alreadyFound }));
+  const content = await chat(GENERATE_SYSTEM, JSON.stringify({ ...data, alreadyFound }), MODEL, temperature);
   return gate(parseStringArray(content), data);
 }
 
@@ -539,7 +628,7 @@ export async function validatePatterns(
   alreadyKept: string[] = []
 ): Promise<JudgedPattern[]> {
   if (!insightsConfigured() || candidates.length === 0) return [];
-  const content = await chat(VALIDATE_SYSTEM, JSON.stringify({ candidates, alreadyKept }));
+  const content = await chat(VALIDATE_SYSTEM, JSON.stringify({ candidates, alreadyKept }), JUDGE_MODEL);
   const trimmed = stripFence(content);
   const validIds = new Set(candidates.map((c) => c.id));
   try {

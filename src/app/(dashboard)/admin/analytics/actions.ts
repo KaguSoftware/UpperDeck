@@ -79,6 +79,16 @@ const TTL_MS = 60 * 60 * 1000;
 // surfaced yet; it stops early once a cycle returns nothing new.
 const MAX_CYCLES = 3;
 
+/** Pause between generation cycles so the free tier's per-minute token bucket
+ *  refills before the next full-payload request. See generateAll. */
+const CYCLE_GAP_MS = 8_000;
+
+/** Non-zero temperature for recall-only cycles — see generateAll. Small on
+ *  purpose: enough to explore a different angle, not enough to invent numbers. */
+const RECALL_TEMPERATURE = 0.4;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export type InsightFinding = { text: string; isNew: boolean };
 export type InsightsResult = {
   ok: boolean;
@@ -393,7 +403,17 @@ async function buildInsightsInput(
 async function generateAll(input: InsightsInput): Promise<string[]> {
   let found: string[] = [];
   for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
-    const batch = await generateFindingsBatch(input, found);
+    // Each pass re-sends the full payload, so back-to-back cycles spend several
+    // thousand tokens inside one minute and trip the free tier's TPM ceiling
+    // mid-run. chat() will wait out a 429, but arriving under the limit is much
+    // cheaper than being bounced off it — the pause between cycles lets the token
+    // bucket refill instead of paying for a rejected request first.
+    if (cycle > 0) await sleep(CYCLE_GAP_MS);
+    // Later cycles exist purely for RECALL — they ask for what the earlier passes
+    // missed. At temperature 0 over an unchanged payload the model retraces the
+    // same ground and dedupeNew discards the result, spending a full request for
+    // nothing; a little spread is what makes the extra pass worth its tokens.
+    const batch = await generateFindingsBatch(input, found, cycle === 0 ? 0 : RECALL_TEMPERATURE);
     const fresh = dedupeNew(batch, found);
     if (fresh.length === 0) break;
     found = [...found, ...fresh];

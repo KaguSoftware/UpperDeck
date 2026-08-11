@@ -21,12 +21,14 @@ import {
   type PatternItem,
 } from "./actions";
 import { ConversionTable } from "./_conversion-table";
+import { MenuPositionCard } from "./_position-card";
 import { Loader } from "@/components/Loader/components";
 import { buildOverview, type OverviewTone } from "@/lib/analytics/overview";
 import { BUSINESS_DAY_START_OPTIONS, businessDayLabel } from "@/lib/analytics/business-day";
 import type { SalesCoverage, CompareBasis } from "@/lib/analytics/range";
 import { COMPARE_BASES } from "@/lib/analytics/range";
 import type { MenuEngineering, MenuQuadrant } from "@/lib/analytics/menu-matrix";
+import type { MenuPositionAnalysis } from "@/lib/analytics/menu-position";
 import { describeBasis, isThinPeriod, thinWeekdays, type DataBasis } from "@/lib/analytics/confidence";
 import type { NamedCount, AbandonedView, LocalePref, EngagementWindow } from "@/lib/analytics/posthog";
 import type { PriceBandSales } from "@/lib/analytics/price-bands";
@@ -57,6 +59,8 @@ export type AnalyticsData = {
    * margin figure appears anywhere on the page.
    */
   menuEngineering: MenuEngineering;
+  /** Current menu slot order vs. real units sold — does position move product? */
+  menuPosition: MenuPositionAnalysis;
   /**
    * The sample every claim on this page rests on. Printed under the AI card so a
    * reader sees the basis at the same moment as the claim, and used server-side to
@@ -485,61 +489,69 @@ function Kpi({
   /** Renders a "~" prefix + "tahmini" note (used for the sessions-based cover estimate). */
   estimated?: boolean;
 }) {
-  // The Bowlby display font is very wide, so long values (e.g. "1.234.567")
-  // overrun the narrow cards. The "~"/₺ prefix eats width too, so fold it into
-  // the effective length. Step the size down as the string grows.
-  const eff = value.length + (unit ? 2 : 0) + (estimated ? 2 : 0);
-  const size =
-    eff > 11 ? "text-[18px]" : eff > 9 ? "text-[22px]" : eff > 6 ? "text-[28px]" : "text-[40px]";
   return (
-    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center">
+    <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center h-full flex flex-col">
       {/* NEVER truncated: the label is what makes the number mean anything, and
           "MENÜ GÖRÜNTÜLE…" beside a figure is a number without a metric. It wraps
           to two lines on mobile at a slightly tighter size/tracking instead; the
           `title` stays for the hover affordance. */}
+      {/* Two lines' worth of height is reserved whether or not the label wraps,
+          so a wrapping label ("Menü Görüntüleme") doesn't shove its number down
+          a line relative to a one-word neighbour ("Kişi"). */}
       <div
-        className="text-[9px] sm:text-[10px] tracking-[0.16em] sm:tracking-[0.22em] font-bold text-green/70 uppercase whitespace-normal leading-tight"
+        className="flex items-center justify-center min-h-[2.4em] text-[9px] sm:text-[10px] tracking-[0.16em] sm:tracking-[0.22em] font-bold text-green/70 uppercase whitespace-normal leading-tight"
         title={label}
       >
         {label}
       </div>
-      <div className="flex items-baseline justify-center gap-1 mt-1.5 whitespace-nowrap">
-        {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
-        {estimated && <span className="font-ui font-extrabold text-[16px] text-green/50">~</span>}
-        {unit && <span className="font-ui font-extrabold text-[16px] text-green/70">{unit}</span>}
-        <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
+      {/* The number band takes the leftover height and centres within it, so
+          every figure in the row sits on the same optical line regardless of
+          what the bands above and below it contain. */}
+      <div className="flex-1 flex items-center justify-center min-h-[44px]">
+        <div className="flex items-baseline justify-center gap-1 whitespace-nowrap">
+          {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
+          {estimated && <span className="font-ui font-extrabold text-[15px] text-green/50">~</span>}
+          {unit && <span className="font-ui font-extrabold text-[15px] text-green/70">{unit}</span>}
+          {/* One size for every card in the row. The old per-card step-down
+              (40px for "595", 18px for "2.270.197") made a row of peers read as
+              a hierarchy that isn't there — a bigger number meant nothing but a
+              shorter string. Shrinking to fit is left to the container instead. */}
+          <span className="font-bowlby text-[22px] sm:text-[24px] leading-none text-green">{value}</span>
+        </div>
       </div>
+      {/* Reserved regardless of content: cards with no delta and no estimate
+          would otherwise end short and float their number upward. */}
       {estimated ? (
         <div
-          className="mt-1.5 text-[11px] font-extrabold text-green/40"
+          className="min-h-[2.4em] text-[11px] font-extrabold text-green/40"
           title="Gerçek kişi sayısı girilmedi — menüyü açan tekil ziyaretlerden tahmin edildi"
         >
           tahmini
         </div>
+      ) : delta != null ? (
+        <div
+          className={`min-h-[2.4em] text-[11px] font-extrabold ${
+            muted
+              ? "text-green/30"
+              : delta > 0
+                ? "text-green"
+                : delta < 0
+                  ? "text-orange"
+                  : "text-green/50"
+          }`}
+          title={muted ? mutedReason : deltaNote ? `${deltaNote} dönemine göre` : "Önceki döneme göre"}
+        >
+          {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
+          {delta}%
+          {/* Never leave a percentage without saying what it is a percentage OF. */}
+          {deltaNote && (
+            <span className="block mt-0.5 text-[9px] font-bold text-green/40 leading-tight normal-case">
+              {muted ? "eksik veri" : `vs ${deltaNote}`}
+            </span>
+          )}
+        </div>
       ) : (
-        delta != null && (
-          <div
-            className={`mt-1.5 text-[11px] font-extrabold ${
-              muted
-                ? "text-green/30"
-                : delta > 0
-                  ? "text-green"
-                  : delta < 0
-                    ? "text-orange"
-                    : "text-green/50"
-            }`}
-            title={muted ? mutedReason : deltaNote ? `${deltaNote} dönemine göre` : "Önceki döneme göre"}
-          >
-            {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}
-            {delta}%
-            {/* Never leave a percentage without saying what it is a percentage OF. */}
-            {deltaNote && (
-              <span className="block mt-0.5 text-[9px] font-bold text-green/40 leading-tight normal-case">
-                {muted ? "eksik veri" : `vs ${deltaNote}`}
-              </span>
-            )}
-          </div>
-        )
+        <div className="min-h-[2.4em]" aria-hidden />
       )}
     </div>
   );
@@ -2368,6 +2380,11 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               its four quadrants each name the action to take. Full width — it's a
               2×2 grid that can't survive a half-column. */}
           <MenuMatrix me={data.menuEngineering} />
+          {/* Position vs sales. Sits under the profit matrix because it answers the
+              cheapest question on the page — reordering rows costs nothing, while
+              every fix the matrix implies costs money or menu space. Full width:
+              it's a per-category ladder that needs the horizontal room. */}
+          <MenuPositionCard analysis={data.menuPosition} />
           <ChartCard title="Ürün Performansı — Menü Etkileşimi & Kasa Satışı">
             <ConversionTable rows={data.itemConversion} note={engagementNote} range={data.range} />
           </ChartCard>
