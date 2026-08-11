@@ -489,6 +489,13 @@ function Kpi({
   /** Renders a "~" prefix + "tahmini" note (used for the sessions-based cover estimate). */
   estimated?: boolean;
 }) {
+  // One big size for the row, with a single step down for values long enough to
+  // overrun a card in the very wide display font — in practice only the lira
+  // sales figure ("2.270.197"). The "~"/₺ prefixes eat width too, so fold them
+  // into the effective length. Deliberately NOT the old five-step ramp, which
+  // gave every card a different size and implied a hierarchy that wasn't there.
+  const eff = value.length + (unit ? 2 : 0) + (estimated ? 2 : 0);
+  const size = eff > 9 ? "text-[26px] sm:text-[30px]" : "text-[34px] sm:text-[38px]";
   return (
     <div className="border-2 border-green bg-white p-4 sm:p-5 min-w-0 overflow-hidden shadow-hard text-center h-full flex flex-col">
       {/* NEVER truncated: the label is what makes the number mean anything, and
@@ -510,13 +517,9 @@ function Kpi({
       <div className="flex-1 flex items-center justify-center min-h-[44px]">
         <div className="flex items-baseline justify-center gap-1 whitespace-nowrap">
           {/* "~", ₺ and % live outside the display font, which lacks those glyphs. */}
-          {estimated && <span className="font-ui font-extrabold text-[15px] text-green/50">~</span>}
-          {unit && <span className="font-ui font-extrabold text-[15px] text-green/70">{unit}</span>}
-          {/* One size for every card in the row. The old per-card step-down
-              (40px for "595", 18px for "2.270.197") made a row of peers read as
-              a hierarchy that isn't there — a bigger number meant nothing but a
-              shorter string. Shrinking to fit is left to the container instead. */}
-          <span className="font-bowlby text-[22px] sm:text-[24px] leading-none text-green">{value}</span>
+          {estimated && <span className="font-ui font-extrabold text-[18px] text-green/50">~</span>}
+          {unit && <span className="font-ui font-extrabold text-[18px] text-green/70">{unit}</span>}
+          <span className={`font-bowlby ${size} leading-none text-green`}>{value}</span>
         </div>
       </div>
       {/* Reserved regardless of content: cards with no delta and no estimate
