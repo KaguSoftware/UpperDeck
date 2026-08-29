@@ -1,7 +1,10 @@
 /**
  * Breakfast is a kitchen-hours product: the line switches over at 14:00 and the
- * plates only come back at 10:00 the next morning. Locking the category in the
- * menu is cheaper than a waiter walking back to the table to say no.
+ * plates only come back at 10:00 the next morning. Outside those hours the items
+ * are shown sold out — exactly as if staff had flagged them by hand — so diners
+ * can still read the menu, they just can't order from it.
+ *
+ * Cheaper than a waiter walking back to the table to say no.
  *
  * Slugs, not IDs, so the list survives a reseed. `breakfast` is the only one the
  * live menu still uses; `breakfast-extra` is kept because the seed migration

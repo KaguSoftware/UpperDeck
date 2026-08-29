@@ -69,7 +69,6 @@ const tr: Messages = {
         addedPrefix: "Eklendi · ",
         orderSentPrefix: "Sipariş alındı! Masa ",
         callWaiterToConfirm: "Siparişi onaylamak için garson çağırın",
-        categoryLocked: "Kahvaltı servisi şu an kapalı",
     },
     coupon: {
         label: "İndirim Kodu",
@@ -116,9 +115,9 @@ const tr: Messages = {
         banner: "Çevrimdışısınız — bağlantı dönene kadar işlemler kaydedilmez",
     },
     lockedCategory: {
-        badge: "Kahvaltı kapalı",
+        badge: "10:00 – 14:00 arası",
         breakfast:
-            "Maalesef saat 14:00'ten sonra kahvaltı servisimiz yok. Kahvaltı 10:00'da tekrar menüde.",
+            "Mutfak kahvaltıyı 10:00 ile 14:00 arasında servis ediyor, bu yüzden şu an tükendi olarak görünüyor. Yarın 10:00'da tekrar menüde.",
     },
     categories: {
         Breakfast: "Kahvaltı",

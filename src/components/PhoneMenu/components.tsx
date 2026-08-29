@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { TopBar } from "@/components/TopBar/components";
@@ -80,7 +80,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   // not a status — reading status off it made the takeover revert to "call a
   // waiter" seconds after the diner had already called one.
   const [waiterCalledForOrder, setWaiterCalledForOrder] = useState(false);
-  const [lockedSlugs, setLockedSlugs] = useState<string[]>(lockedCategories);
+  const [closedSlugs, setClosedSlugs] = useState<string[]>(lockedCategories);
   const waiterCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -196,7 +196,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   useEffect(() => {
     const sync = () => {
       const next = lockedCategorySlugs();
-      setLockedSlugs((prev) => (prev.join("|") === next.join("|") ? prev : next));
+      setClosedSlugs((prev) => (prev.join("|") === next.join("|") ? prev : next));
     };
     sync();
     const id = setInterval(sync, 60_000);
@@ -233,31 +233,27 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     if (dwellMs >= 5000) track.itemViewAbandoned({ id: v.id, name: v.name, dwellMs });
   }, []);
 
-  const isCategoryLocked = useCallback(
-    (cat: string | undefined | null) => !!cat && lockedSlugs.includes(cat),
-    [lockedSlugs]
+  // Outside its serving window a category reads as sold out, which is a
+  // property of the item everywhere it appears — not a gate on one code path.
+  // Marking it here means the card stamp, the modal stamp and the disabled
+  // "Add to Order" button all follow for free.
+  const servedItems = useMemo(
+    () =>
+      closedSlugs.length === 0
+        ? items
+        : items.map((i) => (closedSlugs.includes(i.cat) ? { ...i, sold_out: true } : i)),
+    [items, closedSlugs]
   );
 
-  const flashCategoryLocked = useCallback(() => {
-    buzz();
-    flashToast(t.toast.categoryLocked);
-  }, [flashToast, t.toast.categoryLocked]);
-
   // Opening an item modal — wraps setActiveItem so every open is tracked.
-  // Also the one gate every path funnels through (card tap, hero featured item),
-  // so a closed category can't be opened even if its card is reached some other way.
   const openItem = useCallback((item: PlacedCard | null) => {
-    if (item && isCategoryLocked(item.cat)) {
-      flashCategoryLocked();
-      return;
-    }
     flushDwell();
     if (item) {
       track.itemViewed({ id: item.id, name: item.name, price: item.price, discountPct: item.discountPct });
       viewStartRef.current = { id: item.id, name: item.name, start: Date.now() };
     }
     setActiveItem(item);
-  }, [flushDwell, isCategoryLocked, flashCategoryLocked]);
+  }, [flushDwell]);
 
   const closeItem = useCallback(() => {
     flushDwell();
@@ -363,12 +359,8 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, [activeItem, flashToast, t.toast]);
 
   const handleSuggestedClick = useCallback((sug: SuggestedItemPublic) => {
-    const fullItem = items.find((i) => i.id === sug.id);
+    const fullItem = servedItems.find((i) => i.id === sug.id);
     if (!fullItem) return;
-    if (isCategoryLocked(fullItem.cat)) {
-      flashCategoryLocked();
-      return;
-    }
     track.suggestedItemClicked(sug.id);
     // Suggested items carry no featured discount, so none is reported.
     track.itemViewed({ id: fullItem.id, name: fullItem.name, price: fullItem.price });
@@ -384,7 +376,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       x: 0,
       y: 0,
     });
-  }, [items, flushDwell, isCategoryLocked, flashCategoryLocked]);
+  }, [servedItems, flushDwell]);
 
   const scrollPillIntoView = useCallback((slug: string) => {
     const nav = pillsNavRef.current;
@@ -540,21 +532,20 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
               onSelect={handlePillSelect}
               navRef={pillsNavRef}
               compact={heroCollapsed}
-              lockedIds={lockedSlugs}
+              soldOutIds={closedSlugs}
             />
           </div>
           <MenuStage
             onOpen={openItem}
             stageRef={stageRef}
             categories={categories}
-            items={items}
+            items={servedItems}
             itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
             featuredItemId={heroMode === "featured" ? featuredItemId : null}
             featuredDiscount={featuredDiscount}
-            lockedSlugs={lockedSlugs}
-            lockedBadgeLabel={t.lockedCategory.badge}
-            lockedMessage={t.lockedCategory.breakfast}
-            onLockedTap={flashCategoryLocked}
+            closedSlugs={closedSlugs}
+            closedBadgeLabel={t.lockedCategory.badge}
+            closedMessage={t.lockedCategory.breakfast}
           />
           <div ref={footerRef}><Footer /></div>
         </div>

@@ -4,6 +4,6 @@ export type FilterPillsProps = {
   onSelect: (id: string, btn: HTMLButtonElement) => void;
   navRef?: React.RefObject<HTMLElement | null>;
   compact?: boolean;
-  /** Pills for categories that can't be ordered right now — dimmed. */
-  lockedIds?: string[];
+  /** Categories currently sold out by the clock — dimmed, still selectable. */
+  soldOutIds?: string[];
 };

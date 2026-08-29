@@ -45,7 +45,6 @@ type EnShape = {
     addedPrefix: string;
     orderSentPrefix: string;
     callWaiterToConfirm: string;
-    categoryLocked: string;
   };
   ticker: string[];
   categories: Record<string, string>;
@@ -121,7 +120,6 @@ const en: EnShape = {
     addedPrefix: "Added · ",
     orderSentPrefix: "Order received! Table ",
     callWaiterToConfirm: "Call a waiter to confirm your order",
-    categoryLocked: "Breakfast is closed right now",
   },
   coupon: {
     label: "Coupon Code",
@@ -167,8 +165,8 @@ const en: EnShape = {
     banner: "You're offline — actions won't go through until you reconnect",
   },
   lockedCategory: {
-    badge: "Breakfast closed",
-    breakfast: "Sorry — we can't serve breakfast after 2 PM. Breakfast is back on the menu at 10:00.",
+    badge: "Served 10:00 – 14:00",
+    breakfast: "The kitchen serves breakfast between 10:00 and 14:00, so these are sold out for now. They're back on the menu tomorrow at 10:00.",
   },
   categories: {
     Breakfast: "Breakfast",
