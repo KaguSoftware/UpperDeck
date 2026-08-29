@@ -32,6 +32,11 @@ export type MenuStageProps = {
   itemLabel: (count: number) => string;
   featuredItemId?: string | null;
   featuredDiscount?: number | null;
+  /** Category slugs the kitchen can't serve right now — shaded and untappable. */
+  lockedSlugs?: string[];
+  lockedBadgeLabel?: string;
+  lockedMessage?: string;
+  onLockedTap?: () => void;
 };
 
 export type SectionData = {

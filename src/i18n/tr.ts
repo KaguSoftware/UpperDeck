@@ -39,9 +39,21 @@ const tr: Messages = {
         table_from_qr: "QR'dan",
         note_placeholder: "Özel istekler, alerjiler…",
         callWaiter: "Garson Çağır",
+        confirmOrder: "Siparişi Onayla",
         continueBrowsing: "Menüye dön",
         sending: "Gönderiliyor…",
         headed: "Garson siparişinizi almak için yola çıktı!",
+        waiterCheckEyebrow: "Sipariş henüz onaylanmadı",
+        waiterCheckTitle: "Onay için garson çağırın",
+        waiterCheckDismiss: "Siparişime dön",
+        orderNotPlacedYet: "Sipariş henüz verilmedi",
+        waiterOnWayTitle: "Garson size geliyor",
+        waiterOnWayBody:
+            "Personele haber verdik. Bu listeyi açık tutun — siparişinizi masada garson alır ve sipariş o zaman verilmiş olur.",
+        callAgain: "Gelen olmadı mı? Tekrar çağır",
+        callAgainIn: "{time} sonra tekrar çağırabilirsiniz",
+        waiterCheckBody:
+            "Siparişiniz henüz mutfağa iletilmedi. Onaylanması için bir garsonun masaya gelip siparişinizi kontrol etmesi gerekiyor.",
         waiterCalled: "Garson çağrıldı — yolda!",
         error_send: "Personele ulaşılamadı. Lütfen tekrar deneyin.",
         subtotal: "Ara Toplam",
@@ -56,6 +68,8 @@ const tr: Messages = {
         itemsOnDeckMany: "{count} ürün sepette",
         addedPrefix: "Eklendi · ",
         orderSentPrefix: "Sipariş alındı! Masa ",
+        callWaiterToConfirm: "Siparişi onaylamak için garson çağırın",
+        categoryLocked: "Kahvaltı servisi şu an kapalı",
     },
     coupon: {
         label: "İndirim Kodu",
@@ -100,6 +114,11 @@ const tr: Messages = {
     },
     offline: {
         banner: "Çevrimdışısınız — bağlantı dönene kadar işlemler kaydedilmez",
+    },
+    lockedCategory: {
+        badge: "Kahvaltı kapalı",
+        breakfast:
+            "Maalesef saat 14:00'ten sonra kahvaltı servisimiz yok. Kahvaltı 10:00'da tekrar menüde.",
     },
     categories: {
         Breakfast: "Kahvaltı",

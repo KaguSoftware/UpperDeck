@@ -11,6 +11,7 @@ import { ItemModal } from "@/components/ItemModal/components";
 import { CartDrawer } from "@/components/CartDrawer/components";
 import { WaiterButton } from "@/components/WaiterButton/components";
 import { QrRequiredModal } from "@/components/QrRequiredModal/components";
+import { WaiterCheckModal } from "@/components/WaiterCheckModal/components";
 import { BellTutorial } from "@/components/BellTutorial/components";
 import { Toast } from "@/components/Toast/components";
 import { Ticker } from "@/components/Ticker/components";
@@ -27,6 +28,7 @@ import { tap, buzz } from "@/lib/haptics";
 import type { Messages } from "@/i18n";
 import type { PublicCategory, PublicMenuItem } from "@/lib/menu/queries";
 import { isValidTableId } from "@/lib/tables";
+import { lockedCategorySlugs } from "@/lib/menu/serving-window";
 // v2: table IDs are strings, not numbers — bumped to drop stale legacy sessions
 const CART_STORAGE_KEY = "upperdeck-cart-v2";
 
@@ -51,9 +53,11 @@ type PhoneMenuProps = {
   featuredBadge?: string | null;
   featuredDiscount?: number | null;
   openHoursOverride?: string | null;
+  /** Category slugs closed at render time — recomputed on the client as the clock moves. */
+  lockedCategories?: string[];
 };
 
-export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, openHoursOverride }: PhoneMenuProps) {
+export function PhoneMenu({ messages: t, locale, categories, items, initialTableNumber, disabledTables = [], heroMode, heroMediaUrl, featuredItem, featuredItemId, featuredLabel, featuredBadge, featuredDiscount, openHoursOverride, lockedCategories = [] }: PhoneMenuProps) {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<string | null>(initialTableNumber ?? null);
@@ -71,6 +75,12 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const [showBellTutorial, setShowBellTutorial] = useState(false);
   const [waiterSecondsLeft, setWaiterSecondsLeft] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [waiterCheckOpen, setWaiterCheckOpen] = useState(false);
+  // Sticky for the life of the basket. The 10s call cooldown is a rate limit,
+  // not a status — reading status off it made the takeover revert to "call a
+  // waiter" seconds after the diner had already called one.
+  const [waiterCalledForOrder, setWaiterCalledForOrder] = useState(false);
+  const [lockedSlugs, setLockedSlugs] = useState<string[]>(lockedCategories);
   const waiterCooldownUntil = useRef(0);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -180,6 +190,24 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     }
   }, [tableNumber]);
 
+  // The server decided the lock at render time, but a phone can sit on the
+  // table across 14:00. Re-check on a timer and whenever the tab comes back —
+  // background timers are throttled on mobile, so the visibility check matters.
+  useEffect(() => {
+    const sync = () => {
+      const next = lockedCategorySlugs();
+      setLockedSlugs((prev) => (prev.join("|") === next.join("|") ? prev : next));
+    };
+    sync();
+    const id = setInterval(sync, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") sync(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   const flashToast = useCallback((msg: string) => {
     setToastMsg(msg);
     setToastShow(true);
@@ -188,6 +216,10 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, []);
 
   const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
+
+  useEffect(() => {
+    if (cartItems.length === 0) setWaiterCalledForOrder(false);
+  }, [cartItems.length]);
 
   // Dwell tracking: measures how long an item modal stayed open before being
   // closed without an add-to-cart. <5s is treated as a mistake tap and dropped.
@@ -201,15 +233,31 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     if (dwellMs >= 5000) track.itemViewAbandoned({ id: v.id, name: v.name, dwellMs });
   }, []);
 
+  const isCategoryLocked = useCallback(
+    (cat: string | undefined | null) => !!cat && lockedSlugs.includes(cat),
+    [lockedSlugs]
+  );
+
+  const flashCategoryLocked = useCallback(() => {
+    buzz();
+    flashToast(t.toast.categoryLocked);
+  }, [flashToast, t.toast.categoryLocked]);
+
   // Opening an item modal — wraps setActiveItem so every open is tracked.
+  // Also the one gate every path funnels through (card tap, hero featured item),
+  // so a closed category can't be opened even if its card is reached some other way.
   const openItem = useCallback((item: PlacedCard | null) => {
+    if (item && isCategoryLocked(item.cat)) {
+      flashCategoryLocked();
+      return;
+    }
     flushDwell();
     if (item) {
       track.itemViewed({ id: item.id, name: item.name, price: item.price, discountPct: item.discountPct });
       viewStartRef.current = { id: item.id, name: item.name, start: Date.now() };
     }
     setActiveItem(item);
-  }, [flushDwell]);
+  }, [flushDwell, isCategoryLocked, flashCategoryLocked]);
 
   const closeItem = useCallback(() => {
     flushDwell();
@@ -243,6 +291,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       const ok = await callWaiter(tableNumber, "order");
       track.waiterCalled("order");
       handleWaiterCalled(WAITER_COOLDOWN_MS);
+      if (ok) setWaiterCalledForOrder(true);
       buzz();
       flashToast(ok ? t.cart.waiterCalled : t.cart.error_send);
     } catch (err) {
@@ -253,6 +302,21 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitting, waiterSecondsLeft, tableNumber, handleWaiterCalled, flashToast, t.cart.waiterCalled, t.cart.error_send]);
+
+  // Nothing is sent anywhere here: the order is only real once a waiter checks
+  // it at the table, so confirming just surfaces the sheet that says so.
+  const handleConfirmOrder = useCallback(() => {
+    if (cartItems.length === 0) return;
+    buzz();
+    setWaiterCheckOpen(true);
+  }, [cartItems.length]);
+
+  // Dismissing the takeover without ringing leaves the order in limbo, so the
+  // instruction follows them back into the cart.
+  const handleWaiterCheckClose = useCallback(() => {
+    setWaiterCheckOpen(false);
+    if (!waiterCalledForOrder) flashToast(t.toast.callWaiterToConfirm);
+  }, [waiterCalledForOrder, flashToast, t.toast.callWaiterToConfirm]);
 
   const handleRemove = useCallback((id: string) => {
     setCartItems((prev) => {
@@ -301,6 +365,10 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   const handleSuggestedClick = useCallback((sug: SuggestedItemPublic) => {
     const fullItem = items.find((i) => i.id === sug.id);
     if (!fullItem) return;
+    if (isCategoryLocked(fullItem.cat)) {
+      flashCategoryLocked();
+      return;
+    }
     track.suggestedItemClicked(sug.id);
     // Suggested items carry no featured discount, so none is reported.
     track.itemViewed({ id: fullItem.id, name: fullItem.name, price: fullItem.price });
@@ -316,7 +384,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
       x: 0,
       y: 0,
     });
-  }, [items, flushDwell]);
+  }, [items, flushDwell, isCategoryLocked, flashCategoryLocked]);
 
   const scrollPillIntoView = useCallback((slug: string) => {
     const nav = pillsNavRef.current;
@@ -415,6 +483,14 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     setActiveSlug(current);
   }, []);
 
+  const cooldownLabel =
+    waiterSecondsLeft > 0
+      ? t.cart.callAgainIn.replace(
+          "{time}",
+          `${Math.floor(waiterSecondsLeft / 60)}:${String(waiterSecondsLeft % 60).padStart(2, "0")}`
+        )
+      : "";
+
   const pillItems = categories.map((c) => ({ id: c.slug, label: c.name, image_url: c.image_url, emoji: c.emoji }));
 
   return (
@@ -464,6 +540,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
               onSelect={handlePillSelect}
               navRef={pillsNavRef}
               compact={heroCollapsed}
+              lockedIds={lockedSlugs}
             />
           </div>
           <MenuStage
@@ -474,6 +551,10 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
             itemLabel={(count) => `${count} ${count > 1 ? t.stage.items : t.stage.item}`}
             featuredItemId={heroMode === "featured" ? featuredItemId : null}
             featuredDiscount={featuredDiscount}
+            lockedSlugs={lockedSlugs}
+            lockedBadgeLabel={t.lockedCategory.badge}
+            lockedMessage={t.lockedCategory.breakfast}
+            onLockedTap={flashCategoryLocked}
           />
           <div ref={footerRef}><Footer /></div>
         </div>
@@ -530,13 +611,17 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         tableLabel={t.cart.table_number}
         tableFromQrLabel={t.cart.table_from_qr}
         notePlaceholder={t.cart.note_placeholder}
+        confirmOrderLabel={t.cart.confirmOrder}
+        onConfirmOrder={handleConfirmOrder}
         callWaiterLabel={t.cart.callWaiter}
         callWaiterSendingLabel={t.cart.sending}
         callWaiterHeadedLabel={t.cart.headed}
         submitting={submitting}
         onCallWaiter={() => { void handleCartCallWaiter(); }}
         waiterCooldownSeconds={waiterSecondsLeft}
-        waiterCooldownLabel={waiterSecondsLeft > 0 ? `You can send another request in ${Math.floor(waiterSecondsLeft / 60)}:${String(waiterSecondsLeft % 60).padStart(2, "0")}` : ""}
+        waiterCalledForOrder={waiterCalledForOrder}
+        callAgainLabel={t.cart.callAgain}
+        waiterCooldownLabel={cooldownLabel}
         tableFromQr={tableLocked}
         topOffset={topbarRef.current?.offsetHeight ?? 0}
         coupon={{
@@ -568,6 +653,24 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         addonGroups={activeItem?.addonGroups ?? []}
         suggestedItems={activeItem?.suggestedItems ?? []}
       />
+      <WaiterCheckModal
+        show={waiterCheckOpen}
+        onClose={handleWaiterCheckClose}
+        eyebrow={t.cart.waiterCheckEyebrow}
+        title={t.cart.waiterCheckTitle}
+        body={t.cart.waiterCheckBody}
+        dismissLabel={t.cart.waiterCheckDismiss}
+        callWaiterLabel={t.cart.callWaiter}
+        sendingLabel={t.cart.sending}
+        notPlacedLabel={t.cart.orderNotPlacedYet}
+        onWayTitle={t.cart.waiterOnWayTitle}
+        onWayBody={t.cart.waiterOnWayBody}
+        callAgainLabel={t.cart.callAgain}
+        cooldownLabel={cooldownLabel}
+        waiterCalled={waiterCalledForOrder}
+        submitting={submitting}
+        onCallWaiter={() => { void handleCartCallWaiter(); }}
+      />
       <QrRequiredModal
         show={qrModalOpen}
         onClose={() => setQrModalOpen(false)}
@@ -583,6 +686,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
         && !activeItem
         && !cartOpen
         && !qrModalOpen
+        && !waiterCheckOpen
         && (
         <BellTutorial
           eyebrow={t.bellTutorial.eyebrow}

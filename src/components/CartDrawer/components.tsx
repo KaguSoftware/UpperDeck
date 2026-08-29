@@ -23,19 +23,26 @@ export function CartDrawer({
     tableLabel,
     tableFromQrLabel,
     notePlaceholder,
+    confirmOrderLabel,
+    onConfirmOrder,
     callWaiterLabel,
     callWaiterSendingLabel,
     callWaiterHeadedLabel,
     onCallWaiter,
     waiterCooldownSeconds,
     waiterCooldownLabel,
+    waiterCalledForOrder,
+    callAgainLabel,
     submitting = false,
     tableFromQr = false,
     topOffset = 0,
     coupon,
 }: CartDrawerProps) {
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-    const waiterCalled = waiterCooldownSeconds > 0;
+    // Status, not rate limit: the cooldown lapses in seconds but the waiter
+    // is still on their way, so the footer must not revert to a bare prompt.
+    const waiterCalled = waiterCalledForOrder;
+    const coolingDown = waiterCooldownSeconds > 0;
 
     const dragY = useRef(0);
     const startY = useRef<number | null>(null);
@@ -267,6 +274,16 @@ export function CartDrawer({
                         </div>
                         <CouponSection {...coupon} />
                         <div className="px-4.5 pb-4 flex flex-col gap-2">
+                            {/* Confirming only completes the basket — a waiter still has to
+                                check it, which is what the sheet this opens explains. */}
+                            <button
+                                type="button"
+                                onClick={onConfirmOrder}
+                                disabled={items.length === 0 || submitting}
+                                className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3.5 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {confirmOrderLabel}
+                            </button>
                             {waiterCalled ? (
                                 <div className="w-full bg-green text-bg font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 text-center">
                                     {callWaiterHeadedLabel}
@@ -276,11 +293,11 @@ export function CartDrawer({
                                     type="button"
                                     onClick={onCallWaiter}
                                     disabled={items.length === 0 || submitting}
-                                    className="w-full bg-orange text-white font-ui font-extrabold text-[13px] tracking-widest uppercase py-3 border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                                    className="w-full bg-transparent border-2 border-green text-green font-ui font-extrabold text-[13px] tracking-widest uppercase py-2.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                                 >
                                     {submitting ? (
                                         <>
-                                            <Loader size="xs" tone="onDark" />
+                                            <Loader size="xs" />
                                             <span>{callWaiterSendingLabel}</span>
                                         </>
                                     ) : (
@@ -288,11 +305,21 @@ export function CartDrawer({
                                     )}
                                 </button>
                             )}
-                            {waiterCalled && (
+                            {waiterCalled && (coolingDown ? (
                                 <p className="text-center font-ui text-[11px] text-green/60">
                                     {waiterCooldownLabel}
                                 </p>
-                            )}
+                            ) : (
+                                /* Escape hatch only — nobody showed up. */
+                                <button
+                                    type="button"
+                                    onClick={onCallWaiter}
+                                    disabled={submitting}
+                                    className="w-full bg-transparent border-0 text-green/60 font-ui font-extrabold text-[11px] tracking-[0.16em] uppercase py-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    {submitting ? callWaiterSendingLabel : callAgainLabel}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}

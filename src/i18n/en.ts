@@ -19,9 +19,19 @@ type EnShape = {
     table_from_qr: string;
     note_placeholder: string;
     callWaiter: string;
+    confirmOrder: string;
     continueBrowsing: string;
     sending: string;
     headed: string;
+    waiterCheckEyebrow: string;
+    waiterCheckTitle: string;
+    waiterCheckDismiss: string;
+    orderNotPlacedYet: string;
+    waiterOnWayTitle: string;
+    waiterOnWayBody: string;
+    callAgain: string;
+    callAgainIn: string;
+    waiterCheckBody: string;
     waiterCalled: string;
     error_send: string;
     subtotal: string;
@@ -34,6 +44,8 @@ type EnShape = {
     itemsOnDeckMany: string;
     addedPrefix: string;
     orderSentPrefix: string;
+    callWaiterToConfirm: string;
+    categoryLocked: string;
   };
   ticker: string[];
   categories: Record<string, string>;
@@ -41,6 +53,7 @@ type EnShape = {
   qrRequired: { title: string; body: string };
   bellTutorial: { eyebrow: string; title: string; dismissHint: string };
   offline: { banner: string };
+  lockedCategory: { badge: string; breakfast: string };
 };
 
 const en: EnShape = {
@@ -82,9 +95,19 @@ const en: EnShape = {
     table_from_qr: "from QR",
     note_placeholder: "Special requests, allergies…",
     callWaiter: "Call Waiter",
+    confirmOrder: "Confirm Order",
     continueBrowsing: "Browse the menu",
     sending: "Sending…",
     headed: "A waiter is headed your way to place your order!",
+    waiterCheckEyebrow: "Order not confirmed yet",
+    waiterCheckTitle: "Call a waiter to confirm",
+    waiterCheckDismiss: "Back to my order",
+    orderNotPlacedYet: "Order not placed yet",
+    waiterOnWayTitle: "A waiter is coming to you",
+    waiterOnWayBody: "We’ve let the staff know. Keep this list open — the waiter takes your order at the table, and that is when it’s placed.",
+    callAgain: "No one came yet? Call again",
+    callAgainIn: "You can call again in {time}",
+    waiterCheckBody: "Nothing reaches the kitchen yet. A waiter has to come and check your order at the table before it is confirmed.",
     waiterCalled: "Waiter notified — on the way!",
     error_send: "Couldn't reach the staff. Please try again.",
     subtotal: "Subtotal",
@@ -97,6 +120,8 @@ const en: EnShape = {
     itemsOnDeckMany: "{count} items on the deck",
     addedPrefix: "Added · ",
     orderSentPrefix: "Order received! Table ",
+    callWaiterToConfirm: "Call a waiter to confirm your order",
+    categoryLocked: "Breakfast is closed right now",
   },
   coupon: {
     label: "Coupon Code",
@@ -140,6 +165,10 @@ const en: EnShape = {
   },
   offline: {
     banner: "You're offline — actions won't go through until you reconnect",
+  },
+  lockedCategory: {
+    badge: "Breakfast closed",
+    breakfast: "Sorry — we can't serve breakfast after 2 PM. Breakfast is back on the menu at 10:00.",
   },
   categories: {
     Breakfast: "Breakfast",

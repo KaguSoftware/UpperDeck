@@ -6,7 +6,7 @@ import { MenuCard } from "@/components/MenuCard/components";
 import type { Fill } from "@/components/MenuCard/types";
 import type { MenuItem, MenuStageProps } from "./types";
 
-export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, featuredItemId, featuredDiscount }: MenuStageProps) {
+export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, featuredItemId, featuredDiscount, lockedSlugs = [], lockedBadgeLabel, lockedMessage, onLockedTap }: MenuStageProps) {
   const sections = useMemo(() => {
     return categories.map(({ slug, name, emoji, image_url, subcategories }) => {
       const catItems = items.filter((m) => m.cat === slug);
@@ -57,6 +57,7 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
     <div className="relative w-full" ref={stageRef}>
       {sections.map(({ slug, name, emoji, image_url, catItems, groups }, secIdx) => {
         const isCollapsed = collapsed[slug] ?? false;
+        const isLocked = lockedSlugs.includes(slug);
         return (
           <div key={slug}>
             {/* header — always visible, tap to toggle */}
@@ -93,9 +94,15 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
                     {name}
                   </span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-ui font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase">
-                      {itemLabel(catItems.length)}
-                    </span>
+                    {isLocked && lockedBadgeLabel ? (
+                      <span className="font-ui font-extrabold text-[9px] tracking-[0.18em] uppercase bg-green text-bg px-1.5 py-1 leading-none whitespace-nowrap">
+                        🔒 {lockedBadgeLabel}
+                      </span>
+                    ) : (
+                      <span className="font-ui font-extrabold text-[9px] tracking-[0.28em] text-orange uppercase">
+                        {itemLabel(catItems.length)}
+                      </span>
+                    )}
                     <span className={["text-green font-bowlby text-[14px] transition-transform duration-300", isCollapsed ? "rotate-0" : "rotate-180"].join(" ")}>
                       ▾
                     </span>
@@ -110,7 +117,32 @@ export function MenuStage({ onOpen, stageRef, categories, items, itemLabel, feat
               style={{ gridTemplateRows: isCollapsed ? "0fr" : "1fr" }}
             >
               <div className="overflow-hidden">
-                <div className="flex flex-col">
+                <div className="relative flex flex-col">
+                  {isLocked && (
+                    /* Dark shadow over the whole category: the cards stay readable
+                       underneath but every tap lands here instead of on a card. */
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={lockedMessage}
+                      onClick={onLockedTap}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onLockedTap?.(); }}
+                      className="absolute inset-0 z-20 flex flex-col items-center gap-2.5 px-6 pt-7 text-center cursor-not-allowed"
+                      style={{ background: "rgba(31,46,38,0.82)" }}
+                    >
+                      <span className="text-[30px] leading-none" aria-hidden>🔒</span>
+                      {lockedBadgeLabel && (
+                        <span className="font-bowlby text-[17px] uppercase tracking-[-0.3px] text-bg leading-[1.05]">
+                          {lockedBadgeLabel}
+                        </span>
+                      )}
+                      {lockedMessage && (
+                        <span className="font-ui text-[13px] leading-[1.5] text-bg/85 max-w-xs">
+                          {lockedMessage}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {groups.map((group, gi) => {
                     const subKey = `${slug}__${gi}`;
                     const isSubCollapsed = subCollapsed[subKey] ?? false;

@@ -1,12 +1,13 @@
 import { BrandImage } from "@/components/BrandImage/components";
 import type { FilterPillsProps } from "./types";
 
-export function FilterPills({ items, activeId, onSelect, navRef, compact }: FilterPillsProps) {
+export function FilterPills({ items, activeId, onSelect, navRef, compact, lockedIds = [] }: FilterPillsProps) {
   return (
     <div className="relative shrink-0" style={{ overflowAnchor: "none" }}>
     <nav ref={navRef} className="py-2 pl-2.5 bg-bg border-t-2 border-b-2 border-green flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map(({ id, label, image_url, emoji }) => {
         const isActive = id === activeId;
+        const isLocked = lockedIds.includes(id);
         return (
           <button
             key={id}
@@ -19,6 +20,7 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
               isActive
                 ? "bg-green border-green text-bg"
                 : "bg-transparent border-green text-green",
+              isLocked ? "opacity-45 grayscale" : "",
             ].join(" ")}
           >
             {/* thumbnail — collapses to 0 height when compact */}
@@ -40,7 +42,10 @@ export function FilterPills({ items, activeId, onSelect, navRef, compact }: Filt
                 <span className="text-[20px] leading-none">{emoji ?? "🍽"}</span>
               )}
             </div>
-            <span className="w-24 px-2 py-1 text-center leading-[1.4] wrap-break-word flex-1 flex items-center justify-center">{label}</span>
+            <span className="w-24 px-2 py-1 text-center leading-[1.4] wrap-break-word flex-1 flex items-center justify-center">
+              {isLocked && <span className="mr-1" aria-hidden>🔒</span>}
+              {label}
+            </span>
           </button>
         );
       })}

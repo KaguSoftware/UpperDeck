@@ -163,6 +163,55 @@ a {
   75%       { box-shadow: 0 0 22px 9px #CC2222, 0 0 50px 15px #FF5138, 0 0 80px 20px rgba(255,81,56,0.4); }
 }
 
+/* Waiter-check takeover — the diner has to leave with one instruction in mind:
+   ring the bell. Every animation below exists to point at that one button. */
+@keyframes bellSwing {
+  0%, 62%, 100% { transform: rotate(0deg); }
+  6%            { transform: rotate(-17deg); }
+  14%           { transform: rotate(14deg); }
+  22%           { transform: rotate(-11deg); }
+  30%           { transform: rotate(8deg); }
+  38%           { transform: rotate(-5deg); }
+  46%           { transform: rotate(3deg); }
+  54%           { transform: rotate(-1deg); }
+}
+
+@keyframes bellRing {
+  0%   { transform: scale(0.85); opacity: 0.55; }
+  100% { transform: scale(2.7);  opacity: 0; }
+}
+
+@keyframes ctaGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,81,56,0.7), 0 0 22px 2px rgba(255,81,56,0.3); }
+  50%      { box-shadow: 0 0 0 16px rgba(255,81,56,0), 0 0 36px 7px rgba(255,81,56,0.55); }
+}
+
+/* Moving barber-pole band — reads as "stop, something is required of you". */
+@keyframes hazardScroll {
+  from { background-position: 0 0; }
+  to   { background-position: 56px 0; }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.86); opacity: 0; }
+  60%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes eyebrowBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* The takeover is deliberately loud; motion sensitivity shouldn't have to pay
+   for that. The layout and colour carry the message on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .waiter-check-motion,
+  .waiter-check-motion * {
+    animation: none !important;
+  }
+}
+
 .shimmer {
   background: linear-gradient(
     90deg,

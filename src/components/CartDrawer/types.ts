@@ -41,12 +41,17 @@ export type CartDrawerProps = {
   tableLabel: string;
   tableFromQrLabel: string;
   notePlaceholder: string;
+  confirmOrderLabel: string;
+  onConfirmOrder: () => void;
   callWaiterLabel: string;
   callWaiterSendingLabel: string;
   callWaiterHeadedLabel: string;
   onCallWaiter: () => void;
   waiterCooldownSeconds: number;
   waiterCooldownLabel: string;
+  /** Sticky once a waiter has been called for this basket — not the rate-limit window. */
+  waiterCalledForOrder: boolean;
+  callAgainLabel: string;
   submitting?: boolean;
   tableFromQr?: boolean;
   topOffset?: number;

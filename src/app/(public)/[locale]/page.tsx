@@ -3,6 +3,7 @@ import { getMessages } from "@/i18n";
 import { locales, defaultLocale } from "@/i18n/config";
 import type { Locale } from "@/i18n/config";
 import { getPublicMenu, getHeroSettings } from "@/lib/menu/queries";
+import { lockedCategorySlugs } from "@/lib/menu/serving-window";
 import { getWaiterDisabledTables } from "@/lib/settings/queries";
 import { cookies } from "next/headers";
 import { verifyTableCookie } from "@/lib/table-auth";
@@ -60,6 +61,7 @@ export default async function Home({
       featuredBadge={heroSettings.featuredBadge}
       featuredDiscount={heroSettings.featuredDiscount}
       openHoursOverride={openHoursOverride}
+      lockedCategories={lockedCategorySlugs()}
     />
   );
 }
