@@ -9,7 +9,7 @@ const getMenuListItems = unstable_cache(
     const supabase = getCacheClient();
     const { data, error } = await supabase
       .from("menu_items")
-      .select("id, name_en, price, image_url, spicy, is_available, sold_out, sort_order, category_id, categories(name_en)")
+      .select("id, name_en, price, cost, image_url, spicy, is_available, sold_out, sort_order, category_id, categories(name_en)")
       .order("sort_order", { ascending: true })
       .order("name_en", { ascending: true });
     if (error) throw new Error(error.message);
@@ -37,6 +37,9 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
       id: item.id,
       name_en: item.name_en,
       price: item.price,
+      // Drives the margin chip + the "kaç ürün maliyetsiz" count below. Older
+      // cached rows (pre-migration) have no key at all, hence the ?? null.
+      cost: (item as { cost?: number | null }).cost ?? null,
       image_url: item.image_url,
       spicy: item.spicy,
       is_available: item.is_available,
@@ -50,11 +53,20 @@ export default async function MenuPage({ searchParams }: { searchParams: Promise
     { key: "name", label: "Alfabetik" },
   ];
 
+  // Menu engineering only covers items whose cost is entered, so the header says
+  // how far from full coverage the menu is — otherwise the analytics matrix
+  // quietly speaks for a fraction of the menu with no hint why.
+  const missingCost = items.filter((i) => i.cost == null).length;
+
   return (
     <>
       <PageHeader
         title="Menü"
-        subtitle={`${items.length} ürün`}
+        subtitle={
+          missingCost > 0
+            ? `${items.length} ürün · ${missingCost} ürünün maliyeti girilmedi (kâr analizi için gerekli)`
+            : `${items.length} ürün · tüm maliyetler girildi`
+        }
         action={
           <Link
             href="/admin/menu/new"

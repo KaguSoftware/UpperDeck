@@ -45,6 +45,17 @@ export function MenuItemForm({
         required
         defaultValue={initial?.price ?? 0}
       />
+      {/* Optional on purpose, and blank ≠ 0: an empty cost means "unknown", so the
+          item is left out of the margin analysis instead of reporting 100% kâr. */}
+      <Field
+        label="Maliyet (₺)"
+        name="cost"
+        type="number"
+        step="0.01"
+        min="0"
+        defaultValue={initial?.cost ?? ""}
+        placeholder="opsiyonel — kâr analizi için"
+      />
       <Field
         label="Sıralama"
         name="sort_order"

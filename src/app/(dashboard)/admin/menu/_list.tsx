@@ -10,6 +10,8 @@ type Item = {
   id: string;
   name_en: string;
   price: number;
+  /** Unit cost in ₺; null = not entered yet (never 0 — see the cost migration). */
+  cost: number | null;
   image_url: string | null;
   spicy: boolean;
   is_available: boolean;
@@ -17,6 +19,14 @@ type Item = {
   sort_order: number | null;
   category_name: string;
 };
+
+/** Contribution margin as a % of price. Only called once a cost exists. */
+function marginPct(item: Item): number {
+  const price = Number(item.price) || 0;
+  const cost = Number(item.cost) || 0;
+  if (price <= 0) return 0;
+  return Math.round(((price - cost) / price) * 100);
+}
 
 export function MenuList({ initial }: { initial: Item[] }) {
   const [items, setItems] = useState(initial);
@@ -134,8 +144,27 @@ export function MenuList({ initial }: { initial: Item[] }) {
                 )}
               </div>
               <div className="font-bowlby text-[20px] uppercase text-green/80 leading-none">{item.category_name}</div>
-              <div className="text-right font-ui font-extrabold text-[16px] text-orange">
-                {Number(item.price).toFixed(0)} ₺
+              <div className="text-right">
+                <div className="font-ui font-extrabold text-[16px] text-orange">
+                  {Number(item.price).toFixed(0)} ₺
+                </div>
+                {/* Margin, not cost: the number the owner actually decides on.
+                    A missing cost is called out rather than left blank — it's
+                    what keeps the item out of the analytics profit matrix. */}
+                <div className="mt-0.5 text-[10px] font-extrabold tabular-nums leading-none">
+                  {item.cost == null ? (
+                    <span className="text-green/35" title="Maliyet girilmedi — kâr analizine dahil edilmiyor">
+                      maliyet yok
+                    </span>
+                  ) : (
+                    <span
+                      className={marginPct(item) >= 60 ? "text-green" : marginPct(item) >= 35 ? "text-green/60" : "text-orange"}
+                      title={`Maliyet ${Number(item.cost).toFixed(2)} ₺ · birim kâr ${(Number(item.price) - Number(item.cost)).toFixed(0)} ₺`}
+                    >
+                      %{marginPct(item)} kâr
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex justify-center">
                 <button

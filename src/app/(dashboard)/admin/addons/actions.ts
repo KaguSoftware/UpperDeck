@@ -59,7 +59,7 @@ function parseOption(formData: FormData) {
 }
 
 export async function createGroup(formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { group, itemIds } = parseGroup(formData);
   const { data: created, error } = await db(supabase)
     .from("addon_groups")
@@ -80,7 +80,7 @@ export async function createGroup(formData: FormData) {
 }
 
 export async function updateGroup(id: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { group, itemIds } = parseGroup(formData);
   const { error } = await db(supabase).from("addon_groups").update(group).eq("id", id);
   if (error) throw new Error(error.message);
@@ -99,7 +99,7 @@ export async function updateGroup(id: string, formData: FormData) {
 
 export async function deleteGroup(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await db(supabase).from("addon_groups").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -108,7 +108,7 @@ export async function deleteGroup(formData: FormData) {
 }
 
 export async function createOption(groupId: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parseOption(formData);
   const { error } = await db(supabase)
     .from("addon_options")
@@ -119,7 +119,7 @@ export async function createOption(groupId: string, formData: FormData) {
 }
 
 export async function updateOption(id: string, _groupId: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parseOption(formData);
   const { error } = await db(supabase).from("addon_options").update(data).eq("id", id);
   if (error) throw new Error(error.message);
@@ -139,7 +139,7 @@ export async function reorderOption(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
   const groupId = z.string().uuid().parse(formData.get("group_id"));
   const direction = z.enum(["up", "down"]).parse(formData.get("direction"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
 
   const { data: opts } = await db(supabase)
     .from("addon_options")
@@ -164,7 +164,7 @@ export async function reorderOption(formData: FormData) {
 }
 
 export async function createRevealedGroup(optionId: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const label_en = z.string().min(1).max(60).trim().parse(formData.get("label_en"));
   const label_tr = z.string().min(1).max(60).trim().parse(formData.get("label_tr"));
   const multi = formData.get("multi") === "on";
@@ -192,7 +192,7 @@ export async function createRevealedGroup(optionId: string, formData: FormData) 
 
 export async function deleteOption(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await db(supabase).from("addon_options").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");

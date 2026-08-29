@@ -33,7 +33,7 @@ function parseGroup(formData: FormData) {
 }
 
 export async function createGroup(formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parseGroup(formData);
   const { data: group, error } = await db(supabase)
     .from("suggested_groups")
@@ -47,7 +47,7 @@ export async function createGroup(formData: FormData) {
 }
 
 export async function updateGroup(id: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const data = parseGroup(formData);
   const { error } = await db(supabase).from("suggested_groups").update(data).eq("id", id);
   if (error) throw new Error(error.message);
@@ -58,7 +58,7 @@ export async function updateGroup(id: string, formData: FormData) {
 
 export async function deleteGroup(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await db(supabase).from("suggested_groups").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -67,7 +67,7 @@ export async function deleteGroup(formData: FormData) {
 }
 
 export async function createItem(groupId: string, formData: FormData) {
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const menu_item_id = z.string().uuid().parse(formData.get("menu_item_id"));
   const sort_order = z.coerce.number().int().parse(formData.get("sort_order") ?? 0);
   const { error } = await db(supabase)
@@ -80,7 +80,7 @@ export async function createItem(groupId: string, formData: FormData) {
 
 export async function deleteItem(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
   const { error } = await db(supabase).from("suggested_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
   updateTag("menu");
@@ -91,7 +91,7 @@ export async function reorderItem(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
   const groupId = z.string().uuid().parse(formData.get("group_id"));
   const direction = z.enum(["up", "down"]).parse(formData.get("direction"));
-  const { supabase } = await requireRole(["admin", "owner"]);
+  const { supabase } = await requireRole(["admin", "owner", "dev"]);
 
   const { data: items } = await db(supabase)
     .from("suggested_items")

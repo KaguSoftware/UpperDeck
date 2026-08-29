@@ -1,6 +1,24 @@
 import "server-only";
-import { getRealSalesOverTime, type DateRange } from "@/lib/analytics/sales";
-import { getDailyEngagement } from "@/lib/analytics/posthog";
+import {
+  getRealSalesOverTime,
+  getRealBestSellers,
+  getSoldItemsByDay,
+  type DateRange,
+} from "@/lib/analytics/sales";
+import {
+  getDailyEngagement,
+  getTopViewedItems,
+  getTopCartedItems,
+  getAbandonedViewsByDay,
+  engagementWindow,
+  type AbandonedView,
+} from "@/lib/analytics/posthog";
+import { previousRange } from "@/lib/analytics/range";
+import { canonicalItemName } from "@/lib/analytics/clean-sales";
+
+/** Shared join key for matching PostHog menu names against POS item names.
+ *  Uses the canonical name so kitchen-name variants (see NAME_ALIASES) line up. */
+const nameKey = (name: string) => canonicalItemName(name).toLocaleLowerCase("tr");
 
 /**
  * Headline correlation: real daily revenue (Supabase) vs menu engagement
@@ -10,6 +28,219 @@ import { getDailyEngagement } from "@/lib/analytics/posthog";
  * gap and the UI hints "no sales entered"). Days with sales but no engagement
  * data (PostHog absent) show zeros.
  */
+export type ItemConversion = {
+  name: string;
+  views: number;
+  carts: number;
+  sold: number; // real POS qty; 0 when per-item sales weren't entered
+  convPct: number; // views → actually SOLD, in percent (can exceed 100 when an item
+  // sells more than its detail page is opened — common for staples ordered verbally)
+};
+
+/**
+ * One row per item across the whole funnel: distinct-session views → cart adds
+ * (PostHog) → actually sold (owner-entered POS items). Merged by item name —
+ * the only key shared by both sources. Sorted by views so the "looked at a lot
+ * but never bought" items surface without cross-referencing three charts.
+ */
+export async function getItemConversion(range: DateRange, limit = 15): Promise<ItemConversion[]> {
+  // Fetch at least the display limit, wider when the caller wants a deeper pool
+  // (e.g. Hidden Gems needs the low-view tail, not just the top 50).
+  const pool = Math.max(50, limit);
+  const [viewed, carted, sold] = await Promise.all([
+    getTopViewedItems(range, pool),
+    getTopCartedItems(range, pool),
+    // ALL sold items, not just the top N: this table is keyed on the top-VIEWED
+    // items, and a heavily-viewed but moderate-selling item (e.g. Nashville Waffle,
+    // which ranks below the top 50 sellers) must still get its real sold count —
+    // otherwise it shows "0 sold" despite having sales.
+    getRealBestSellers(range, Number.MAX_SAFE_INTEGER),
+  ]);
+
+  // Key by normalized name so PostHog's raw menu names line up with the POS item
+  // names (already normalized on import); keep the first-seen (viewed) name for display.
+  const rows = new Map<string, ItemConversion>();
+  const row = (name: string) => {
+    const k = nameKey(name);
+    // Display the canonical menu name so a merged row never shows a kitchen-name variant.
+    const r = rows.get(k) ?? { name: canonicalItemName(name), views: 0, carts: 0, sold: 0, convPct: 0 };
+    if (!rows.has(k)) rows.set(k, r);
+    return r;
+  };
+  // Accumulate (+=), never assign: two source names can canonicalize to the same
+  // item (a rename, or a kitchen-name alias), and their views/carts must SUM — an
+  // assignment would let a stray low-count variant clobber the real total.
+  for (const v of viewed) row(v.name).views += v.count;
+  for (const c of carted) row(c.name).carts += c.count;
+  for (const s of sold) row(s.item_name).sold += s.qty;
+
+  return [...rows.values()]
+    // Conversion is views → actually SOLD (real POS qty), not views → cart adds:
+    // the menu has no checkout, so add-to-cart is only a weak intent proxy while
+    // entered sales are the ground truth for demand.
+    .map((r) => ({ ...r, convPct: r.views > 0 ? Math.round((r.sold / r.views) * 100) : 0 }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, limit);
+}
+
+/**
+ * "Bakıp Almayanlar" (looked but didn't order), net of real sales.
+ *
+ * The menu has no checkout, so a diner routinely opens an item, closes it without
+ * tapping add-to-cart, and orders it verbally — a real sale the abandoned-view
+ * signal would wrongly flag. We can't correlate to the minute (POS data is
+ * day-level), so we suppress at day granularity: on any day an item actually sold
+ * (≥1 in `sales_entry_items`), that day's abandoned views for it are dropped.
+ * Remaining views are re-aggregated per item, matching `getAbandonedViews`' shape.
+ */
+export async function getAbandonedViewsNet(range: DateRange, limit = 12): Promise<AbandonedView[]> {
+  const [abandonedByDay, soldByDay] = await Promise.all([
+    getAbandonedViewsByDay(range),
+    getSoldItemsByDay(range),
+  ]);
+
+  // (normalized name + day) pairs the item sold on — those views don't count.
+  const soldDays = new Set<string>();
+  for (const s of soldByDay) {
+    if (s.qty > 0) soldDays.add(`${nameKey(s.name)} ${s.date}`);
+  }
+
+  const byItem = new Map<string, AbandonedView>();
+  for (const r of abandonedByDay) {
+    if (soldDays.has(`${nameKey(r.name)} ${r.date}`)) continue;
+    const cur = byItem.get(r.name) ?? { name: r.name, b5to10: 0, b10to20: 0, b20plus: 0, total: 0 };
+    cur.b5to10 += r.b5to10;
+    cur.b10to20 += r.b10to20;
+    cur.b20plus += r.b20plus;
+    cur.total += r.b5to10 + r.b10to20 + r.b20plus;
+    byItem.set(r.name, cur);
+  }
+
+  return [...byItem.values()]
+    .filter((v) => v.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
+export type HiddenGem = { name: string; views: number; sold: number; convPct: number };
+
+/**
+ * "Hidden gems": items that convert views into real SALES at a high rate but get
+ * little exposure — few diners find them, yet most who do buy. The inverse of the
+ * dead-item list, and a direct menu-placement lever: move these up / feature them.
+ */
+export async function getHiddenGems(
+  range: DateRange,
+  limit = 6,
+  // Optional pre-computed deep-pool conversion rows. The page already computes
+  // getItemConversion with a deep pool for the conversion table; passing those in
+  // avoids a second full run (and a second getRealBestSellers round-trip) here.
+  // Must be a DEEP pool (≥80) or low-view gems get truncated before this filter.
+  precomputed?: ItemConversion[]
+): Promise<HiddenGem[]> {
+  const rows = precomputed ?? (await getItemConversion(range, 80)); // deep pool so low-view items are kept
+  const maxViews = Math.max(...rows.map((r) => r.views), 1);
+  return rows
+    // sells for real, has a usable sample, converts well, yet seen far less than the
+    // most-viewed item (≤40% of it) — i.e. under-exposed relative to the menu's stars.
+    .filter((r) => r.sold >= 2 && r.views >= 3 && r.convPct >= 50 && r.views <= maxViews * 0.4)
+    .sort((a, b) => b.convPct - a.convPct || a.views - b.views)
+    .slice(0, limit)
+    .map((r) => ({ name: r.name, views: r.views, sold: r.sold, convPct: r.convPct }));
+}
+
+export type ItemMomentum = {
+  name: string;
+  current: number;
+  previous: number;
+  deltaPct: number | null; // null when previous = 0 (brand new)
+  isNew: boolean;
+};
+
+export type MomentumResult = {
+  rising: ItemMomentum[];
+  fading: ItemMomentum[];
+  /**
+   * False when the baseline can't carry a comparison — see `getItemMomentum`.
+   * The module then says why instead of rendering fabricated momentum.
+   */
+  comparable: boolean;
+  /** The window the comparison is (or would be) made against — named on screen. */
+  previous: DateRange;
+  /** Engagement days actually behind each side, for the on-screen explanation. */
+  currentDays: number;
+  previousDays: number;
+};
+
+/**
+ * Per-item interest momentum: distinct-session views this period vs the previous
+ * period of equal length. Surfaces rising stars and quietly fading items early,
+ * instead of waiting for end-of-season totals. Based on views (always available);
+ * a volume floor keeps a 1→3 blip from being called a trend.
+ */
+export async function getItemMomentum(range: DateRange, limit = 6): Promise<MomentumResult> {
+  const prev = previousRange(range);
+  const engNow = engagementWindow(range);
+  const engPrev = engagementWindow(prev);
+  const base = { rising: [], fading: [], previous: prev, currentDays: engNow.days, previousDays: engPrev.days };
+
+  // The baseline has to span the SAME number of tracked days, not merely exist.
+  //
+  // The tracking floor clips the previous window without touching the current
+  // one, and a partial baseline is worse than none: comparing 30 days of views
+  // against the 7 that clear the floor understates every previous count by ~4x,
+  // so untracked items become "0→15 YENİ" and ordinary ones become "▲ +350%".
+  // Both readings are artifacts of the clip, and both looked like real momentum.
+  //
+  // This is the same equal-length test the KPI deltas already apply (page.tsx
+  // `engagementComparable`); momentum was the one module still comparing across
+  // unequal spans.
+  if (engPrev.empty || engPrev.days !== engNow.days) {
+    return { ...base, comparable: false };
+  }
+
+  const [cur, old] = await Promise.all([
+    getTopViewedItems(range, 60),
+    getTopViewedItems(prev, 60),
+  ]);
+
+  // Same failure, detected from the data rather than the floor: a previous window
+  // inside the tracked span that still has no views (menu not yet live, tracking
+  // paused) would make every current item look brand new.
+  if (old.length === 0) {
+    return { ...base, comparable: false };
+  }
+
+  const oldByKey = new Map(old.map((o) => [nameKey(o.name), o.count]));
+  const seen = new Set<string>();
+  const rows: ItemMomentum[] = [];
+  for (const c of cur) {
+    const k = nameKey(c.name);
+    seen.add(k);
+    const previous = oldByKey.get(k) ?? 0;
+    const deltaPct = previous > 0 ? Math.round(((c.count - previous) / previous) * 100) : null;
+    rows.push({ name: c.name, current: c.count, previous, deltaPct, isNew: previous === 0 });
+  }
+  // Items that fell out of the current top list entirely still count as fading.
+  for (const o of old) {
+    const k = nameKey(o.name);
+    if (seen.has(k)) continue;
+    rows.push({ name: o.name, current: 0, previous: o.count, deltaPct: -100, isNew: false });
+  }
+
+  const MIN = 5; // ignore items too small in both periods to read a trend from
+  const rising = rows
+    .filter((r) => r.current >= MIN && (r.isNew || (r.deltaPct != null && r.deltaPct >= 25)))
+    .sort((a, b) => (b.deltaPct ?? 9999) - (a.deltaPct ?? 9999) || b.current - a.current)
+    .slice(0, limit);
+  const fading = rows
+    // previous >= MIN implies !isNew (isNew ⟺ previous === 0), so it's not repeated.
+    .filter((r) => r.previous >= MIN && r.deltaPct != null && r.deltaPct <= -25)
+    .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
+    .slice(0, limit);
+  return { rising, fading, comparable: true, previous: prev, currentDays: engNow.days, previousDays: engPrev.days };
+}
+
 export async function getSalesVsEngagement(range: DateRange) {
   const [sales, engagement] = await Promise.all([
     getRealSalesOverTime(range),

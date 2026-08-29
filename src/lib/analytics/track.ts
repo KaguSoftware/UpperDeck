@@ -28,16 +28,23 @@ function capture(event: string, props?: Record<string, unknown>) {
 }
 
 export const track = {
-  itemViewed: (item: { id: string; name: string; price?: number; category?: string }) =>
-    capture("item_viewed", { item_id: item.id, item_name: item.name, price: item.price, category: item.category }),
+  itemViewed: (item: { id: string; name: string; price?: number; category?: string; discountPct?: number | null }) =>
+    capture("item_viewed", {
+      item_id: item.id,
+      item_name: item.name,
+      price: item.price,
+      category: item.category,
+      discount_pct: item.discountPct ?? 0,
+    }),
 
-  itemAddedToCart: (item: { id: string; name: string; price: number; qty: number; extras?: number }) =>
+  itemAddedToCart: (item: { id: string; name: string; price: number; qty: number; extras?: number; discountPct?: number | null }) =>
     capture("item_added_to_cart", {
       item_id: item.id,
       item_name: item.name,
       price: item.price,
       qty: item.qty,
       extras_count: item.extras ?? 0,
+      discount_pct: item.discountPct ?? 0,
     }),
 
   // Fired when a diner closes an item modal without adding to cart. Dwell <5s
@@ -52,7 +59,10 @@ export const track = {
 
   cartOpened: () => capture("cart_opened"),
 
-  waiterCalled: (kind: "order" | "bill" = "order") => capture("waiter_called", { kind }),
+  // One event for every staff call regardless of entry point: cart "call
+  // waiter" (order), bell sheet "call waiter" (waiter) and "ask for bill"
+  // (bill). Analytics treats them as one metric; `kind` keeps the breakdown.
+  waiterCalled: (kind: "order" | "bill" | "waiter" = "order") => capture("waiter_called", { kind }),
 
   orderSubmitted: (o: { total: number; item_count: number }) =>
     capture("order_submitted", { total: o.total, item_count: o.item_count }),
