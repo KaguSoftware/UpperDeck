@@ -191,7 +191,7 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
   }, [tableNumber]);
 
   // The server decided the lock at render time, but a phone can sit on the
-  // table across 14:00. Re-check on a timer and whenever the tab comes back —
+  // table across 16:00. Re-check on a timer and whenever the tab comes back —
   // background timers are throttled on mobile, so the visibility check matters.
   useEffect(() => {
     const sync = () => {

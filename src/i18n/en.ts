@@ -165,8 +165,8 @@ const en: EnShape = {
     banner: "You're offline — actions won't go through until you reconnect",
   },
   lockedCategory: {
-    badge: "Served 10:00 – 14:00",
-    breakfast: "The kitchen serves breakfast between 10:00 and 14:00, so these are sold out for now. They're back on the menu tomorrow at 10:00.",
+    badge: "Served 10:00 – 16:00",
+    breakfast: "The kitchen serves breakfast between 10:00 and 16:00, so these are sold out for now. They're back on the menu tomorrow at 10:00.",
   },
   categories: {
     Breakfast: "Breakfast",

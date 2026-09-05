@@ -1,5 +1,5 @@
 /**
- * Breakfast is a kitchen-hours product: the line switches over at 14:00 and the
+ * Breakfast is a kitchen-hours product: the line switches over at 16:00 and the
  * plates only come back at 10:00 the next morning. Outside those hours the items
  * are shown sold out — exactly as if staff had flagged them by hand — so diners
  * can still read the menu, they just can't order from it.
@@ -12,15 +12,15 @@
  *
  * The live `extra` category is deliberately absent: it mixes breakfast add-ons
  * (Füme Et, Fried Egg) with burger ones (Burger Patty, Crispy Chicken), so
- * locking it would take the burger extras down after 14:00 as well. Splitting
+ * locking it would take the burger extras down after 16:00 as well. Splitting
  * those into their own category is the fix — then add its slug here.
  */
 
 export const BREAKFAST_CATEGORY_SLUGS = ["breakfast", "breakfast-extra"] as const;
 
-/** Served from 10:00 up to (not including) 14:00 — restaurant local time. */
+/** Served from 10:00 up to (not including) 16:00 — restaurant local time. */
 export const BREAKFAST_START_HOUR = 10;
-export const BREAKFAST_END_HOUR = 14;
+export const BREAKFAST_END_HOUR = 16;
 
 /** The kitchen's clock, not the diner's — a tourist's phone may be on any zone. */
 const RESTAURANT_TIME_ZONE = "Europe/Istanbul";

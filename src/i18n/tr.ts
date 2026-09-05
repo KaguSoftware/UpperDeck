@@ -115,9 +115,9 @@ const tr: Messages = {
         banner: "Çevrimdışısınız — bağlantı dönene kadar işlemler kaydedilmez",
     },
     lockedCategory: {
-        badge: "10:00 – 14:00 arası",
+        badge: "10:00 – 16:00 arası",
         breakfast:
-            "Mutfak kahvaltıyı 10:00 ile 14:00 arasında servis ediyor, bu yüzden şu an tükendi olarak görünüyor. Yarın 10:00'da tekrar menüde.",
+            "Mutfak kahvaltıyı 10:00 ile 16:00 arasında servis ediyor, bu yüzden şu an tükendi olarak görünüyor. Yarın 10:00'da tekrar menüde.",
     },
     categories: {
         Breakfast: "Kahvaltı",
