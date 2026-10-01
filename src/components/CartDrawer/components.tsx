@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { CouponSection } from "./CouponSection";
 import { Loader } from "@/components/Loader/components";
 import type { CartDrawerProps } from "./types";
+import { cartTotal } from "@/lib/cart";
 
 export function CartDrawer({
     items,
@@ -38,7 +39,7 @@ export function CartDrawer({
     topOffset = 0,
     coupon,
 }: CartDrawerProps) {
-    const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+    const total = cartTotal(items);
     // Status, not rate limit: the cooldown lapses in seconds but the waiter
     // is still on their way, so the footer must not revert to a bare prompt.
     const waiterCalled = waiterCalledForOrder;

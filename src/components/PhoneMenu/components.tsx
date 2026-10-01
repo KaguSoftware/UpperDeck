@@ -21,6 +21,7 @@ import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { track } from "@/lib/analytics/track";
 import type { PlacedCard } from "@/components/MenuCard/types";
 import type { CartItem } from "@/components/CartDrawer/types";
+import { addToCart, buildCartId, decrementItem, incrementItem, removeFromCart, unitPrice } from "@/lib/cart";
 import type { AddonOptionPublic, SuggestedItemPublic } from "@/lib/menu/queries";
 import { TOAST_DURATION_MS } from "@/components/Toast/constants";
 import { WAITER_COOLDOWN_MS } from "@/components/WaiterButton/constants";
@@ -318,39 +319,24 @@ export function PhoneMenu({ messages: t, locale, categories, items, initialTable
     setCartItems((prev) => {
       const removed = prev.find((i) => i.id === id);
       if (removed) track.itemRemovedFromCart({ id: removed.menu_item_id, name: removed.name });
-      return prev.filter((i) => i.id !== id);
+      return removeFromCart(prev, id);
     });
   }, []);
 
   const handleIncrement = useCallback((id: string) => {
-    setCartItems((prev) => prev.map((i) => i.id === id ? { ...i, qty: i.qty + 1 } : i));
+    setCartItems((prev) => incrementItem(prev, id));
   }, []);
 
   const handleDecrement = useCallback((id: string) => {
-    setCartItems((prev) => {
-      const item = prev.find((i) => i.id === id);
-      if (!item) return prev;
-      if (item.qty <= 1) return prev.filter((i) => i.id !== id);
-      return prev.map((i) => i.id === id ? { ...i, qty: i.qty - 1 } : i);
-    });
+    setCartItems((prev) => decrementItem(prev, id));
   }, []);
 
   const handleAdd = useCallback((extras: (AddonOptionPublic & { required?: boolean; groupLabel?: string })[], itemNote: string) => {
     if (!activeItem) return;
     const { id: menu_item_id, name, price, discountPct } = activeItem;
-    const basePrice = discountPct ? Math.round(price * (1 - discountPct / 100)) : price;
-    const extrasTotal = extras.reduce((s, e) => s + e.price, 0);
-    const effectivePrice = basePrice + extrasTotal;
-    // Items with extras or a note get a unique cart id so they don't merge with the plain version
-    const noteKey = itemNote ? `__note${itemNote.slice(0, 8)}` : "";
-    const cartId = extras.length > 0 || itemNote
-      ? `${menu_item_id}__${extras.map((e) => e.id).join("_")}${noteKey}`
-      : menu_item_id;
-    setCartItems((prev) => {
-      const existing = prev.find((i) => i.id === cartId);
-      if (existing) return prev.map((i) => i.id === cartId ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: cartId, menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length > 0 ? extras : undefined, itemNote: itemNote || undefined }];
-    });
+    const effectivePrice = unitPrice(price, discountPct, extras);
+    const cartId = buildCartId(menu_item_id, extras, itemNote);
+    setCartItems((prev) => addToCart(prev, { cartId, menu_item_id, name, price: effectivePrice, extras, itemNote }));
     track.itemAddedToCart({ id: menu_item_id, name, price: effectivePrice, qty: 1, extras: extras.length, discountPct });
     viewStartRef.current = null; // added to cart — not an abandoned view
     setActiveItem(null);
