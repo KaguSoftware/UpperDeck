@@ -46,3 +46,6 @@ scripts/qrs.html
 # real POS sales exports (data, not code)
 *.xlsx
 *.xls
+
+# playwright
+/test-results/
