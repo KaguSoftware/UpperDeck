@@ -123,9 +123,20 @@ deployment goes down before your first customer of the day does.
 - [ ] In dev: check **DEV: simulate failure** in the cart drawer, tap **Send Order** → "Show this to a member of staff" fallback screen appears with a **Try again** button
 - [ ] `GET /api/health` returns `{"ok":true,"db":"ok"}` with status 200
 
+## Tests and CI
+
+Unit tests run on [Vitest](https://vitest.dev) and cover the cart logic (`src/lib/cart.ts`), order submission and server-side total (`src/lib/orders/submit.ts`), table validation and the breakfast serving window.
+
+```bash
+npm test            # run the unit tests once
+npm run typecheck   # tsc --noEmit
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the typecheck and the tests on every pull request and on pushes to `main`.
+
 ## Not yet built (ask before adding)
 
 - Image upload to Supabase Storage (replace emoji with photos)
 - Realtime subscriptions on the public menu
 - Audit log / activity feed
-- Playwright/Vitest test suites
+- Browser (Playwright) end-to-end tests
